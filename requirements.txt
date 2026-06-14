@@ -1,0 +1,8 @@
+scikit-learn
+xgboost
+pymatgen
+matminer
+matplotlib
+jarvis-tools
+pandas
+numpy

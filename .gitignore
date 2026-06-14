@@ -1,0 +1,22 @@
+# окружение
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# данные — воспроизводимы скриптом export_structures_for_alignn.py
+alignn_data/
+alignn_data_c2db/
+alignn_data_alex_2d/
+alignn_data_alex_2d_eh02/
+*.zip
+
+# выходные артефакты (генерируются при запуске)
+results.csv
+
+# устаревшие веса (актуальны cgcnn_2d_ensemble.pt + cgcnn_2d_typed.pt)
+cgcnn_2d_bandgap.pt
+cgcnn_2d_multi.pt
+
+# артефакты Gradio
+.gradio/
