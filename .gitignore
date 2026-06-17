@@ -20,3 +20,6 @@ cgcnn_2d_multi.pt
 
 # артефакты Gradio
 .gradio/
+
+# сторонние скиллы Claude Code (не коммитим)
+.claude/skills/
