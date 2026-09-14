@@ -1,0 +1,29 @@
+{
+  "task": "metal",
+  "split": "group",
+  "members": [
+    {
+      "n": 2440,
+      "positive_rate": 0.3987704813480377,
+      "threshold": 0.6476057171821595,
+      "roc_auc": 0.9442016938596361,
+      "balanced_accuracy": 0.8758630256180682,
+      "f1_positive": 0.851619644723093,
+      "accuracy": 0.8836065573770492,
+      "precision_positive": 0.8660998940467834
+    }
+  ],
+  "n_train": 19478,
+  "n_val": 2396,
+  "n_test": 2440,
+  "ensemble": {
+    "n": 2440,
+    "positive_rate": 0.3987704813480377,
+    "threshold": 0.6476057171821595,
+    "roc_auc": 0.9442016938596361,
+    "balanced_accuracy": 0.8758630256180682,
+    "f1_positive": 0.851619644723093,
+    "accuracy": 0.8836065573770492,
+    "precision_positive": 0.8660998940467834
+  }
+}

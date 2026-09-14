@@ -17,7 +17,7 @@
   <out_dir>/
     <jid>.vasp        # структура в POSCAR-формате
     ...
-    id_prop.csv       # строки: <jid>.vasp,<band_gap>   (без заголовка)
+    id_prop.csv       # строки: <jid>.vasp,<band_gap>[,<extra_target>]   (без заголовка)
 
 Запуск (локально, БЕЗ прокси, если он мешает сети):
     env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
@@ -48,6 +48,8 @@ def main():
                     help="только для alex_2d: фильтр стабильности e_above_hull<=X эВ/атом (по умолч. 0.1)")
     ap.add_argument("--keep-metals", action="store_true",
                     help="не отсекать металлы (по умолчанию убираем gap<=0.01)")
+    ap.add_argument("--extra-target", default=None,
+                    help="второе поле в id_prop.csv (напр. band_gap_dir для классификатора типа щели)")
     args = ap.parse_args()
 
     # дефолты под источник
@@ -103,7 +105,15 @@ def main():
         fname = f"{jid}.vasp"
         with open(os.path.join(args.out_dir, fname), "w") as f:
             f.write(poscar)
-        rows.append((fname, float(gap)))
+        if args.extra_target:
+            extra = pd.to_numeric(e.get(args.extra_target), errors="coerce")
+            if pd.isna(extra):
+                n_skip_target += 1
+                os.remove(os.path.join(args.out_dir, fname))
+                continue
+            rows.append((fname, float(gap), float(extra)))
+        else:
+            rows.append((fname, float(gap)))
 
     # --- id_prop.csv (без заголовка, как ждёт ALIGNN) ---
     with open(os.path.join(args.out_dir, "id_prop.csv"), "w", newline="") as f:

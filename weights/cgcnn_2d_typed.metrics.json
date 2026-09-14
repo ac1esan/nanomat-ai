@@ -1,0 +1,29 @@
+{
+  "task": "type",
+  "split": "group",
+  "members": [
+    {
+      "n": 1326,
+      "positive_rate": 0.21040724217891693,
+      "threshold": 0.32657402276992803,
+      "roc_auc": 0.7583400944155173,
+      "balanced_accuracy": 0.7021751856302184,
+      "f1_positive": 0.4864864864864865,
+      "accuracy": 0.6417797888386124,
+      "precision_positive": 0.34829720854759216
+    }
+  ],
+  "n_train": 10733,
+  "n_val": 1290,
+  "n_test": 1326,
+  "ensemble": {
+    "n": 1326,
+    "positive_rate": 0.21040724217891693,
+    "threshold": 0.32657402276992803,
+    "roc_auc": 0.7583400944155173,
+    "balanced_accuracy": 0.7021751856302184,
+    "f1_positive": 0.4864864864864865,
+    "accuracy": 0.6417797888386124,
+    "precision_positive": 0.34829720854759216
+  }
+}

@@ -1,25 +1,37 @@
-# окружение
+# environment
 venv/
 __pycache__/
 *.pyc
 .DS_Store
+*.egg-info/
+.pytest_cache/
 
-# данные — воспроизводимы скриптом export_structures_for_alignn.py
+# data: reproducible with export_structures_for_alignn.py
 alignn_data/
 alignn_data_c2db/
 alignn_data_alex_2d/
 alignn_data_alex_2d_eh02/
 *.zip
+graphs_cache_*.pt
 
-# выходные артефакты (генерируются при запуске)
+# run outputs
 results.csv
+# сырые артефакты GPU-прогонов; то, что поставляется, скопировано в weights/
+runs/
 
-# устаревшие веса (актуальны cgcnn_2d_ensemble.pt + cgcnn_2d_typed.pt)
-cgcnn_2d_bandgap.pt
-cgcnn_2d_multi.pt
+# superseded weights (shipped: weights/cgcnn_2d_ensemble.pt + weights/cgcnn_2d_typed.pt)
+weights/cgcnn_2d_bandgap.pt
+weights/cgcnn_2d_multi.pt
 
-# артефакты Gradio
+# Gradio
 .gradio/
 
-# сторонние скиллы Claude Code (не коммитим)
+# third-party Claude Code skills
 .claude/skills/
+
+# предпосчитанная таблица скрининга (воспроизводится scripts/precompute_screening.py)
+screening_table.csv
+
+# лабораторный журнал: контекст для Claude Code, намеренно не публикуется
+# (удалён из репозитория коммитом 770f5cd; файл остаётся локально)
+CLAUDE.md

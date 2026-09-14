@@ -1,0 +1,9 @@
+# Composition baseline (baseline_2d_bandgap.py) and data export.
+scikit-learn>=1.4
+xgboost>=2.0          # optional; needs `brew install libomp` on macOS
+matminer>=0.9
+jarvis-tools>=2024.1
+pymatgen>=2024.1
+matplotlib>=3.8
+pandas>=2.0
+numpy>=1.26

@@ -1,0 +1,7 @@
+# Training CGCNN (train_cgcnn.py). Kaggle T4: torch is preinstalled, add the rest.
+torch>=2.4
+torch_geometric>=2.5
+pymatgen>=2024.1
+scikit-learn>=1.4
+numpy>=1.26
+pandas>=2.0

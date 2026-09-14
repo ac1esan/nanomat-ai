@@ -1,8 +1,9 @@
-scikit-learn
-xgboost
-pymatgen
-matminer
-matplotlib
-jarvis-tools
-pandas
-numpy
+# Inference + web UI (CPU). Tested with Python 3.14, torch 2.12, PyG 2.8, gradio 6.18.
+# On Linux/HF Spaces the CPU wheel keeps the install small:
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.4
+torch_geometric>=2.5
+pymatgen>=2024.1
+gradio>=5.0
+numpy>=1.26
+pandas>=2.0

@@ -1,314 +1,275 @@
-"""
-Screening-инструмент: структура 2D-материала -> предсказанный band gap.
-=======================================================================
+"""NanoMatAI screening tool: crystal structure -> band gap of a 2D semiconductor.
 
-Берёт обученную CGCNN (дотюн на 13k стабильных 2D, Alexandria PBE, MAE~0.22 эВ),
-читает кристаллическую структуру (CIF / POSCAR / .vasp) и выдаёт:
-  - предсказанный band gap (эВ),
-  - неопределённость (MC-dropout, std по K стохастическим проходам),
-  - флаг доверия (по медиане неопределённости на тесте ~0.09 эВ).
-
-Два режима:
-  # интерактивная морда (перетащил файл -> увидел gap)
+Two modes
+  # interactive web UI (drag & drop a CIF / POSCAR, or paste it as text)
   python screen_bandgap.py --app
 
-  # батч-скрининг: папка/файл структур -> CSV, отсортированный по щели
-  python screen_bandgap.py --in structures/ --out results.csv
-  python screen_bandgap.py --in MoS2.cif
+  # batch screening: folder (or one file) -> CSV ranked by band gap
+  python screen_bandgap.py --in examples/ --out results.csv
 
-Веса модели: cgcnn_2d_bandgap.pt (скачать из Kaggle Output). Лежат рядом со скриптом.
+Output per structure: PBE band gap + ensemble uncertainty, estimated experimental
+gap (linear PBE correction), direct/indirect type, and a verdict
+(reliable / check / out-of-domain). Runs on CPU in well under a second per structure.
 
-ВАЖНО: архитектура и параметры графа (CUTOFF, N_RBF) ДОЛЖНЫ совпадать с обучением.
+Weights are read from ./weights (or $NANOMAT_WEIGHTS). The model definition and
+the graph construction live in the `nanomat` package and are shared with
+train_cgcnn.py, so they cannot drift apart.
 """
+
+from __future__ import annotations
 
 import argparse
 import glob
 import os
+import tempfile
 import warnings
 
 warnings.filterwarnings("ignore")
 
-import numpy as np
-import torch
-import torch.nn as nn
-from torch_geometric.data import Data, Batch
-from torch_geometric.nn import CGConv, global_mean_pool
-from pymatgen.core import Structure
+from nanomat import Predictor
+from nanomat.predict import METAL_GAP, read_structure
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-CKPT_ENS = os.path.join(_HERE, "cgcnn_2d_ensemble.pt")   # ансамбль gap (приоритет)
-CKPT_ONE = os.path.join(_HERE, "cgcnn_2d_bandgap.pt")    # одиночная модель gap
-CKPT_TYPE = os.path.join(_HERE, "cgcnn_2d_typed.pt")     # классификатор типа щели (опц.)
+# Validated strain window (scripts/geometry_sensitivity.py): the response is smooth
+# and correct in sign under tension, but breaks down below -2% compression.
+STRAIN_MIN, STRAIN_MAX = -0.02, 0.06
 
-# параметры графа — переопределяются из чекпойнта, дефолты под обучение
-CUTOFF, N_RBF = 8.0, 40
-MED_UNC = 0.092  # медиана неопределённости на тесте — порог «доверять/проверить»
+STRUCTURE_GLOBS = ("*.cif", "*.vasp", "*.poscar", "POSCAR*", "CONTCAR*")
 
 
-# --- граф из структуры (идентично обучению) ---
-def to_graph(st: Structure):
-    c, n, img, d = st.get_neighbor_list(r=CUTOFF)  # соседи с учётом периодики
-    if len(c) == 0:
-        return None
-    z = torch.tensor([s.specie.Z for s in st], dtype=torch.long)
-    ei = torch.tensor(np.vstack([c, n]), dtype=torch.long)
-    ew = torch.tensor(d, dtype=torch.float)
-    return Data(z=z, edge_index=ei, edge_weight=ew, num_nodes=len(z))
-
-
-# --- модель (идентична Kaggle CGCNN2) ---
-class CGCNN(nn.Module):
-    def __init__(self, h=128, n_conv=4, p=0.2):
-        super().__init__()
-        self.emb = nn.Embedding(100, h)
-        self.convs = nn.ModuleList(
-            [CGConv(h, dim=N_RBF, batch_norm=True) for _ in range(n_conv)]
-        )
-        self.head = nn.Sequential(nn.Linear(h, h), nn.Softplus(), nn.Linear(h, 1))
-        self.drop = nn.Dropout(p)
-        self.register_buffer("centers", torch.linspace(0, CUTOFF, N_RBF))
-
-    def forward(self, data):
-        ea = torch.exp(-0.5 * (data.edge_weight.unsqueeze(1) - self.centers.unsqueeze(0)) ** 2)
-        x = self.emb(data.z)
-        for c in self.convs:
-            x = c(x, data.edge_index, ea)
-        x = self.drop(global_mean_pool(x, data.batch))
-        return self.head(x).squeeze(-1)
-
-
-# --- классификатор типа щели (прямая/непрямая), идентичен Kaggle CGCNNcls ---
-class CGCNNcls(nn.Module):
-    def __init__(self, h=128, n_conv=4):
-        super().__init__()
-        self.emb = nn.Embedding(100, h)
-        self.convs = nn.ModuleList([CGConv(h, dim=N_RBF, batch_norm=True) for _ in range(n_conv)])
-        self.body = nn.Sequential(nn.Linear(h, h), nn.Softplus())
-        self.reg = nn.Linear(h, 1)
-        self.cls = nn.Linear(h, 1)
-        self.register_buffer("centers", torch.linspace(0, CUTOFF, N_RBF))
-
-    def forward(self, data):
-        ea = torch.exp(-0.5 * (data.edge_weight.unsqueeze(1) - self.centers.unsqueeze(0)) ** 2)
-        x = self.emb(data.z)
-        for c in self.convs:
-            x = c(x, data.edge_index, ea)
-        x = self.body(global_mean_pool(x, data.batch))
-        return self.reg(x).squeeze(-1), self.cls(x).squeeze(-1)
-
-
-def load_type_model():
-    """Классификатор типа щели, если веса есть. Иначе None."""
-    if not os.path.exists(CKPT_TYPE):
-        return None
-    ck = torch.load(CKPT_TYPE, map_location="cpu")
-    m = CGCNNcls(); m.load_state_dict(ck["state_dict"]); m.eval()
-    print("Загружен классификатор типа щели (прямая/непрямая).")
-    return m
-
-
-def load_models():
-    """Грузит ансамбль (если есть) либо одиночную модель. Возвращает
-    (models, mean, std): список моделей — для ансамбля >1, иначе 1."""
-    global CUTOFF, N_RBF
-    if os.path.exists(CKPT_ENS):
-        ck = torch.load(CKPT_ENS, map_location="cpu")
-        CUTOFF, N_RBF = ck.get("cutoff", CUTOFF), ck.get("n_rbf", N_RBF)
-        models = []
-        for sd in ck["state_dicts"]:
-            m = CGCNN(); m.load_state_dict(sd); m.eval(); models.append(m)
-        print(f"Загружен ансамбль из {len(models)} моделей.")
-        return models, float(ck["mean"]), float(ck["std"])
-    if os.path.exists(CKPT_ONE):
-        ck = torch.load(CKPT_ONE, map_location="cpu")
-        CUTOFF, N_RBF = ck.get("cutoff", CUTOFF), ck.get("n_rbf", N_RBF)
-        m = CGCNN(); m.load_state_dict(ck["state_dict"]); m.eval()
-        print("Загружена одиночная модель (неопределённость через MC-dropout).")
-        return [m], float(ck["mean"]), float(ck["std"])
-    raise SystemExit(
-        "Не найдены веса. Скачай из Kaggle один из файлов в папку проекта:\n"
-        f"  {os.path.basename(CKPT_ENS)} (ансамбль, предпочтительно) или\n"
-        f"  {os.path.basename(CKPT_ONE)} (одиночная модель)."
-    )
-
-
-def read_structure(path: str) -> Structure:
-    try:
-        return Structure.from_file(path)
-    except Exception:
-        return Structure.from_file(path, fmt="poscar")  # POSCAR без расширения
-
-
-@torch.no_grad()
-def predict(models, mean, std, st: Structure, mc=30):
-    """Возвращает (gap, uncertainty) в эВ.
-    Ансамбль (len>1): gap=среднее, unc=std между моделями.
-    Одиночная: gap=точечное, unc=std по MC-dropout."""
-    g = to_graph(st)
-    if g is None:
-        return None, None
-    batch = Batch.from_data_list([g])
-
-    if len(models) > 1:
-        preds = [(m(batch) * std + mean).item() for m in models]
-        return float(np.mean(preds)), float(np.std(preds))
-
-    model = models[0]
-    model.eval()
-    gap = (model(batch) * std + mean).item()
-    model.train()  # dropout ВКЛ
-    for mod in model.modules():
-        if isinstance(mod, nn.BatchNorm1d):
-            mod.eval()
-    preds = [(model(batch) * std + mean).item() for _ in range(mc)]
-    model.eval()
-    return gap, float(np.std(preds))
-
-
-@torch.no_grad()
-def predict_type(type_model, st: Structure):
-    """Возвращает (label, p_непрямозонный) или (None, None)."""
-    if type_model is None:
-        return None, None
-    g = to_graph(st)
-    if g is None:
-        return None, None
-    _, logit = type_model(Batch.from_data_list([g]))
-    p_ind = torch.sigmoid(logit).item()
-    return ("непрямозонный" if p_ind >= 0.5 else "прямозонный"), p_ind
-
-
-# PBE->эксперимент: грубая линейная поправка из validate_experiment.py (exp≈1.26·gap−0.12)
-A_CORR, B_CORR = 1.26, -0.12
-
-
-def corrected_gap(gap):
-    return A_CORR * gap + B_CORR
-
-
-def verdict(unc):
-    if unc <= 1.5 * MED_UNC:
-        return "надёжно"
-    if unc <= 3.0 * MED_UNC:
-        return "проверить (повышенная неопределённость)"
-    return "вне области применимости (возможно металл / нетипичная структура)"
+def find_structures(path: str) -> list[str]:
+    if os.path.isdir(path):
+        files: list[str] = []
+        for pat in STRUCTURE_GLOBS:
+            files += glob.glob(os.path.join(path, "**", pat), recursive=True)
+        return sorted(set(files))
+    return [path]
 
 
 # ---------------------------------------------------------------------------
-# Режим 1: батч-скрининг папки/файла -> CSV
+# Mode 1: batch screening -> CSV
 # ---------------------------------------------------------------------------
-def run_batch(in_path, out_path):
+def run_batch(in_path: str, out_path: str | None, weights_dir: str | None = None,
+              pad_vacuum: bool = True):
     import pandas as pd
 
-    models, mean, std = load_models()
-    type_model = load_type_model()
-
-    if os.path.isdir(in_path):
-        files = []
-        for ext in ("*.cif", "*.vasp", "*.poscar", "POSCAR*"):
-            files += glob.glob(os.path.join(in_path, "**", ext), recursive=True)
-    else:
-        files = [in_path]
-    files = sorted(set(files))
+    files = find_structures(in_path)
     if not files:
-        raise SystemExit(f"Структур не найдено в {in_path}")
+        raise SystemExit(f"No structures found in {in_path}")
+    P = Predictor(weights_dir)
 
     rows = []
     for i, f in enumerate(files, 1):
         try:
             st = read_structure(f)
-            gap, unc = predict(models, mean, std, st)
-            if gap is None:
+            r = P.run(st, pad_vacuum=pad_vacuum)
+            if r is None:
+                print(f"[{i}/{len(files)}] SKIP {os.path.basename(f)}: no neighbours within cutoff")
                 continue
-            gap_type, p_ind = predict_type(type_model, st)
-            row = {
-                "file": os.path.basename(f),
-                "formula": st.composition.reduced_formula,
-                "band_gap_PBE_eV": round(gap, 3),
-                "exp_gap_est_eV": round(corrected_gap(gap), 3) if gap > 0.1 else 0.0,
-                "uncertainty_eV": round(unc, 3),
-                "verdict": verdict(unc),
-            }
-            if gap_type is not None:
-                row["gap_type"] = gap_type
-                row["p_indirect"] = round(p_ind, 2)
+            row = {"file": os.path.basename(f), **r.as_row()}
             rows.append(row)
-            extra = f"  [{gap_type}]" if gap_type else ""
-            print(f"[{i}/{len(files)}] {st.composition.reduced_formula:14s} "
-                  f"gap={gap:.3f} ± {unc:.3f} эВ{extra}")
-        except Exception as e:
-            print(f"[{i}/{len(files)}] ПРОПУСК {os.path.basename(f)}: {e}")
+            extra = f"  [{r.gap_type}]" if r.gap_type else ""
+            flag = "  !" if r.warnings else ""
+            print(f"[{i}/{len(files)}] {r.formula:12s} gap={r.gap:.3f} ± {r.unc:.3f} eV{extra}"
+                  f"  {r.verdict}{flag}")
+        except Exception as e:  # keep going on a bad file
+            print(f"[{i}/{len(files)}] SKIP {os.path.basename(f)}: {e}")
 
+    if not rows:
+        raise SystemExit("Nothing predicted.")
     df = pd.DataFrame(rows).sort_values("band_gap_PBE_eV").reset_index(drop=True)
     out_path = out_path or "results.csv"
     df.to_csv(out_path, index=False)
-    print(f"\nГотово: {len(df)} структур -> {out_path} (отсортировано по band gap)")
+    print(f"\nDone: {len(df)} structures -> {out_path} (sorted by band gap)")
+    return df
 
 
 # ---------------------------------------------------------------------------
-# Режим 2: Gradio-морда
+# Mode 2: Gradio UI
 # ---------------------------------------------------------------------------
-def run_app():
+def format_markdown(r, cal: dict | None = None) -> str:
+    cal = cal or {}
+    ood = r.verdict.startswith("out-of-domain")
+    kind = "metal / semimetal" if r.is_metal_like else "semiconductor / insulator"
+    headline = f"**{r.gap:.2f} eV**"
+    if ood:
+        # The interval is conditioned on the ensemble spread, and out-of-domain is
+        # exactly where that spread is untrustworthy. Showing a tight interval next
+        # to a number we have just disowned would be the worst of both worlds.
+        headline += " &nbsp; — **do not use this number**"
+    elif r.interval90 is not None:
+        headline += f" &nbsp; (90% interval ±{r.interval90:.2f})"
+    lines = [
+        f"### {r.formula} &nbsp;·&nbsp; {r.natoms} atoms &nbsp;·&nbsp; "
+        f"vacuum {r.layer.get('vacuum', float('nan')):.1f} Å",
+        "",
+        "| | |",
+        "|---|---|",
+        f"| **Band gap (PBE)** | {headline} &nbsp; ({kind}) |",
+    ]
+    if r.exp_gap_est is not None and not ood:
+        lines.append(f"| Estimated experimental gap | ≈ {r.exp_gap_est:.2f} eV (linear PBE correction) |")
+    if r.gap_type is not None:
+        conf = r.p_indirect if r.gap_type == "indirect" else 1 - r.p_indirect
+        lines.append(f"| Gap type | {r.gap_type} (p = {conf:.2f}) |")
+    if r.p_metal is not None:
+        lines.append(f"| Metal gate | p(metal) = {r.p_metal:.2f} |")
+    lines.append(f"| Ensemble spread | {r.unc:.3f} eV |")
+    if r.latent_distance is not None and cal.get("latent_q75"):
+        near = "inside" if r.latent_distance <= cal["latent_q75"] else "OUTSIDE"
+        lines.append(f"| Distance to training data | {r.latent_distance:.3f} — {near} the "
+                     f"familiar region (q75 = {cal['latent_q75']:.3f}) |")
+    lines.append(f"| **Verdict** | **{r.verdict}** |")
+    if r.typical_error is not None:
+        lines.append(f"| Typical error of this tier | {r.typical_error:.2f} eV (measured on "
+                     "held-out data) |")
+    if ood:
+        lines += ["", "> **Out of the model's domain.** The prediction above is reported for "
+                  "transparency, not for use: the calibrated interval assumes the ensemble "
+                  "spread is meaningful, and on out-of-domain inputs it is not. Phosphorene is "
+                  "the documented example — spread 0.03 eV, actual error 1.2 eV."]
+    if r.warnings:
+        lines += ["", "⚠️ " + "  \n⚠️ ".join(r.warnings)]
+    mae = cal.get("test_mae")
+    lines += [
+        "",
+        "<sub>CGCNN ensemble (5 models) on 13 349 stable 2D semiconductors (Alexandria, PBE), "
+        f"evaluated on a composition-disjoint split: test MAE {mae:.2f} eV. "
+        "Two independent out-of-domain signals are used, because neither alone is enough: "
+        "the spread between ensemble members, and the distance to the training set in the "
+        "model's own latent space. The second one exists because all members share a training "
+        "set, so a chemistry none of them saw produces confident agreement. "
+        f"Gaps below {METAL_GAP} eV are reported as metal-like; PBE underestimates real gaps."
+        "</sub>" if mae else
+        "<sub>CGCNN ensemble on 2D semiconductors (Alexandria, PBE).</sub>",
+    ]
+    return "\n".join(lines)
+
+
+def strain_curve(P, st, eps_min: float = STRAIN_MIN, eps_max: float = STRAIN_MAX):
+    """Band gap under biaxial in-plane strain, over the validated window only.
+
+    Internal coordinates are frozen (no Poisson relaxation), and the model was
+    trained on relaxed ground states only, so this is a qualitative trend.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from pymatgen.core import Lattice, Structure
+
+    eps = np.arange(eps_min, eps_max + 1e-9, 0.01)
+    gaps, uncs = [], []
+    for e in eps:
+        f = 1 + float(e)
+        lat = Lattice.from_parameters(st.lattice.a * f, st.lattice.b * f, st.lattice.c,
+                                      *st.lattice.angles)
+        r = P.run(Structure(lat, st.species, st.frac_coords))
+        gaps.append(r.gap)
+        uncs.append(r.unc)
+    gaps, uncs, x = np.array(gaps), np.array(uncs), eps * 100
+
+    fig, ax = plt.subplots(figsize=(5.4, 3.2), dpi=140)
+    ax.fill_between(x, gaps - uncs, gaps + uncs, color="#2a78d6", alpha=0.18, lw=0)
+    ax.plot(x, gaps, color="#2a78d6", lw=2, marker="o", ms=4)
+    ax.axvline(0, color="#52514e", lw=1, ls=":")
+    ax.set_xlabel("biaxial strain, %", fontsize=9)
+    ax.set_ylabel("band gap, eV", fontsize=9)
+    ax.set_title("Trend under strain (qualitative)", fontsize=10, loc="left")
+    ax.grid(axis="y", color="#e6e5e1", lw=0.8)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(labelsize=8)
+    fig.tight_layout()
+    return fig
+
+
+def build_demo(weights_dir: str | None = None):
     import gradio as gr
 
-    models, mean, std = load_models()
-    type_model = load_type_model()
+    P = Predictor(weights_dir)
 
-    def infer(file):
-        if file is None:
-            return "Загрузи файл структуры (CIF / POSCAR / .vasp)."
+    def infer(file, text, want_strain):
+        path = file
+        if text and text.strip():
+            suffix = ".cif" if "_cell_length_a" in text or "loop_" in text else ".vasp"
+            tmp = tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False)
+            tmp.write(text)
+            tmp.close()
+            path = tmp.name
+        if not path:
+            return "Upload a structure file (CIF / POSCAR / .vasp) or paste its contents.", None
         try:
-            st = read_structure(file)
+            st = read_structure(path)
         except Exception as e:
-            return f"Не удалось прочитать структуру: {e}"
-        gap, unc = predict(models, mean, std, st)
-        if gap is None:
-            return "Не удалось построить граф (нет соседей в радиусе обрезки)."
-        kind = "металл / полуметалл" if gap < 0.1 else "полупроводник / диэлектрик"
-        gap_type, p_ind = predict_type(type_model, st)
-        type_line = ""
-        if gap_type is not None:
-            conf = p_ind if gap_type == "непрямозонный" else 1 - p_ind
-            type_line = f"Тип щели:         {gap_type}  (p={conf:.2f})\n"
-        corr_line = (f"≈ эксперимент:    {corrected_gap(gap):.2f} эВ  (PBE-поправка)\n"
-                     if gap > 0.1 else "")
-        return (
-            f"Состав:           {st.composition.reduced_formula}\n"
-            f"Атомов в ячейке:  {len(st)}\n"
-            f"─────────────────────────────\n"
-            f"Band gap (PBE):   {gap:.3f} эВ   ({kind})\n"
-            f"{corr_line}"
-            f"{type_line}"
-            f"Неопределённость: ± {unc:.3f} эВ\n"
-            f"Оценка:           {verdict(unc)}\n"
-            f"─────────────────────────────\n"
-            f"Модель: CGCNN-ансамбль на 2D-полупроводниках (Alexandria PBE), "
-            f"MAE gap ≈ 0.23 эВ, тип щели ROC-AUC ≈ 0.80. PBE занижает истинную щель "
-            f"(поправка калибрована на 6 эталонах)."
-        )
+            return f"Could not parse the structure: {e}", None
+        r = P.run(st)
+        if r is None:
+            return "Could not build a graph (no neighbours within the cutoff radius).", None
+        fig = None
+        if want_strain and r.layer.get("is_layer"):
+            try:
+                fig = strain_curve(P, st)
+            except Exception:
+                fig = None
+        return format_markdown(r, P.cal), fig
 
-    demo = gr.Interface(
-        fn=infer,
-        inputs=gr.File(label="Структура 2D-материала (CIF / POSCAR / .vasp)", type="filepath"),
-        outputs=gr.Textbox(label="Предсказание band gap", lines=10),
-        title="NanoMatAI — предсказание band gap 2D-материалов",
-        description="Загрузи кристаллическую структуру → получи band gap и неопределённость. "
-                    "Инференс на CPU, без DFT.",
-    )
-    demo.launch()
+    here = os.path.dirname(os.path.abspath(__file__))
+    ex_dir = os.path.join(here, "examples")
+    examples = [[os.path.join(ex_dir, f), ""] for f in
+                ("MoS2.vasp", "WS2.vasp", "WSe2.vasp", "hBN.vasp", "phosphorene.vasp",
+                 "MoS2_thin_vacuum.vasp", "graphene.vasp")
+                if os.path.exists(os.path.join(ex_dir, f))]
+
+    with gr.Blocks(title="NanoMatAI · 2D band gap") as demo:
+        gr.Markdown(
+            "# NanoMatAI — band gap of 2D materials from structure\n"
+            "Upload a monolayer structure (CIF / POSCAR / .vasp) **or** paste it as text. "
+            "A graph neural network predicts the PBE band gap with an uncertainty estimate "
+            "in well under a second on CPU, instead of hours of DFT."
+        )
+        with gr.Row():
+            with gr.Column(scale=1):
+                f_in = gr.File(label="Structure file", type="filepath",
+                               file_types=[".cif", ".vasp", ".poscar", ""])
+                t_in = gr.Textbox(label="…or paste POSCAR / CIF here", lines=8,
+                                  placeholder="MoS2\n1.0\n 3.19 0 0\n ...")
+                strain_cb = gr.Checkbox(
+                    value=False,
+                    label="also show the trend under biaxial strain (-2%…+6%)",
+                    info="Adds ~9 extra predictions. Qualitative only: the model was "
+                         "trained on relaxed ground states, and the response breaks "
+                         "down below -2% compression.")
+                btn = gr.Button("Predict band gap", variant="primary")
+            with gr.Column(scale=1):
+                out = gr.Markdown(label="Prediction")
+                plot = gr.Plot(label="Strain response")
+        if examples:
+            gr.Examples(examples=examples, inputs=[f_in, t_in], label="Try an example",
+                        examples_per_page=8)
+        btn.click(infer, inputs=[f_in, t_in, strain_cb], outputs=[out, plot])
+        f_in.change(infer, inputs=[f_in, t_in, strain_cb], outputs=[out, plot])
+    return demo
+
+
+def run_app(weights_dir: str | None = None, share: bool = False):
+    build_demo(weights_dir).launch(share=share)
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Screening band gap 2D-материалов по структуре")
-    ap.add_argument("--app", action="store_true", help="запустить Gradio-морду")
-    ap.add_argument("--in", dest="inp", help="файл или папка со структурами (батч-режим)")
-    ap.add_argument("--out", help="куда писать CSV (по умолч. results.csv)")
+    ap = argparse.ArgumentParser(description="Band-gap screening of 2D materials from structure")
+    ap.add_argument("--app", action="store_true", help="launch the Gradio web UI")
+    ap.add_argument("--in", dest="inp", help="structure file or folder (batch mode)")
+    ap.add_argument("--out", help="output CSV (default results.csv)")
+    ap.add_argument("--weights", help="directory with .pt weights (default ./weights)")
+    ap.add_argument("--no-pad", action="store_true",
+                    help="do not auto-pad thin vacuum (debug only)")
+    ap.add_argument("--share", action="store_true", help="Gradio public link")
     args = ap.parse_args()
 
     if args.app:
-        run_app()
+        run_app(args.weights, share=args.share)
     elif args.inp:
-        run_batch(args.inp, args.out)
+        run_batch(args.inp, args.out, args.weights, pad_vacuum=not args.no_pad)
     else:
         ap.print_help()
 
