@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NanoMatAI — 2D band gap screening</title>
+<meta name="description" content="Browse predicted band gaps of 28 372 two-dimensional structures, with a calibrated uncertainty and an explicit trust verdict on every row.">
+<style>
+:root{
+  color-scheme: light;
+  --surface-1:#fcfcfb; --surface-2:#f4f3f0; --surface-3:#ebeae6;
+  --border:#e0dfda; --border-strong:#c9c8c2;
+  --text-1:#0b0b0b; --text-2:#52514e; --text-3:#87867f;
+  --tier-0:#008300; --tier-1:#4a3aa7; --tier-2:#e34948;
+  --accent:#2a78d6; --warn-bg:#fdf4e3; --warn-border:#e3c37a;
+  --ramp-lo:#eef4fb; --ramp-hi:#10396b;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --surface-1:#1a1a19; --surface-2:#232322; --surface-3:#2d2d2b;
+    --border:#37372f; --border-strong:#4d4d45;
+    --text-1:#ffffff; --text-2:#c3c2b7; --text-3:#8d8c83;
+    --tier-0:#008300; --tier-1:#9085e9; --tier-2:#e66767;
+    --accent:#3987e5; --warn-bg:#2e2716; --warn-border:#6b5722;
+    --ramp-lo:#20303f; --ramp-hi:#8fc0f5;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --surface-1:#1a1a19; --surface-2:#232322; --surface-3:#2d2d2b;
+  --border:#37372f; --border-strong:#4d4d45;
+  --text-1:#ffffff; --text-2:#c3c2b7; --text-3:#8d8c83;
+  --tier-0:#008300; --tier-1:#9085e9; --tier-2:#e66767;
+  --accent:#3987e5; --warn-bg:#2e2716; --warn-border:#6b5722;
+  --ramp-lo:#20303f; --ramp-hi:#8fc0f5;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-1);color:var(--text-1);
+  font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+a{color:var(--accent)}
+.wrap{max-width:1240px;margin:0 auto;padding:22px 18px 60px}
+header h1{font-size:21px;margin:0 0 4px;letter-spacing:-.01em}
+header p{margin:0;color:var(--text-2);max-width:70ch}
+.links{margin-top:10px;font-size:13px;color:var(--text-3)}
+.links a{margin-right:14px}
+.tabs{display:flex;gap:4px;margin:22px 0 14px;border-bottom:1px solid var(--border)}
+.tab{padding:8px 14px;border:0;background:none;color:var(--text-2);font:inherit;
+  cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--text-1);border-bottom-color:var(--accent);font-weight:600}
+.panel[hidden]{display:none!important}
+
+/* filters */
+.filters{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:flex-end;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field > label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3)}
+input[type=text],input[type=number],select{background:var(--surface-1);color:var(--text-1);
+  border:1px solid var(--border-strong);border-radius:5px;padding:5px 7px;font:inherit;font-size:13px}
+input[type=number]{width:72px}
+.chips{display:flex;gap:5px}
+.chip{border:1px solid var(--border-strong);background:var(--surface-1);color:var(--text-2);
+  border-radius:99px;padding:4px 11px;font:inherit;font-size:12px;cursor:pointer;display:flex;
+  align-items:center;gap:6px}
+.chip[aria-pressed="true"]{color:var(--text-1);border-color:currentColor;font-weight:600}
+.chip .dot{width:9px;height:9px;border-radius:50%;background:currentColor;flex:none}
+.chip.t0[aria-pressed="true"]{color:var(--tier-0)}
+.chip.t1[aria-pressed="true"]{color:var(--tier-1)}
+.chip.t2[aria-pressed="true"]{color:var(--tier-2)}
+.chip.t0 .dot{background:var(--tier-0)} .chip.t1 .dot{background:var(--tier-1)} .chip.t2 .dot{background:var(--tier-2)}
+.presets{display:flex;gap:5px;flex-wrap:wrap}
+.preset{border:1px solid var(--border-strong);background:var(--surface-1);color:var(--text-2);
+  border-radius:5px;padding:4px 9px;font:inherit;font-size:12px;cursor:pointer}
+.preset:hover{border-color:var(--accent);color:var(--accent)}
+.check{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2)}
+.banner{margin-top:12px;background:var(--warn-bg);border:1px solid var(--warn-border);
+  border-radius:7px;padding:10px 12px;font-size:13px;color:var(--text-1)}
+.banner b{font-weight:600}
+.count{margin:14px 0 8px;font-size:13px;color:var(--text-2)}
+.count b{color:var(--text-1)}
+
+/* chart */
+.chartbox{position:relative;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:8px;padding:10px 12px 6px}
+.chart-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+.chart-head h2{font-size:14px;margin:0 0 2px}
+.chart-head p{margin:0;font-size:12px;color:var(--text-3);max-width:72ch}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--text-2);flex-wrap:wrap}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+canvas{display:block;width:100%;height:320px;cursor:crosshair}
+.tip{position:absolute;pointer-events:none;background:var(--surface-1);border:1px solid var(--border-strong);
+  border-radius:6px;padding:6px 9px;font-size:12px;box-shadow:0 3px 12px rgba(0,0,0,.14);
+  white-space:nowrap;z-index:5}
+.tip b{display:block;font-size:13px}
+
+/* results */
+.results{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;margin-top:16px;align-items:start}
+@media (max-width:900px){.results{grid-template-columns:1fr}}
+.tablebox{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface-2)}
+.thead{display:grid;grid-template-columns:1.5fr .9fr .8fr .8fr 1.4fr;gap:8px;padding:8px 12px;
+  background:var(--surface-3);border-bottom:1px solid var(--border);font-size:11px;
+  text-transform:uppercase;letter-spacing:.04em;color:var(--text-3)}
+.thead button{all:unset;cursor:pointer;display:flex;align-items:center;gap:4px}
+.thead button:hover{color:var(--text-1)}
+.scroller{height:420px;overflow-y:auto;position:relative}
+.row{display:grid;grid-template-columns:1.5fr .9fr .8fr .8fr 1.4fr;gap:8px;padding:7px 12px;
+  border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;align-items:center}
+.row:hover{background:var(--surface-3)}
+.row[aria-selected="true"]{background:var(--surface-3);box-shadow:inset 3px 0 0 var(--accent)}
+.row .f{font-weight:600;display:flex;align-items:center;gap:6px}
+.badge{font-size:10px;padding:1px 5px;border-radius:3px;background:var(--surface-1);
+  border:1px solid var(--border-strong);color:var(--text-3);font-weight:400;white-space:nowrap}
+.tierdot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.v{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2)}
+.num{font-variant-numeric:tabular-nums}
+.empty{padding:36px 12px;text-align:center;color:var(--text-3)}
+
+/* detail */
+.detail{border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:14px;
+  position:sticky;top:14px}
+.detail h3{margin:0 0 2px;font-size:17px}
+.detail .sub{color:var(--text-3);font-size:12px;margin:0 0 12px}
+.detail dl{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;margin:0;font-size:13px}
+.detail dt{color:var(--text-2)}
+.detail dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.detail .big{font-size:19px;font-weight:600;margin:6px 0 10px}
+.detail .note{margin-top:12px;padding:9px 10px;border-radius:6px;background:var(--surface-3);
+  font-size:12px;color:var(--text-2);line-height:1.45}
+.detail .stop{background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--text-1)}
+
+/* trust map */
+.ptable{display:grid;grid-template-columns:repeat(18,minmax(0,1fr));gap:3px;margin:16px 0 8px}
+.cell{aspect-ratio:1;border-radius:4px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;font-size:11px;line-height:1.1;border:1px solid transparent;min-height:34px}
+.cell b{font-size:12px;font-weight:600}
+.cell small{font-size:9px;opacity:.85;font-variant-numeric:tabular-nums}
+.cell.void{background:none}
+.cell.nodata{background:var(--surface-3);color:var(--text-3);border-color:var(--border)}
+.ramp{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);margin:4px 0 16px}
+.ramp .bar{height:11px;width:190px;border-radius:3px;
+  background:linear-gradient(to right,var(--ramp-lo),var(--ramp-hi));border:1px solid var(--border)}
+.prose{max-width:76ch;color:var(--text-2);font-size:13px}
+.prose h2{color:var(--text-1);font-size:15px;margin:20px 0 6px}
+.prose code{background:var(--surface-3);padding:1px 5px;border-radius:3px;font-size:12px}
+.loading{padding:60px 0;text-align:center;color:var(--text-3)}
+footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
+  font-size:12px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1 id="t-title">NanoMatAI — 2D band gap screening</h1>
+  <p id="t-lede"></p>
+  <div class="links">
+    <a href="https://github.com/ac1esan/nanomat-ai">GitHub</a>
+    <a href="https://github.com/ac1esan/nanomat-ai/blob/main/MODEL_CARD.md" id="t-mc">Model card</a>
+    <a href="https://github.com/ac1esan/nanomat-ai#knowing-when-not-to-believe-it" id="t-how">How the verdict works</a>
+  </div>
+</header>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" aria-selected="true" data-panel="browse" id="t-tab1">Browse</button>
+  <button class="tab" role="tab" aria-selected="false" data-panel="trust" id="t-tab2">Trust map</button>
+</div>
+
+<div class="loading" id="loading">Loading 28 372 predictions…</div>
+
+<section class="panel" id="panel-browse" hidden>
+  <div class="filters">
+    <div class="field">
+      <label id="t-f-pop">Population</label>
+      <select id="f-pop"></select>
+    </div>
+    <div class="field">
+      <label id="t-f-gap">Band gap, eV</label>
+      <div style="display:flex;gap:5px;align-items:center">
+        <input type="number" id="f-gmin" step="0.1" placeholder="min">
+        <span style="color:var(--text-3)">–</span>
+        <input type="number" id="f-gmax" step="0.1" placeholder="max">
+      </div>
+    </div>
+    <div class="field">
+      <label id="t-f-preset">Quick range</label>
+      <div class="presets" id="f-presets"></div>
+    </div>
+    <div class="field">
+      <label id="t-f-tier">Trust</label>
+      <div class="chips" id="f-tiers"></div>
+    </div>
+    <div class="field">
+      <label id="t-f-type">Gap type</label>
+      <select id="f-type"></select>
+    </div>
+    <div class="field">
+      <label id="t-f-has">Must contain</label>
+      <input type="text" id="f-has" placeholder="Mo S" size="10">
+    </div>
+    <div class="field">
+      <label id="t-f-not">Must not contain</label>
+      <input type="text" id="f-not" placeholder="Pb Cd" size="10">
+    </div>
+    <div class="field">
+      <label id="t-f-search">Formula</label>
+      <input type="text" id="f-q" placeholder="MoS2" size="8">
+    </div>
+    <label class="check"><input type="checkbox" id="f-notrain"> <span id="t-f-notrain">Exclude training rows</span></label>
+    <button class="preset" id="f-reset">Reset</button>
+  </div>
+  <div id="pop-warning"></div>
+  <p class="count" id="count"></p>
+
+  <div class="chartbox">
+    <div class="chart-head">
+      <div>
+        <h2 id="t-c-title">Predicted gap against the model's own uncertainty</h2>
+        <p id="t-c-sub"></p>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <canvas id="chart"></canvas>
+    <div class="tip" id="tip" hidden></div>
+  </div>
+
+  <div class="results">
+    <div class="tablebox">
+      <div class="thead" id="thead"></div>
+      <div class="scroller" id="scroller"><div id="spacer"></div><div id="rows" style="position:absolute;top:0;left:0;right:0"></div></div>
+    </div>
+    <aside class="detail" id="detail"></aside>
+  </div>
+</section>
+
+<section class="panel" id="panel-trust" hidden>
+  <div class="prose">
+    <p id="t-tm-lede"></p>
+  </div>
+  <div class="ptable" id="ptable"></div>
+  <div class="ramp">
+    <span id="t-tm-lo"></span><span class="bar"></span><span id="t-tm-hi"></span>
+    <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
+      <span class="cell" style="width:16px;height:16px;min-height:0;aspect-ratio:auto;
+        background:var(--ramp-lo);border-style:dashed;border-color:var(--text-2)"></span>
+      <span id="t-tm-sparse"></span></span>
+    <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
+      <span class="cell nodata" style="width:16px;height:16px;min-height:0;aspect-ratio:auto"></span>
+      <span id="t-tm-nodata"></span></span>
+  </div>
+  <div class="prose" id="tm-prose"></div>
+</section>
+
+<footer id="t-footer"></footer>
+</div>
+
+<script>
+"use strict";
+/* ---------------------------------------------------------------------------
+   Strings live here, keyed by language, so another language is a translation
+   rather than a rewrite. Everything user-visible goes through t().
+--------------------------------------------------------------------------- */
+const I18N = {
+  en: {
+    title: "NanoMatAI — 2D band gap screening",
+    lede: n => `Predicted band gaps for ${n} two-dimensional structures, each with a calibrated interval and an explicit verdict on whether to believe it. Nothing is computed here: this is a graph neural network's output, precomputed once and served as a static table.`,
+    tab_browse: "Browse", tab_trust: "Trust map",
+    f_pop: "Population", f_gap: "Band gap, eV", f_preset: "Quick range",
+    f_tier: "Trust", f_type: "Gap type", f_has: "Must contain",
+    f_not: "Must not contain", f_search: "Formula",
+    f_notrain: "Exclude training rows", reset: "Reset",
+    pop_calibrated: n => `Held out from training (${n})`,
+    pop_stable: n => `All stable structures (${n})`,
+    pop_all: n => `Everything, including metastable (${n})`,
+    type_any: "any", type_direct: "direct", type_indirect: "indirect",
+    tier: ["reliable", "check", "out-of-domain"],
+    count: (n, total) => `<b>${n}</b> of ${total} structures match`,
+    count_hidden: n => ` · ${n} more are hidden because the model disowns them`,
+    count_none: "No structures match these filters",
+    warn_all: "<b>Outside the calibrated population.</b> The intervals and tier errors shown here were fitted on stable Alexandria structures. On metastable entries and other DFT functionals the verdict still ranks error correctly, but a 90% interval covers about 78% of cases instead of 90%. Use the ordering, not the absolute numbers.",
+    warn_train: "<b>Includes structures the model trained on.</b> Rows badged “trained on” are reproduced from memory, not predicted; their error is about 0.08 eV rather than the honest 0.26 eV.",
+    c_title: "Predicted gap against the model's own uncertainty",
+    c_sub: (a, b) => `Each dot is one structure. The horizontal lines are the verdict thresholds at ${a} and ${b} eV of ensemble spread. Hover for a structure, click to open it.`,
+    ax_gap: "predicted band gap, eV", ax_unc: "ensemble spread, eV (log)",
+    th_formula: "Formula", th_gap: "Gap, eV", th_unc: "Spread", th_type: "Type", th_verdict: "Verdict",
+    badge_train: "trained on",
+    d_empty: "Select a structure in the chart or the table.",
+    d_gap: "Band gap (PBE)", d_interval: "90% interval", d_exp: "Estimated experimental gap",
+    d_type: "Gap type", d_metal: "Metal gate, p(metal)", d_spread: "Ensemble spread",
+    d_type_val: (label, p, thr) => `${label} · p(indirect) = ${p}, threshold ${thr}`,
+    d_latent: "Distance to training data", d_verdict: "Verdict", d_tiererr: "Typical error of this tier",
+    d_dft: "DFT reference", d_err: "Error against reference", d_atoms: "Atoms in cell",
+    d_source: "Source", d_role: "Role in training",
+    d_inside: "inside the familiar region", d_outside: "OUTSIDE the familiar region",
+    d_metallike: g => `Below ${g} eV the model is calling this a metal or semimetal rather than a semiconductor, so no experimental estimate is offered. A slightly negative value is the unconstrained regressor sitting on zero, not a separate failure.`,
+    d_stop: "<b>Out of the model's domain.</b> The gap above is shown for transparency, not for use. The calibrated interval assumes the ensemble spread is meaningful, and out-of-domain is exactly where it is not.",
+    d_note: (mae) => `Ensemble of five CGCNN models, test MAE ${mae} eV on compositions never seen in training. PBE underestimates real gaps; the experimental estimate applies a linear correction fitted on five reference monolayers.`,
+    role: ["never seen", "trained on", "validation", "held-out test"],
+    tm_lede: (n) => `Where does the model actually work? Each element is coloured by the mean error over the ${n} Alexandria structures containing it that the ensemble never trained on. This answers the first question a lab asks: is it any good for my chemistry?`,
+    tm_lo: "accurate", tm_hi: "unreliable",
+    tm_nodata: "too few structures to measure",
+    tm_sparse: "thinly measured (under 60 structures)",
+    tm_prose: `<h2>How to read it</h2><p>Dark cells are chemistries where the model is weak, and they are not the chemistries you might expect. Error tracks how densely a chemistry appears in the training data, not how hard its physics is: transition-metal and heavy-element compounds, which fill Alexandria, come out most accurate, while light main-group elements carry the long tail.</p><p>An element with no colour had fewer than five structures to measure on. That is itself information — a prediction on such a chemistry rests on almost nothing, which is the failure mode that made phosphorene come out at 0.82 eV against an experimental 2.0.</p>`,
+    footer: `Data regenerated by <code>scripts/precompute_screening.py</code> and <code>scripts/build_site_data.py</code>. Model, weights and method: MIT licence. Structures from Alexandria (CC-BY 4.0), C2DB and JARVIS-DFT.`,
+    mc: "Model card", how: "How the verdict works",
+    loading: "Loading predictions…",
+  },
+};
+let LANG = "en";
+const t = (k, ...a) => { const v = I18N[LANG][k]; return typeof v === "function" ? v(...a) : v; };
+const fmt = (x, n = 2) => (x === null || x === undefined || Number.isNaN(x)) ? "—" : x.toFixed(n);
+const int = x => x.toLocaleString("en-US").replace(/,/g, " ");
+
+/* --------------------------------------------------------------------- state */
+const S = {
+  meta: null, rows: [], view: [], sel: null,
+  sort: { key: "g", dir: 1 },
+  f: { pop: 0, gmin: null, gmax: null, tiers: [true, true, false], type: -1,
+       has: [], not: [], q: "", notrain: false },
+  hiddenByTier: 0,
+};
+const TIERVAR = ["--tier-0", "--tier-1", "--tier-2"];
+const tierColor = i => getComputedStyle(document.body).getPropertyValue(TIERVAR[i]).trim();
+
+/* ---------------------------------------------------------------------- load */
+async function load() {
+  const [meta, csv] = await Promise.all([
+    fetch("data/meta.json").then(r => r.json()),
+    fetch("data/screening.csv").then(r => r.text()),
+  ]);
+  S.meta = meta;
+  const lines = csv.trim().split("\n");
+  const H = lines[0].split(",");
+  const ix = Object.fromEntries(H.map((h, i) => [h, i]));
+  const num = v => (v === "" ? null : +v);
+  S.rows = new Array(lines.length - 1);
+  for (let k = 1; k < lines.length; k++) {
+    const c = lines[k].split(",");
+    S.rows[k - 1] = {
+      i: c[ix.i], s: +c[ix.s], f: c[ix.f], e: c[ix.e].split(" "), n: +c[ix.n],
+      d: num(c[ix.d]), g: +c[ix.g], u: +c[ix.u], l: num(c[ix.l]), m: num(c[ix.m]),
+      t: num(c[ix.t]), p: num(c[ix.p]), w: +c[ix.w], r: +c[ix.r], b: +c[ix.b],
+    };
+  }
+  document.getElementById("loading").hidden = true;
+  buildUI();
+  apply();
+}
+
+/* ------------------------------------------------------------------ filtering */
+function passPopulation(row) {
+  if (S.f.pop === 0) return row.b === 1 && row.r !== 1;   // calibrated & unseen
+  if (S.f.pop === 1) return row.b === 1;                  // all stable
+  return true;                                            // everything
+}
+function apply() {
+  const f = S.f;
+  const q = f.q.trim().toLowerCase();
+  const out = [];
+  let hidden = 0;
+  for (const row of S.rows) {
+    if (!passPopulation(row)) continue;
+    if (f.notrain && row.r === 1) continue;
+    if (!f.tiers[row.w]) { hidden++; continue; }
+    if (f.gmin !== null && row.g < f.gmin) continue;
+    if (f.gmax !== null && row.g > f.gmax) continue;
+    if (f.type >= 0 && row.t !== f.type) continue;
+    if (q && !row.f.toLowerCase().includes(q)) continue;
+    if (f.has.length && !f.has.every(el => row.e.includes(el))) continue;
+    if (f.not.length && f.not.some(el => row.e.includes(el))) continue;
+    out.push(row);
+  }
+  const { key, dir } = S.sort;
+  out.sort((a, b) => {
+    let x = a[key], y = b[key];
+    if (key === "f") return dir * String(x).localeCompare(String(y));
+    if (x === null) x = Infinity; if (y === null) y = Infinity;
+    return dir * (x - y);
+  });
+  S.hiddenByTier = hidden;
+  S.view = out;
+  if (S.sel && !out.includes(S.sel)) S.sel = null;
+  renderCount(); renderWarning(); drawChart(); renderTable(); renderDetail();
+}
+
+/* --------------------------------------------------------------------- render */
+function renderCount() {
+  const el = document.getElementById("count");
+  const base = S.view.length ? t("count", int(S.view.length), int(S.meta.n_rows)) : t("count_none");
+  el.innerHTML = base + (S.hiddenByTier ? `<span style="color:var(--text-3)">${t("count_hidden", int(S.hiddenByTier))}</span>` : "");
+}
+function renderWarning() {
+  const box = document.getElementById("pop-warning");
+  const parts = [];
+  if (S.f.pop === 2) parts.push(t("warn_all"));
+  if (S.f.pop >= 1 && !S.f.notrain) parts.push(t("warn_train"));
+  box.innerHTML = parts.map(p => `<div class="banner">${p}</div>`).join("");
+}
+
+/* chart ------------------------------------------------------------------- */
+const cv = () => document.getElementById("chart");
+let PLOT = null;
+function drawChart() {
+  const c = cv(), dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const x = c.getContext("2d");
+  x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  x.clearRect(0, 0, w, h);
+  const cs = getComputedStyle(document.body);
+  const grid = cs.getPropertyValue("--border").trim();
+  const text3 = cs.getPropertyValue("--text-3").trim();
+  const M = { l: 58, r: 10, t: 8, b: 32 };
+  const iw = w - M.l - M.r, ih = h - M.t - M.b;
+  if (!S.view.length) { PLOT = null; return; }
+
+  let ULO, UHI;
+  let gmax = 0, gmin = 0;
+  for (const r of S.view) { if (r.g > gmax) gmax = r.g; if (r.g < gmin) gmin = r.g; }
+  gmax = Math.max(1, Math.ceil(gmax * 2) / 2);
+  gmin = Math.min(0, Math.floor(gmin));
+  const calY = S.meta.calibration;
+  let ulo = Infinity, uhi = 0;
+  for (const r of S.view) { if (r.u < ulo) ulo = r.u; if (r.u > uhi) uhi = r.u; }
+  // keep both verdict thresholds on screen whatever the filter selects, so the
+  // vertical position of a point means the same thing in every view
+  ULO = Math.min(ulo * 0.7, calY.unc_median * 0.35, 0.02);
+  UHI = Math.max(uhi * 1.4, calY.unc_q75 * 2.2);
+  const px = g => M.l + Math.max(0, Math.min(1, (g - gmin) / (gmax - gmin))) * iw;
+  const py = u => {
+    const v = Math.log10(Math.max(ULO, Math.min(UHI, u)));
+    const lo = Math.log10(ULO), hi = Math.log10(UHI);
+    return M.t + ih - ((v - lo) / (hi - lo)) * ih;
+  };
+  PLOT = { px, py, M, iw, ih, gmax };
+
+  // grid + axes
+  x.strokeStyle = grid; x.fillStyle = text3; x.lineWidth = 1;
+  x.font = "11px ui-sans-serif, system-ui, sans-serif";
+  x.textAlign = "right"; x.textBaseline = "middle";
+  for (const u of [0.003, 0.01, 0.03, 0.1, 0.3, 1, 3]) {
+    if (u < ULO || u > UHI) continue;
+    const yy = Math.round(py(u)) + .5;
+    x.beginPath(); x.moveTo(M.l, yy); x.lineTo(M.l + iw, yy); x.stroke();
+    x.fillText(String(u), M.l - 7, yy);
+  }
+  x.textAlign = "center"; x.textBaseline = "top";
+  const step = (gmax - gmin) > 6 ? 2 : 1;
+  for (let g = Math.ceil(gmin / step) * step; g <= gmax + 1e-9; g += step) {
+    const xx = Math.round(px(g)) + .5;
+    x.beginPath(); x.moveTo(xx, M.t); x.lineTo(xx, M.t + ih); x.stroke();
+    x.fillText(String(g), xx, M.t + ih + 7);
+  }
+  x.fillText(t("ax_gap"), M.l + iw / 2, M.t + ih + 20);
+  x.save(); x.translate(12, M.t + ih / 2); x.rotate(-Math.PI / 2);
+  x.textBaseline = "top"; x.fillText(t("ax_unc"), 0, 0); x.restore();
+
+  // points, drawn worst-first so reliable sits on top
+  const cols = [tierColor(0), tierColor(1), tierColor(2)];
+  const alpha = S.view.length > 6000 ? .35 : (S.view.length > 1500 ? .55 : .8);
+  for (const tier of [2, 1, 0]) {
+    x.fillStyle = cols[tier]; x.globalAlpha = alpha;
+    x.beginPath();
+    for (const r of S.view) {
+      if (r.w !== tier) continue;
+      const cx = px(r.g), cy = py(r.u);
+      x.moveTo(cx + 2.1, cy); x.arc(cx, cy, 2.1, 0, 6.2832);
+    }
+    x.fill();
+  }
+  x.globalAlpha = 1;
+
+  // verdict thresholds
+  const cal = S.meta.calibration;
+  x.setLineDash([4, 4]); x.strokeStyle = text3;
+  for (const u of [cal.unc_median, cal.unc_q75]) {
+    const yy = Math.round(py(u)) + .5;
+    x.beginPath(); x.moveTo(M.l, yy); x.lineTo(M.l + iw, yy); x.stroke();
+  }
+  x.setLineDash([]);
+
+  // selection
+  if (S.sel && S.view.includes(S.sel)) {
+    x.strokeStyle = cs.getPropertyValue("--text-1").trim(); x.lineWidth = 2;
+    x.beginPath(); x.arc(px(S.sel.g), py(S.sel.u), 5.5, 0, 6.2832); x.stroke();
+  }
+}
+function nearest(mx, my) {
+  if (!PLOT) return null;
+  let best = null, bd = 144;
+  for (const r of S.view) {
+    const dx = PLOT.px(r.g) - mx, dy = PLOT.py(r.u) - my;
+    const d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; best = r; }
+  }
+  return best;
+}
+
+/* table ------------------------------------------------------------------- */
+const ROWH = 32;
+function renderTable() {
+  const sc = document.getElementById("scroller");
+  document.getElementById("spacer").style.height = (S.view.length * ROWH) + "px";
+  if (!S.view.length) {
+    document.getElementById("rows").innerHTML = `<div class="empty">${t("count_none")}</div>`;
+    return;
+  }
+  paintRows(sc.scrollTop);
+}
+function paintRows(top) {
+  const host = document.getElementById("rows");
+  const h = document.getElementById("scroller").clientHeight;
+  const a = Math.max(0, Math.floor(top / ROWH) - 4);
+  const b = Math.min(S.view.length, Math.ceil((top + h) / ROWH) + 4);
+  const cal = S.meta.calibration;
+  let html = "";
+  for (let k = a; k < b; k++) {
+    const r = S.view[k];
+    const ood = r.w === 2;
+    const iv = ood ? "—" : "± " + fmt(cal.scale90 * r.u, 2);
+    const badge = r.r === 1 ? `<span class="badge">${t("badge_train")}</span>` : "";
+    html += `<div class="row" data-k="${k}" role="option" aria-selected="${S.sel === r}"
+      style="position:absolute;top:${k * ROWH}px;left:0;right:0;height:${ROWH}px">
+      <span class="f">${r.f}${badge}</span>
+      <span class="num">${fmt(r.g, 2)} <span style="color:var(--text-3)">${iv}</span></span>
+      <span class="num" style="color:var(--text-2)">${fmt(r.u, 3)}</span>
+      <span style="color:var(--text-2)">${r.t === null ? "—" : (r.t ? t("type_indirect") : t("type_direct"))}</span>
+      <span class="v"><i class="tierdot" style="background:var(${TIERVAR[r.w]})"></i>${t("tier")[r.w]}</span>
+    </div>`;
+  }
+  host.innerHTML = html;
+}
+function renderTHead() {
+  const cols = [["f", "th_formula"], ["g", "th_gap"], ["u", "th_unc"], ["t", "th_type"], ["w", "th_verdict"]];
+  document.getElementById("thead").innerHTML = cols.map(([k, lbl]) =>
+    `<button data-sort="${k}">${t(lbl)}${S.sort.key === k ? (S.sort.dir > 0 ? " ↑" : " ↓") : ""}</button>`).join("");
+}
+
+/* detail ------------------------------------------------------------------ */
+function renderDetail() {
+  const el = document.getElementById("detail");
+  const r = S.sel;
+  if (!r) { el.innerHTML = `<p class="sub" style="margin:0">${t("d_empty")}</p>`; return; }
+  const cal = S.meta.calibration, pc = S.meta.pbe_correction;
+  const ood = r.w === 2;
+  const iv = cal.scale90 * r.u;
+  const exp = pc.a * r.g + pc.b;
+  const tierErr = cal.tier_mae ? Object.values(cal.tier_mae)[r.w] : null;
+  const rows = [];
+  if (!ood) rows.push([t("d_interval"), "± " + fmt(iv, 2) + " eV"]);
+  if (!ood && r.g >= S.meta.metal_gap_eV) rows.push([t("d_exp"), "≈ " + fmt(exp, 2) + " eV"]);
+  if (r.t !== null) rows.push([t("d_type"), t("d_type_val",
+      r.t ? t("type_indirect") : t("type_direct"), fmt(r.p, 2),
+      fmt(S.meta.calibration.type_threshold ?? 0.33, 2))]);
+  if (r.m !== null) rows.push([t("d_metal"), fmt(r.m, 2)]);
+  rows.push([t("d_spread"), fmt(r.u, 3) + " eV"]);
+  if (r.l !== null) rows.push([t("d_latent"),
+    `${fmt(r.l, 3)} — ${r.l <= cal.latent_q75 ? t("d_inside") : t("d_outside")}`]);
+  rows.push([t("d_verdict"), `<span class="v" style="justify-content:flex-end">
+     <i class="tierdot" style="background:var(${TIERVAR[r.w]})"></i>${t("tier")[r.w]}</span>`]);
+  if (tierErr) rows.push([t("d_tiererr"), fmt(tierErr, 2) + " eV"]);
+  if (r.d !== null) {
+    rows.push([t("d_dft"), fmt(r.d, 2) + " eV"]);
+    rows.push([t("d_err"), fmt(Math.abs(r.g - r.d), 2) + " eV"]);
+  }
+  rows.push([t("d_atoms"), String(r.n)]);
+  rows.push([t("d_source"), S.meta.sources[r.s]]);
+  rows.push([t("d_role"), t("role")[r.r]]);
+
+  el.innerHTML = `<h3>${r.f}</h3>
+    <p class="sub">${r.i} · ${r.e.join(" ")}</p>
+    <div class="big">${fmt(r.g, 2)} eV${ood ? ` <span style="font-size:13px;color:var(--tier-2)">— do not use</span>` : ""}</div>
+    <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+    ${ood ? `<div class="note stop">${t("d_stop")}</div>` : ""}
+    ${(!ood && r.g < S.meta.metal_gap_eV) ? `<div class="note">${t("d_metallike", fmt(S.meta.metal_gap_eV, 1))}</div>` : ""}
+    <div class="note">${t("d_note", fmt(cal.test_mae, 2))}</div>`;
+}
+
+/* trust map --------------------------------------------------------------- */
+function mix(a, b, u) {
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const [r1, g1, b1] = p(a), [r2, g2, b2] = p(b);
+  const q = v => Math.round(v).toString(16).padStart(2, "0");
+  return "#" + q(r1 + (r2 - r1) * u) + q(g1 + (g2 - g1) * u) + q(b1 + (b2 - b1) * u);
+}
+function renderTrust() {
+  const { trust_map: tm, ptable: pt, trust_map_basis: basis } = S.meta;
+  const vals = Object.values(tm).map(v => v.mae);
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const cs = getComputedStyle(document.body);
+  const c0 = cs.getPropertyValue("--ramp-lo").trim(), c1 = cs.getPropertyValue("--ramp-hi").trim();
+  const dark = cs.getPropertyValue("--surface-1").trim() === "#1a1a19";
+  const cells = [];
+  for (let row = 1; row <= 9; row++) {
+    for (let col = 1; col <= 18; col++) {
+      const sym = Object.keys(pt).find(s => pt[s][0] === row && pt[s][1] === col);
+      if (!sym) { cells.push(`<div class="cell void"></div>`); continue; }
+      const d = tm[sym];
+      if (!d) { cells.push(`<div class="cell nodata" title="${sym}: ${t("tm_nodata")}"><b>${sym}</b></div>`); continue; }
+      const u = hi > lo ? (d.mae - lo) / (hi - lo) : .5;
+      const bg = mix(c0, c1, u);
+      const fg = (dark ? u < .45 : u > .5) ? "#ffffff" : "#0b0b0b";
+      const sp = d.sparse ? ";border-style:dashed;border-color:currentColor" : "";
+      cells.push(`<div class="cell" style="background:${bg};color:${fg}${sp}"
+        title="${sym} — MAE ${fmt(d.mae, 2)} eV over ${d.n} structures${d.sparse ? " (thinly measured)" : ""}">
+        <b>${sym}</b><small>${fmt(d.mae, 2)}</small></div>`);
+    }
+  }
+  document.getElementById("ptable").innerHTML = cells.join("");
+  document.getElementById("t-tm-lede").textContent = t("tm_lede", int(basis.n_structures));
+  document.getElementById("t-tm-lo").textContent = `${t("tm_lo")} ${fmt(lo, 2)}`;
+  document.getElementById("t-tm-hi").textContent = `${fmt(hi, 2)} eV ${t("tm_hi")}`;
+  document.getElementById("t-tm-nodata").textContent = t("tm_nodata");
+  document.getElementById("t-tm-sparse").textContent = t("tm_sparse");
+  document.getElementById("tm-prose").innerHTML = t("tm_prose");
+}
+
+/* ------------------------------------------------------------------ UI build */
+function buildUI() {
+  const c = S.meta.counts;
+  document.title = t("title");
+  document.getElementById("t-title").textContent = t("title");
+  document.getElementById("t-lede").textContent = t("lede", int(S.meta.n_rows));
+  document.getElementById("t-tab1").textContent = t("tab_browse");
+  document.getElementById("t-tab2").textContent = t("tab_trust");
+  for (const [id, k] of [["t-f-pop", "f_pop"], ["t-f-gap", "f_gap"], ["t-f-preset", "f_preset"],
+                         ["t-f-tier", "f_tier"], ["t-f-type", "f_type"], ["t-f-has", "f_has"],
+                         ["t-f-not", "f_not"], ["t-f-search", "f_search"], ["t-f-notrain", "f_notrain"],
+                         ["t-mc", "mc"], ["t-how", "how"]])
+    document.getElementById(id).textContent = t(k);
+  document.getElementById("f-reset").textContent = t("reset");
+  document.getElementById("t-c-title").textContent = t("c_title");
+  document.getElementById("t-c-sub").textContent =
+    t("c_sub", fmt(S.meta.calibration.unc_median, 3), fmt(S.meta.calibration.unc_q75, 3));
+  document.getElementById("t-footer").innerHTML = t("footer");
+
+  const pop = document.getElementById("f-pop");
+  pop.innerHTML = [t("pop_calibrated", int(c.default_view)), t("pop_stable", int(c.stable)),
+                   t("pop_all", int(S.meta.n_rows))].map((l, i) => `<option value="${i}">${l}</option>`).join("");
+  document.getElementById("f-type").innerHTML =
+    [[-1, t("type_any")], [0, t("type_direct")], [1, t("type_indirect")]]
+      .map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+  document.getElementById("f-tiers").innerHTML = t("tier").map((l, i) =>
+    `<button class="chip t${i}" data-tier="${i}" aria-pressed="${S.f.tiers[i]}"><i class="dot"></i>${l}</button>`).join("");
+  document.getElementById("legend").innerHTML = t("tier").map((l, i) =>
+    `<span><i style="background:var(${TIERVAR[i]})"></i>${l}</span>`).join("");
+  document.getElementById("f-presets").innerHTML =
+    [["IR", 0.3, 1.6], ["visible", 1.6, 3.2], ["wide", 3.2, null]]
+      .map(([l, a, b]) => `<button class="preset" data-a="${a}" data-b="${b === null ? "" : b}">${l}</button>`).join("");
+  renderTHead(); renderTrust();
+  document.getElementById("panel-browse").hidden = false;
+}
+
+/* -------------------------------------------------------------------- events */
+document.addEventListener("click", e => {
+  const tab = e.target.closest(".tab");
+  if (tab) {
+    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b === tab));
+    document.getElementById("panel-browse").hidden = tab.dataset.panel !== "browse";
+    document.getElementById("panel-trust").hidden = tab.dataset.panel !== "trust";
+    if (tab.dataset.panel === "browse") drawChart();
+    return;
+  }
+  const chip = e.target.closest(".chip[data-tier]");
+  if (chip) {
+    const i = +chip.dataset.tier;
+    S.f.tiers[i] = !S.f.tiers[i];
+    chip.setAttribute("aria-pressed", S.f.tiers[i]);
+    apply(); return;
+  }
+  const pre = e.target.closest(".preset[data-a]");
+  if (pre) {
+    S.f.gmin = pre.dataset.a === "" ? null : +pre.dataset.a;
+    S.f.gmax = pre.dataset.b === "" ? null : +pre.dataset.b;
+    document.getElementById("f-gmin").value = pre.dataset.a;
+    document.getElementById("f-gmax").value = pre.dataset.b;
+    apply(); return;
+  }
+  const sortBtn = e.target.closest("[data-sort]");
+  if (sortBtn) {
+    const k = sortBtn.dataset.sort;
+    S.sort = { key: k, dir: S.sort.key === k ? -S.sort.dir : (k === "f" ? 1 : 1) };
+    renderTHead(); apply(); return;
+  }
+  const row = e.target.closest(".row[data-k]");
+  if (row) { S.sel = S.view[+row.dataset.k]; renderTable(); renderDetail(); drawChart(); }
+});
+document.getElementById("f-reset").addEventListener("click", () => {
+  S.f = { pop: 0, gmin: null, gmax: null, tiers: [true, true, false], type: -1,
+          has: [], not: [], q: "", notrain: false };
+  S.sel = null;
+  document.getElementById("f-pop").value = "0";
+  document.getElementById("f-type").value = "-1";
+  for (const id of ["f-gmin", "f-gmax", "f-has", "f-not", "f-q"]) document.getElementById(id).value = "";
+  document.getElementById("f-notrain").checked = false;
+  document.querySelectorAll(".chip[data-tier]").forEach(c =>
+    c.setAttribute("aria-pressed", String(S.f.tiers[+c.dataset.tier])));
+  apply();
+});
+const syms = s => s.trim().split(/[\s,]+/).filter(Boolean)
+  .map(x => x[0].toUpperCase() + x.slice(1).toLowerCase());
+document.getElementById("f-pop").addEventListener("change", e => { S.f.pop = +e.target.value; apply(); });
+document.getElementById("f-type").addEventListener("change", e => { S.f.type = +e.target.value; apply(); });
+document.getElementById("f-notrain").addEventListener("change", e => { S.f.notrain = e.target.checked; apply(); });
+for (const [id, key, cast] of [["f-gmin", "gmin", 1], ["f-gmax", "gmax", 1],
+                               ["f-has", "has", 2], ["f-not", "not", 2], ["f-q", "q", 0]])
+  document.getElementById(id).addEventListener("input", e => {
+    const v = e.target.value;
+    S.f[key] = cast === 1 ? (v === "" ? null : +v) : cast === 2 ? syms(v) : v;
+    apply();
+  });
+document.getElementById("scroller").addEventListener("scroll", e => paintRows(e.target.scrollTop));
+cv().addEventListener("mousemove", e => {
+  const b = cv().getBoundingClientRect();
+  const r = nearest(e.clientX - b.left, e.clientY - b.top);
+  const tip = document.getElementById("tip");
+  if (!r) { tip.hidden = true; return; }
+  const cal = S.meta.calibration;
+  tip.innerHTML = `<b>${r.f}</b>${fmt(r.g, 2)} eV${r.w === 2 ? "" : " ± " + fmt(cal.scale90 * r.u, 2)}
+    <span style="color:var(${TIERVAR[r.w]})"> · ${t("tier")[r.w]}</span>`;
+  tip.hidden = false;
+  const tx = Math.min(e.clientX - b.left + 12, b.width - tip.offsetWidth - 6);
+  tip.style.left = Math.max(4, tx) + "px";
+  tip.style.top = Math.max(4, e.clientY - b.top - tip.offsetHeight - 10) + "px";
+});
+cv().addEventListener("mouseleave", () => { document.getElementById("tip").hidden = true; });
+cv().addEventListener("click", e => {
+  const b = cv().getBoundingClientRect();
+  const r = nearest(e.clientX - b.left, e.clientY - b.top);
+  if (r) { S.sel = r; renderTable(); renderDetail(); drawChart(); }
+});
+addEventListener("resize", () => { drawChart(); renderTable(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawChart(); renderTrust(); });
+
+load().catch(err => {
+  document.getElementById("loading").textContent = "Could not load the data: " + err.message;
+});
+</script>
+</body>
+</html>

@@ -6,6 +6,10 @@
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [Русская версия](README.ru.md)
 
+**[Browse the predictions →](https://ac1esan.github.io/nanomat-ai/)** — 28 372
+structures with a calibrated interval and a verdict on each, plus a periodic-table
+map of where the model actually works. No install, no upload.
+
 A graph neural network that predicts the band gap of a 2D monolayer from its
 crystal structure in under a second on a laptop CPU — and, more importantly,
 tells you when not to believe it. Built end-to-end solo: open-API data only, a
@@ -30,6 +34,10 @@ pip install -r requirements.txt          # CPU torch + PyTorch Geometric + pymat
 ```bash
 python screen_bandgap.py --in examples/ --out results.csv    # batch: folder of CIF/POSCAR -> ranked CSV
 ```
+
+If you have no structure file to hand, the
+[browser](https://ac1esan.github.io/nanomat-ai/) covers the common case: filter
+28 372 precomputed predictions by element, gap range and trust verdict.
 
 ```bash
 python screen_bandgap.py --app                                # web UI at http://127.0.0.1:7860
@@ -259,6 +267,7 @@ transfer). The composition baseline is
 ## Repository layout
 
 ```
+docs/                     the static browser published on GitHub Pages (index.html + data/)
 nanomat/                  graph.py (structure -> graph, vacuum checks), model.py (CGCNN),
                           predict.py (Predictor, batched inference, verdicts, calibration)
 screen_bandgap.py         CLI batch screening + Gradio UI      app.py: Hugging Face Spaces entry
@@ -275,9 +284,9 @@ figures/                  README figures and the scripts that regenerate them
 
 ## Roadmap
 
-1. Precomputed predictions over every public 2D structure, so the common case
-   needs no file upload at all.
-2. A browser over that table: filter by elements, gap range and verdict.
+1. Deploy the uploader (`app.py`) on Hugging Face Spaces and link it from the browser.
+2. A family browser: pick a prototype and two elements, get a heatmap. Needs lattice
+   constants from the relaxed database, not from covalent radii.
 3. Bagging the ensemble over data subsets, so the spread itself reflects sparse
    chemistry instead of relying on the latent-distance check.
 4. Replace the five-point PBE correction with a PBE → HSE/GW model fitted on C2DB.
