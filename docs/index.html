@@ -284,7 +284,11 @@ const I18N = {
     th_formula: "Formula", th_gap: "Gap, eV", th_unc: "Spread", th_type: "Type", th_verdict: "Verdict",
     badge_train: "trained on",
     d_empty: "Select a structure in the chart or the table.",
-    d_gap: "Band gap (PBE)", d_interval: "90% interval", d_exp: "Estimated experimental gap",
+    d_gap: "Band gap (PBE)", d_interval: "90% interval",
+    d_qp: "Quasiparticle gap", d_opt: "Optical gap",
+    d_qp_note: n => `photoemission and transport · fitted against HSE06 on ${n} structures, leave-one-out error 0.19 eV`,
+    d_opt_note: n => `absorption onset · only ${n} reference monolayers behind this fit, leave-one-out error 0.71 eV — an indication, not a measurement`,
+    d_exciton: d => `The two differ by ${d} eV. That difference is the exciton binding energy, which is why an absorption measurement and a photoemission measurement disagree on the same material.`,
     d_type: "Gap type", d_metal: "Metal gate, p(metal)", d_spread: "Ensemble spread",
     d_type_val: (label, p, thr) => `${label} · p(indirect) = ${p}, threshold ${thr}`,
     d_latent: "Distance to training data", d_verdict: "Verdict", d_tiererr: "Typical error of this tier",
@@ -293,7 +297,7 @@ const I18N = {
     d_inside: "inside the familiar region", d_outside: "OUTSIDE the familiar region",
     d_metallike: g => `Below ${g} eV the model is calling this a metal or semimetal rather than a semiconductor, so no experimental estimate is offered. A slightly negative value is the unconstrained regressor sitting on zero, not a separate failure.`,
     d_stop: "<b>Out of the model's domain.</b> The gap above is shown for transparency, not for use. The calibrated interval assumes the ensemble spread is meaningful, and out-of-domain is exactly where it is not.",
-    d_note: (mae) => `Ensemble of five CGCNN models, test MAE ${mae} eV on compositions never seen in training. PBE underestimates real gaps; the experimental estimate applies a linear correction fitted on five reference monolayers.`,
+    d_note: (mae) => `Ensemble of five CGCNN models, test MAE ${mae} eV on compositions never seen in training. The band gap above is at the PBE level, which underestimates what any measurement returns; the two corrected values are what to quote.`,
     role: ["never seen", "trained on", "validation", "held-out test"],
     tm_lede: (n) => `Where does the model actually work? Each element is coloured by the mean error over the ${n} Alexandria structures containing it that the ensemble never trained on. This answers the first question a lab asks: is it any good for my chemistry?`,
     tm_lo: "accurate", tm_hi: "unreliable",
@@ -540,14 +544,18 @@ function renderDetail() {
   const el = document.getElementById("detail");
   const r = S.sel;
   if (!r) { el.innerHTML = `<p class="sub" style="margin:0">${t("d_empty")}</p>`; return; }
-  const cal = S.meta.calibration, pc = S.meta.pbe_correction;
+  const cal = S.meta.calibration, C = S.meta.corrections;
   const ood = r.w === 2;
   const iv = cal.scale90 * r.u;
-  const exp = pc.a * r.g + pc.b;
+  const exp = C.optical.a * r.g + C.optical.b;
+  const qp = C.quasiparticle.a * r.g + C.quasiparticle.b;
   const tierErr = cal.tier_mae ? Object.values(cal.tier_mae)[r.w] : null;
   const rows = [];
   if (!ood) rows.push([t("d_interval"), "± " + fmt(iv, 2) + " eV"]);
-  if (!ood && r.g >= S.meta.metal_gap_eV) rows.push([t("d_exp"), "≈ " + fmt(exp, 2) + " eV"]);
+  if (!ood && r.g >= S.meta.metal_gap_eV) {
+    rows.push([t("d_qp"), "≈ " + fmt(qp, 2) + " eV"]);
+    rows.push([t("d_opt"), "≈ " + fmt(exp, 2) + " eV"]);
+  }
   if (r.t !== null) rows.push([t("d_type"), t("d_type_val",
       r.t ? t("type_indirect") : t("type_direct"), fmt(r.p, 2),
       fmt(S.meta.calibration.type_threshold ?? 0.33, 2))]);
@@ -571,6 +579,10 @@ function renderDetail() {
     <div class="big">${fmt(r.g, 2)} eV${ood ? ` <span style="font-size:13px;color:var(--tier-2)">— do not use</span>` : ""}</div>
     <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
     ${ood ? `<div class="note stop">${t("d_stop")}</div>` : ""}
+    ${(!ood && r.g >= S.meta.metal_gap_eV) ? `<div class="note">
+        <b>${t("d_qp")}</b> — ${t("d_qp_note", C.quasiparticle.n)}<br>
+        <b>${t("d_opt")}</b> — ${t("d_opt_note", C.optical.n)}<br><br>
+        ${t("d_exciton", fmt(qp - exp, 2))}</div>` : ""}
     ${(!ood && r.g < S.meta.metal_gap_eV) ? `<div class="note">${t("d_metallike", fmt(S.meta.metal_gap_eV, 1))}</div>` : ""}
     <div class="note">${t("d_note", fmt(cal.test_mae, 2))}</div>`;
 }

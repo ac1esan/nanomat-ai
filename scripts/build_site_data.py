@@ -30,7 +30,7 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-from nanomat.predict import A_CORR, B_CORR, METAL_GAP  # noqa: E402
+from nanomat.predict import DEFAULT_CORRECTIONS, METAL_GAP  # noqa: E402
 
 TABLE = os.path.join(ROOT, "screening_table.csv")
 STABLE_INDEX = os.path.join(ROOT, "alignn_data_alex_2d", "id_prop.csv")
@@ -115,6 +115,16 @@ def main():
              for el, v in sorted(per_el.items()) if len(v) >= MIN_N}
     print(f"trust map: {len(trust)} elements over {len(unseen)} unseen Alexandria rows")
 
+    # gap corrections travel in the checkpoint too (scripts/fit_gap_corrections.py)
+    corrections = {k: dict(v) for k, v in DEFAULT_CORRECTIONS.items()}
+    gc = ck.get("gap_corrections")
+    if isinstance(gc, dict):
+        for kind in ("quasiparticle", "optical"):
+            if isinstance(gc.get(kind), dict):
+                corrections[kind].update(gc[kind])
+        if isinstance(gc.get("exciton_binding"), dict):
+            corrections["exciton_binding"] = gc["exciton_binding"]
+
     # --- periodic table layout for the trust map (row, group), f-block on 8/9 ---
     from pymatgen.core.periodic_table import Element
     layout = {}
@@ -145,7 +155,7 @@ def main():
             "default_view": int(((out.b == 1) & (out.r != 1)).sum()),
         },
         "calibration": cal,
-        "pbe_correction": {"a": A_CORR, "b": B_CORR},
+        "corrections": corrections,
         "metal_gap_eV": METAL_GAP,
         "trust_map": trust,
         "ptable": layout,

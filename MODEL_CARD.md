@@ -102,9 +102,20 @@ Fast screening of candidate 2D semiconductors before committing DFT time. Trust 
 `reliable` verdict; treat `check` as a shortlist worth verifying; ignore the number
 under `out-of-domain`.
 
-- **PBE target.** Real gaps are larger. The correction `exp ≈ 1.39·gap − 0.44` is
-  fitted on five reference monolayers, four of them TMDs, using only points the
-  tool calls usable (MAE 0.42 → 0.16 eV). It is a rough estimate.
+- **PBE target, and two corrections rather than one.** The model predicts the PBE
+  gap, which nothing measures. `scripts/fit_gap_corrections.py` fits two separate
+  linear corrections against the model's own output, and both ship in the checkpoint:
+
+  | Target | Fitted against | n | In-sample MAE | Leave-one-out MAE |
+  |---|---|---|---|---|
+  | Quasiparticle (`≈ 1.18·gap + 0.45`) | HSE06, JARVIS dft_2d | 32 | 0.18 eV | **0.19 eV** |
+  | Optical (`≈ 1.39·gap − 0.44`) | measured monolayer gaps | 5 | 0.17 eV | 0.71 eV |
+
+  The quasiparticle fit generalises (raw prediction correlates with HSE at r = 0.988);
+  the optical one does not, and its widely quoted in-sample 0.17 eV is not a
+  performance figure. Their difference is 0.55 eV on the TMDs, which is the exciton
+  binding energy — the two describe different measurements, not competing estimates
+  of one.
 - **Data-density bias.** Error is lowest on transition-metal and heavy-element
   chemistries where Alexandria is dense, highest on light main-group compounds. It
   does not grow with the size of the gap.

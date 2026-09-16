@@ -73,9 +73,58 @@
   "type_threshold": 0.32657402276992803,
   "metal_threshold": 0.6476057171821595
  },
- "pbe_correction": {
-  "a": 1.39,
-  "b": -0.44
+ "corrections": {
+  "quasiparticle": {
+   "a": 1.1788322794968842,
+   "b": 0.44987077216104804,
+   "n": 32,
+   "mae_loo": 0.19327366976946592,
+   "mae_in_sample": 0.17965523357956847,
+   "mae_uncorrected": 0.9454373919963837,
+   "pearson": 0.9879857067917465,
+   "source": "JARVIS dft_2d hse_gap"
+  },
+  "optical": {
+   "a": 1.389793225033205,
+   "b": -0.44154300092508647,
+   "n": 5,
+   "mae_loo": 0.7054329274015716,
+   "mae_in_sample": 0.164843398783789,
+   "mae_uncorrected": 0.4160015068054198,
+   "fitted_on": [
+    "MoS2",
+    "MoSe2",
+    "WS2",
+    "WSe2",
+    "hBN"
+   ],
+   "source": "measured optical gaps of reference monolayers"
+  },
+  "exciton_binding": {
+   "mean_eV": 0.4276000000000001,
+   "per_material": [
+    {
+     "material": "MoS2",
+     "binding_eV": 0.536
+    },
+    {
+     "material": "MoSe2",
+     "binding_eV": 0.568
+    },
+    {
+     "material": "WS2",
+     "binding_eV": 0.483
+    },
+    {
+     "material": "WSe2",
+     "binding_eV": 0.627
+    },
+    {
+     "material": "hBN",
+     "binding_eV": -0.076
+    }
+   ]
+  }
  },
  "metal_gap_eV": 0.1,
  "trust_map": {

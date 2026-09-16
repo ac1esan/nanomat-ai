@@ -24,11 +24,20 @@ from .graph import DEFAULT_CUTOFF, DEFAULT_N_RBF, ensure_vacuum, to_graph
 from .model import CGCNN, CGCNNcls
 
 # --- calibration constants --------------------------------------------------
-# PBE -> experimental optical gap: linear fit on the reference monolayers that the
-# tool itself calls usable (validate_experiment.py). Fitted on MoS2/MoSe2/WS2/WSe2/h-BN;
-# brings the mean deviation from experiment down from 0.42 to 0.16 eV. Five points,
-# four of them TMDs - treat the corrected value as an estimate, not a measurement.
-A_CORR, B_CORR = 1.39, -0.44
+# Two corrections turn a PBE-level prediction into something measurable, and they
+# target DIFFERENT quantities - see scripts/fit_gap_corrections.py:
+#   quasiparticle: what photoemission or a transport calculation wants. Fitted against
+#     HSE06 on 32 structures; leave-one-out MAE 0.19 eV, so it is properly validated.
+#   optical: the absorption onset, which is the quasiparticle gap minus the exciton
+#     binding energy. Fitted on only five reference monolayers; in-sample MAE is 0.17 eV
+#     but leave-one-out is 0.71 eV, so this one is a rough indication, not a measurement.
+# The difference between them is the exciton binding energy, ~0.55 eV on the TMDs,
+# which is the published order for a monolayer.
+DEFAULT_CORRECTIONS = {
+    "quasiparticle": {"a": 1.179, "b": 0.450, "n": 32, "mae_loo": 0.193},
+    "optical": {"a": 1.390, "b": -0.442, "n": 5, "mae_loo": 0.705},
+}
+A_CORR, B_CORR = 1.39, -0.44  # kept for backwards compatibility: the optical fit
 METAL_GAP = 0.1  # eV, below this we call it metal / semimetal
 
 # Fallback calibration, used only when the checkpoint carries none. Real numbers are
@@ -59,9 +68,16 @@ def default_weights_dir() -> str:
     return os.path.join(os.path.dirname(here), "weights")
 
 
-def corrected_gap(gap: float) -> float:
-    """Rough PBE -> experiment correction (see README, limits of validity)."""
-    return A_CORR * gap + B_CORR
+def corrected_gap(gap: float, corrections: dict | None = None) -> float:
+    """PBE -> optical gap. Kept for backwards compatibility; prefer `correct()`."""
+    c = (corrections or DEFAULT_CORRECTIONS)["optical"]
+    return c["a"] * gap + c["b"]
+
+
+def correct(gap: float, kind: str, corrections: dict | None = None) -> float:
+    """Apply one of the two corrections. `kind` is "quasiparticle" or "optical"."""
+    c = (corrections or DEFAULT_CORRECTIONS)[kind]
+    return c["a"] * gap + c["b"]
 
 
 def verdict(unc: float, cal: dict | None = None, latent: float | None = None) -> str:
@@ -103,6 +119,7 @@ class Prediction:
     verdict: str
     exp_gap_est: float | None  # eV, after PBE->exp correction (None for metals)
     is_metal_like: bool        # gap < METAL_GAP
+    gap_quasiparticle: float | None = None  # eV, HSE-level estimate (photoemission / transport)
     latent_distance: float | None = None  # 1 - mean cosine sim to 10 nearest training structures
     interval90: float | None = None  # eV, half-width of the calibrated 90% interval
     typical_error: float | None = None  # eV, measured MAE of this trust tier
@@ -117,6 +134,7 @@ class Prediction:
             "formula": self.formula,
             "natoms": self.natoms,
             "band_gap_PBE_eV": round(self.gap, 3),
+            "gap_quasiparticle_eV": None if self.gap_quasiparticle is None else round(self.gap_quasiparticle, 3),
             "exp_gap_est_eV": None if self.exp_gap_est is None else round(self.exp_gap_est, 3),
             "uncertainty_eV": round(self.unc, 3),
             "interval90_eV": None if self.interval90 is None else round(self.interval90, 3),
@@ -141,6 +159,7 @@ class Predictor:
         self.weights_dir = weights_dir or default_weights_dir()
         self.cutoff, self.n_rbf = DEFAULT_CUTOFF, DEFAULT_N_RBF
         self.cal = dict(DEFAULT_CAL)
+        self.corr = {k: dict(v) for k, v in DEFAULT_CORRECTIONS.items()}
         self.ref_emb: torch.Tensor | None = None  # normalised training embeddings
         self.models: list[nn.Module] = []
         self.mean = self.std = 0.0
@@ -172,6 +191,11 @@ class Predictor:
             self.mean, self.std = float(ck["mean"]), float(ck["std"])
             if ck.get("reference_embeddings") is not None:
                 self.ref_emb = ck["reference_embeddings"].float()
+            gc = ck.get("gap_corrections")
+            if isinstance(gc, dict):
+                for kind in ("quasiparticle", "optical"):
+                    if isinstance(gc.get(kind), dict):
+                        self.corr[kind].update(gc[kind])
             if isinstance(ck.get("calibration"), dict):
                 self.cal.update(ck["calibration"])
                 self._log(f"Loaded gap ensemble: {len(self.models)} models, calibrated "
@@ -304,7 +328,8 @@ class Predictor:
         return Prediction(
             formula=st.composition.reduced_formula, natoms=len(st),
             gap=gap, unc=unc, verdict=v,
-            exp_gap_est=None if metal_like else corrected_gap(gap),
+            exp_gap_est=None if metal_like else correct(gap, "optical", self.corr),
+            gap_quasiparticle=None if metal_like else correct(gap, "quasiparticle", self.corr),
             is_metal_like=metal_like, latent_distance=ld,
             interval90=self.cal["scale90"] * unc,
             typical_error=self.cal["tier_mae"].get(tier_key(v)),
@@ -409,7 +434,8 @@ class Predictor:
             out[order[j]] = (key, Prediction(
                 formula=st2.composition.reduced_formula, natoms=len(st2),
                 gap=gap, unc=unc, verdict=v,
-                exp_gap_est=None if metal_like else corrected_gap(gap),
+                exp_gap_est=None if metal_like else correct(gap, "optical", self.corr),
+                gap_quasiparticle=None if metal_like else correct(gap, "quasiparticle", self.corr),
                 is_metal_like=metal_like, latent_distance=ld,
                 interval90=self.cal["scale90"] * unc,
                 typical_error=self.cal["tier_mae"].get(tier_key(v)),

@@ -111,8 +111,14 @@ def format_markdown(r, cal: dict | None = None) -> str:
         "|---|---|",
         f"| **Band gap (PBE)** | {headline} &nbsp; ({kind}) |",
     ]
-    if r.exp_gap_est is not None and not ood:
-        lines.append(f"| Estimated experimental gap | ≈ {r.exp_gap_est:.2f} eV (linear PBE correction) |")
+    if not ood and r.gap_quasiparticle is not None:
+        qn = (cal.get("corr", {}).get("quasiparticle", {}) or {}).get("n", 32)
+        lines.append(f"| **Quasiparticle gap** (photoemission, transport) | **≈ {r.gap_quasiparticle:.2f} eV** "
+                     f"<br><sub>fitted against HSE06 on {qn} structures, leave-one-out error 0.19 eV</sub> |")
+    if not ood and r.exp_gap_est is not None:
+        lines.append(f"| **Optical gap** (absorption onset) | **≈ {r.exp_gap_est:.2f} eV** "
+                     "<br><sub>only five reference monolayers behind this fit: leave-one-out "
+                     "error 0.71 eV, so treat it as an indication</sub> |")
     if r.gap_type is not None:
         conf = r.p_indirect if r.gap_type == "indirect" else 1 - r.p_indirect
         lines.append(f"| Gap type | {r.gap_type} (p = {conf:.2f}) |")
@@ -134,6 +140,11 @@ def format_markdown(r, cal: dict | None = None) -> str:
                   "the documented example — spread 0.03 eV, actual error 1.2 eV."]
     if r.warnings:
         lines += ["", "⚠️ " + "  \n⚠️ ".join(r.warnings)]
+    if not ood and r.gap_quasiparticle is not None and r.exp_gap_est is not None:
+        lines += ["", f"<sub>The two differ by {r.gap_quasiparticle - r.exp_gap_est:.2f} eV, which is "
+                  "the exciton binding energy: the optical onset sits below the quasiparticle gap by "
+                  "exactly that much. Which one you want depends on the measurement — photoemission "
+                  "and transport see the first, absorption sees the second.</sub>"]
     mae = cal.get("test_mae")
     lines += [
         "",
@@ -216,7 +227,7 @@ def build_demo(weights_dir: str | None = None):
                 fig = strain_curve(P, st)
             except Exception:
                 fig = None
-        return format_markdown(r, P.cal), fig
+        return format_markdown(r, {**P.cal, "corr": P.corr}), fig
 
     here = os.path.dirname(os.path.abspath(__file__))
     ex_dir = os.path.join(here, "examples")

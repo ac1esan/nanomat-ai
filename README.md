@@ -176,11 +176,30 @@ Two more things the numbers say:
 <p align="center"><img src="figures/experiment_validation.png" width="560" alt="Model vs experimental gaps for reference monolayers"></p>
 
 [`validate_experiment.py`](validate_experiment.py) runs seven reference monolayers
-(shipped in [`examples/`](examples/), so it works offline). PBE underestimates by
-+0.42 eV on average; a linear correction `exp ≈ 1.39·gap − 0.44` brings the
-deviation from 0.42 to 0.16 eV. The correction is fitted only on points the tool
-itself calls usable — a prediction flagged as out-of-domain must not steer the
-calibration every other prediction is corrected by.
+(shipped in [`examples/`](examples/), so it works offline), and
+[`scripts/fit_gap_corrections.py`](scripts/fit_gap_corrections.py) turns the PBE
+output into something measurable. There are **two** targets, and conflating them is
+the trap:
+
+| | Fitted against | n | Leave-one-out error |
+|---|---|---|---|
+| **Quasiparticle gap** — photoemission, transport | HSE06 from JARVIS dft_2d | 32 | **0.19 eV** |
+| **Optical gap** — absorption onset | measured monolayer gaps | 5 | 0.71 eV |
+
+The quasiparticle fit is solid: the raw prediction correlates with HSE at r = 0.988,
+and leave-one-out barely differs from in-sample (0.19 vs 0.18 eV). The optical fit is
+not: its in-sample 0.17 eV collapses to 0.71 eV under leave-one-out, because five
+points with h-BN at 6 eV is not a fit, it is an interpolation between two clusters.
+Both are reported, labelled, and the optical one is marked as an indication.
+
+The difference between them averages **0.55 eV on the four TMDs**, and that is the
+physics working: it is the exciton binding energy, which is why absorption and
+photoemission disagree on the same monolayer. Reporting only one number would have
+hidden that.
+
+Both corrections are fitted only on points the tool itself calls usable — a
+prediction flagged as out-of-domain must not steer the calibration every other
+prediction is corrected by.
 
 ### Does geometry have to come from a DFT relaxation?
 
