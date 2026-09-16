@@ -17,10 +17,12 @@ feature = distance, atomic number embedded at the nodes.
 | **Test performance** | **MAE 0.261 eV** (95% bootstrap CI 0.242–0.283), RMSE 0.454, R² 0.889. Members: 0.281 / 0.305 / 0.274 / 0.277 / 0.319 |
 | **Control** | Identical code and data on a random split: MAE 0.252. The honest split costs ≈ 0.01 eV |
 | **Composition baseline** | Magpie + RandomForest/XGBoost on the same data: CV MAE 0.360 eV |
-| **Checksum** | SHA-256 `5697273713e2d9ecc7ac8b51b1bc11c90992f0b81779ddd7f39b6e6c68ac5f67` |
+| **Checksum** | SHA-256 `b2a4644a81a65d273346c555fb0cb1c425687381ae11ddb871986ff0ca67c075` |
 
-The checkpoint also carries its own `calibration` block and 10 733 reference
-embeddings, so it can judge its own output without any external file.
+The checkpoint also carries its own `calibration` block, both gap corrections and
+10 733 reference embeddings, so it can judge and correct its own output without
+any external file. Its checksum therefore changes whenever the calibration is
+refitted, not only when the weights are retrained.
 
 ### Uncertainty, and why the raw spread is not enough
 
