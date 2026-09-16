@@ -240,7 +240,10 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
         <h2 id="t-c-title">Predicted gap against the model's own uncertainty</h2>
         <p id="t-c-sub"></p>
       </div>
-      <div class="legend" id="legend"></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="preset" id="chart-reset" hidden></button>
+        <div class="legend" id="legend"></div>
+      </div>
     </div>
     <canvas id="chart"></canvas>
     <div class="tip" id="tip" hidden></div>
@@ -339,7 +342,9 @@ const I18N = {
     warn_all: "<b>Outside the calibrated population.</b> The intervals and tier errors shown here were fitted on stable Alexandria structures. On metastable entries and other DFT functionals the verdict still ranks error correctly, but a 90% interval covers about 78% of cases instead of 90%. Use the ordering, not the absolute numbers.",
     warn_train: "<b>Includes structures the model trained on.</b> Rows badged “trained on” are reproduced from memory, not predicted; their error is about 0.08 eV rather than the honest 0.26 eV.",
     c_title: "Predicted gap against the model's own uncertainty",
-    c_sub: (a, b) => `Each dot is one structure. The horizontal lines are the verdict thresholds at ${a} and ${b} eV of ensemble spread. Hover for a structure, click to open it.`,
+    c_sub: (a, b) => `Each dot is one structure; the horizontal lines are the verdict thresholds at ${a} and ${b} eV of ensemble spread. Hover to ring a point, click to open it. Scroll to zoom, drag to pan, double-click to fit again — with this many dots overlapping, zooming is the only way to separate them.`,
+    crowd: n => n === 1 ? "1 more structure under the cursor" : `${n} more structures under the cursor`,
+    reset_zoom: "Fit to data",
     ax_gap: "predicted band gap, eV", ax_unc: "ensemble spread, eV (log)",
     th_formula: "Formula", th_gap: "Gap, eV", th_unc: "Spread", th_type: "Type", th_verdict: "Verdict",
     badge_train: "trained on",
@@ -381,6 +386,10 @@ const S = {
   meta: null, rows: [], view: [], sel: null,
   sort: { key: "g", dir: 1 },
   fam: { pick: 0, sel: null },
+  // chart viewport. null = fit to the filtered data. Set by wheel-zoom and drag-pan,
+  // which is the only way to tell points apart once 28 000 of them overlap.
+  zoom: null,
+  hover: null,
   f: { pop: 0, gmin: null, gmax: null, tiers: [true, true, false], type: -1,
        has: [], not: [], q: "", notrain: false },
   hiddenByTier: 0,
@@ -446,6 +455,7 @@ function apply() {
   });
   S.hiddenByTier = hidden;
   S.view = out;
+  S.hover = null;
   if (S.sel && !out.includes(S.sel)) S.sel = null;
   renderCount(); renderWarning(); drawChart(); renderTable(); renderDetail();
   if (S.fam.sel && !out.includes(S.fam.sel)) S.fam.sel = null;
@@ -495,30 +505,52 @@ function drawChart() {
   // vertical position of a point means the same thing in every view
   ULO = Math.min(ulo * 0.7, calY.unc_median * 0.35, 0.02);
   UHI = Math.max(uhi * 1.4, calY.unc_q75 * 2.2);
+  if (S.zoom) {
+    gmin = S.zoom.gmin; gmax = S.zoom.gmax;
+    ULO = Math.pow(10, S.zoom.lylo); UHI = Math.pow(10, S.zoom.lyhi);
+  }
   const px = g => M.l + Math.max(0, Math.min(1, (g - gmin) / (gmax - gmin))) * iw;
   const py = u => {
     const v = Math.log10(Math.max(ULO, Math.min(UHI, u)));
     const lo = Math.log10(ULO), hi = Math.log10(UHI);
     return M.t + ih - ((v - lo) / (hi - lo)) * ih;
   };
-  PLOT = { px, py, M, iw, ih, gmax };
+  const invx = mx => gmin + ((mx - M.l) / iw) * (gmax - gmin);
+  const invy = my => {
+    const lo = Math.log10(ULO), hi = Math.log10(UHI);
+    return lo + ((M.t + ih - my) / ih) * (hi - lo);   // возвращает log10(u)
+  };
+  PLOT = { px, py, invx, invy, M, iw, ih, gmin, gmax, ULO, UHI };
 
   // grid + axes
   x.strokeStyle = grid; x.fillStyle = text3; x.lineWidth = 1;
   x.font = "11px ui-sans-serif, system-ui, sans-serif";
   x.textAlign = "right"; x.textBaseline = "middle";
-  for (const u of [0.003, 0.01, 0.03, 0.1, 0.3, 1, 3]) {
-    if (u < ULO || u > UHI) continue;
+  // log ticks generated rather than listed: a fixed list leaves one label on screen
+  // once the viewport is zoomed into a fraction of a decade
+  const decades = Math.log10(UHI) - Math.log10(ULO);
+  const mant = decades > 2.5 ? [1] : decades > 1.2 ? [1, 3] : [1, 2, 3, 5, 7];
+  const ticks = [];
+  for (let k = Math.floor(Math.log10(ULO)); k <= Math.ceil(Math.log10(UHI)); k++)
+    for (const mm of mant) {
+      const u = mm * Math.pow(10, k);
+      if (u >= ULO && u <= UHI) ticks.push(u);
+    }
+  const tlbl = u => u >= 1 ? String(+u.toFixed(1))
+                  : u.toFixed(Math.min(4, Math.max(1, Math.ceil(-Math.log10(u)) + 1))).replace(/0+$/, "");
+  for (const u of ticks) {
     const yy = Math.round(py(u)) + .5;
     x.beginPath(); x.moveTo(M.l, yy); x.lineTo(M.l + iw, yy); x.stroke();
-    x.fillText(String(u), M.l - 7, yy);
+    x.fillText(tlbl(u), M.l - 7, yy);
   }
   x.textAlign = "center"; x.textBaseline = "top";
-  const step = (gmax - gmin) > 6 ? 2 : 1;
+  const span = gmax - gmin;
+  const step = span > 6 ? 2 : span > 2.5 ? 1 : span > 1 ? 0.5 : span > 0.4 ? 0.2 : 0.1;
+  const lbl = v => (step < 1 ? v.toFixed(1) : String(Math.round(v)));
   for (let g = Math.ceil(gmin / step) * step; g <= gmax + 1e-9; g += step) {
     const xx = Math.round(px(g)) + .5;
     x.beginPath(); x.moveTo(xx, M.t); x.lineTo(xx, M.t + ih); x.stroke();
-    x.fillText(String(g), xx, M.t + ih + 7);
+    x.fillText(lbl(g), xx, M.t + ih + 7);
   }
   x.fillText(t("ax_gap"), M.l + iw / 2, M.t + ih + 20);
   x.save(); x.translate(12, M.t + ih / 2); x.rotate(-Math.PI / 2);
@@ -548,6 +580,11 @@ function drawChart() {
   }
   x.setLineDash([]);
 
+  // the point under the cursor, so the tooltip is visibly about one specific dot
+  if (S.hover && S.view.includes(S.hover)) {
+    x.strokeStyle = cs.getPropertyValue("--text-2").trim(); x.lineWidth = 1.5;
+    x.beginPath(); x.arc(px(S.hover.g), py(S.hover.u), 4.5, 0, 6.2832); x.stroke();
+  }
   // selection
   if (S.sel && S.view.includes(S.sel)) {
     x.strokeStyle = cs.getPropertyValue("--text-1").trim(); x.lineWidth = 2;
@@ -555,14 +592,15 @@ function drawChart() {
   }
 }
 function nearest(mx, my) {
-  if (!PLOT) return null;
-  let best = null, bd = 144;
+  if (!PLOT) return { row: null, crowd: 0 };
+  let best = null, bd = 144, crowd = 0;
   for (const r of S.view) {
     const dx = PLOT.px(r.g) - mx, dy = PLOT.py(r.u) - my;
     const d = dx * dx + dy * dy;
+    if (d < 36) crowd++;                       // within ~6 px of the cursor
     if (d < bd) { bd = d; best = r; }
   }
-  return best;
+  return { row: best, crowd };
 }
 
 /* table ------------------------------------------------------------------- */
@@ -814,6 +852,7 @@ function buildUI() {
   document.getElementById("t-c-sub").textContent =
     t("c_sub", fmt(S.meta.calibration.unc_median, 3), fmt(S.meta.calibration.unc_q75, 3));
   document.getElementById("t-footer").innerHTML = t("footer");
+  document.getElementById("chart-reset").textContent = t("reset_zoom");
 
   const pop = document.getElementById("f-pop");
   pop.innerHTML = [t("pop_calibrated", int(c.default_view)), t("pop_stable", int(c.stable)),
@@ -867,6 +906,9 @@ document.addEventListener("click", e => {
     document.getElementById("f-gmax").value = pre.dataset.b;
     apply(); return;
   }
+  if (e.target.id === "chart-reset") {
+    S.zoom = null; e.target.hidden = true; drawChart(); return;
+  }
   const sortBtn = e.target.closest("[data-sort]");
   if (sortBtn) {
     const k = sortBtn.dataset.sort;
@@ -918,24 +960,73 @@ for (const [id, key, cast] of [["f-gmin", "gmin", 1], ["f-gmax", "gmax", 1],
 document.getElementById("fam-pick").addEventListener("change", e => {
   S.fam.pick = +e.target.value; S.fam.sel = null; renderFamilies(); });
 document.getElementById("scroller").addEventListener("scroll", e => paintRows(e.target.scrollTop));
+let DRAG = null;
+function setZoomFromPlot(gmin, gmax, lylo, lyhi) {
+  // never let the viewport collapse to nothing or invert
+  if (gmax - gmin < 0.02 || lyhi - lylo < 0.05) return;
+  S.zoom = { gmin, gmax, lylo, lyhi };
+  document.getElementById("chart-reset").hidden = false;
+  drawChart();
+}
+cv().addEventListener("wheel", e => {
+  if (!PLOT) return;
+  e.preventDefault();
+  const b = cv().getBoundingClientRect();
+  const mx = e.clientX - b.left, my = e.clientY - b.top;
+  const cx = PLOT.invx(mx), cy = PLOT.invy(my);          // data point under the cursor
+  const k = e.deltaY > 0 ? 1.18 : 1 / 1.18;              // stays put while the rest scales
+  const lo = Math.log10(PLOT.ULO), hi = Math.log10(PLOT.UHI);
+  setZoomFromPlot(cx - (cx - PLOT.gmin) * k, cx + (PLOT.gmax - cx) * k,
+                  cy - (cy - lo) * k, cy + (hi - cy) * k);
+}, { passive: false });
+cv().addEventListener("mousedown", e => {
+  if (!PLOT) return;
+  DRAG = { x: e.clientX, y: e.clientY, moved: false,
+           gmin: PLOT.gmin, gmax: PLOT.gmax,
+           lylo: Math.log10(PLOT.ULO), lyhi: Math.log10(PLOT.UHI) };
+  cv().style.cursor = "grabbing";
+});
+addEventListener("mouseup", () => {
+  if (DRAG) cv().style.cursor = "crosshair";
+  DRAG = null;
+});
 cv().addEventListener("mousemove", e => {
   const b = cv().getBoundingClientRect();
-  const r = nearest(e.clientX - b.left, e.clientY - b.top);
+  const mx = e.clientX - b.left, my = e.clientY - b.top;
+  if (DRAG) {
+    const dxp = e.clientX - DRAG.x, dyp = e.clientY - DRAG.y;
+    if (Math.abs(dxp) + Math.abs(dyp) > 3) DRAG.moved = true;
+    const gspan = DRAG.gmax - DRAG.gmin, lspan = DRAG.lyhi - DRAG.lylo;
+    const dg = -dxp / PLOT.iw * gspan, dl = dyp / PLOT.ih * lspan;
+    setZoomFromPlot(DRAG.gmin + dg, DRAG.gmax + dg, DRAG.lylo + dl, DRAG.lyhi + dl);
+    document.getElementById("tip").hidden = true;
+    return;
+  }
+  const { row: r, crowd } = nearest(mx, my);
   const tip = document.getElementById("tip");
-  if (!r) { tip.hidden = true; return; }
+  if (!r) { if (S.hover) { S.hover = null; drawChart(); } tip.hidden = true; return; }
+  if (S.hover !== r) { S.hover = r; drawChart(); }
   const cal = S.meta.calibration;
   tip.innerHTML = `<b>${r.f}</b>${fmt(r.g, 2)} eV${r.w === 2 ? "" : " ± " + fmt(cal.scale90 * r.u, 2)}
-    <span style="color:var(${TIERVAR[r.w]})"> · ${t("tier")[r.w]}</span>`;
+    <span style="color:var(${TIERVAR[r.w]})"> · ${t("tier")[r.w]}</span>` +
+    (crowd > 1 ? `<span style="color:var(--text-3)"><br>${t("crowd", crowd - 1)}</span>` : "");
   tip.hidden = false;
-  const tx = Math.min(e.clientX - b.left + 12, b.width - tip.offsetWidth - 6);
+  const tx = Math.min(mx + 12, b.width - tip.offsetWidth - 6);
   tip.style.left = Math.max(4, tx) + "px";
-  tip.style.top = Math.max(4, e.clientY - b.top - tip.offsetHeight - 10) + "px";
+  tip.style.top = Math.max(4, my - tip.offsetHeight - 10) + "px";
 });
-cv().addEventListener("mouseleave", () => { document.getElementById("tip").hidden = true; });
+cv().addEventListener("mouseleave", () => {
+  document.getElementById("tip").hidden = true;
+  if (S.hover) { S.hover = null; drawChart(); }
+});
 cv().addEventListener("click", e => {
+  if (DRAG && DRAG.moved) return;                        // a pan is not a selection
   const b = cv().getBoundingClientRect();
-  const r = nearest(e.clientX - b.left, e.clientY - b.top);
+  const { row: r } = nearest(e.clientX - b.left, e.clientY - b.top);
   if (r) { S.sel = r; renderTable(); renderDetail(); drawChart(); }
+});
+cv().addEventListener("dblclick", () => {
+  S.zoom = null; document.getElementById("chart-reset").hidden = true; drawChart();
 });
 addEventListener("resize", () => { drawChart(); renderTable(); });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
