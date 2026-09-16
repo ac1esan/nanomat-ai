@@ -119,6 +119,12 @@ def format_markdown(r, cal: dict | None = None) -> str:
         lines.append(f"| **Optical gap** (absorption onset) | **≈ {r.exp_gap_est:.2f} eV** "
                      "<br><sub>only five reference monolayers behind this fit: leave-one-out "
                      "error 0.71 eV, so treat it as an indication</sub> |")
+    if r.work_function is not None:
+        wfn = (cal.get("wf", {}) or {}).get("test_mae")
+        lines.append(f"| **Work function** | **{r.work_function:.2f} ± {r.work_function_unc:.2f} eV** "
+                     "<br><sub>which metal makes an ohmic contact, and where the Schottky "
+                     "barrier sits" + (f"; separate model, test MAE {wfn:.2f} eV" if wfn else "") +
+                     "</sub> |")
     if r.gap_type is not None:
         conf = r.p_indirect if r.gap_type == "indirect" else 1 - r.p_indirect
         lines.append(f"| Gap type | {r.gap_type} (p = {conf:.2f}) |")
@@ -227,7 +233,8 @@ def build_demo(weights_dir: str | None = None):
                 fig = strain_curve(P, st)
             except Exception:
                 fig = None
-        return format_markdown(r, {**P.cal, "corr": P.corr}), fig
+        return format_markdown(r, {**P.cal, "corr": P.corr,
+                                   "wf": (P.wf.cal if P.wf else {})}), fig
 
     here = os.path.dirname(os.path.abspath(__file__))
     ex_dir = os.path.join(here, "examples")

@@ -31,6 +31,9 @@ def main():
     ap.add_argument("--data", required=True, help="folder with .vasp files and id_prop.csv")
     ap.add_argument("--split", required=True, help="<run>.split.json written by train_cgcnn.py")
     ap.add_argument("--trees", type=int, default=400)
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="matminer workers. Keep 1 on macOS: its spawn start method "
+                         "deadlocks a script without a __main__ guard. On Linux raise it.")
     ap.add_argument("--json", help="write the metrics to this file")
     args = ap.parse_args()
 
@@ -53,7 +56,7 @@ def main():
 
     feat = MultipleFeaturizer([ElementProperty.from_preset("magpie"),
                                Stoichiometry(), ValenceOrbital()])
-    feat.set_n_jobs(1)   # matminer's workers deadlock on macOS without a __main__ guard
+    feat.set_n_jobs(args.jobs)
     X = feat.featurize_many([Composition(formula[f]) for f in names],
                             ignore_errors=True, pbar=False)
     X = pd.DataFrame(X, columns=feat.feature_labels()).apply(pd.to_numeric, errors="coerce")

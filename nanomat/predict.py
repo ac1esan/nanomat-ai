@@ -75,6 +75,23 @@ def corrected_gap(gap: float, corrections: dict | None = None) -> float:
     return c["a"] * gap + c["b"]
 
 
+def band_edges(work_function: float, gap: float) -> tuple[float, float]:
+    """(electron affinity, ionisation potential) relative to vacuum, in eV.
+
+    The trained target is what C2DB calls the work function: the vacuum level minus
+    the Fermi level. For a metal that is the work function proper. For an undoped
+    semiconductor DFT puts the Fermi level mid-gap, so the number on its own is a
+    reference level rather than anything a probe measures — but together with the
+    gap it places both band edges, which is the pair a contact is chosen on.
+
+    Checked against published monolayer values: ionisation potentials land within
+    0.15 eV for MoS2, MoSe2, WS2 and WSe2, affinities within 0.4 eV. The mid-gap
+    assumption is a convention, not a law, so treat these as placements rather than
+    measurements.
+    """
+    return work_function - gap / 2, work_function + gap / 2
+
+
 def correct(gap: float, kind: str, corrections: dict | None = None) -> float:
     """Apply one of the two corrections. `kind` is "quasiparticle" or "optical"."""
     c = (corrections or DEFAULT_CORRECTIONS)[kind]
@@ -160,6 +177,10 @@ class Prediction:
     is_metal_like: bool        # gap < METAL_GAP
     work_function: float | None = None      # eV, only when the second model is present
     work_function_unc: float | None = None
+    # Band edges relative to the vacuum level, the pair a contact is actually chosen
+    # on. Derived from the two models together rather than predicted directly.
+    electron_affinity: float | None = None   # vacuum -> conduction band minimum
+    ionisation_potential: float | None = None  # vacuum -> valence band maximum
     gap_quasiparticle: float | None = None  # eV, HSE-level estimate (photoemission / transport)
     latent_distance: float | None = None  # 1 - mean cosine sim to 10 nearest training structures
     interval90: float | None = None  # eV, half-width of the calibrated 90% interval
@@ -176,6 +197,8 @@ class Prediction:
             "natoms": self.natoms,
             "band_gap_PBE_eV": round(self.gap, 3),
             "work_function_eV": None if self.work_function is None else round(self.work_function, 3),
+            "electron_affinity_eV": None if self.electron_affinity is None else round(self.electron_affinity, 3),
+            "ionisation_potential_eV": None if self.ionisation_potential is None else round(self.ionisation_potential, 3),
             "work_function_unc_eV": None if self.work_function_unc is None else round(self.work_function_unc, 3),
             "gap_quasiparticle_eV": None if self.gap_quasiparticle is None else round(self.gap_quasiparticle, 3),
             "exp_gap_est_eV": None if self.exp_gap_est is None else round(self.exp_gap_est, 3),
@@ -379,6 +402,12 @@ class Predictor:
             is_metal_like=metal_like, latent_distance=ld,
             work_function=None if wf_v is None else float(wf_v[0]),
             work_function_unc=None if wf_u is None else float(wf_u[0]),
+            # derived from the gap, so it inherits the gap's verdict: a number the
+            # tool has just disowned must not reappear as two numbers
+            **(dict(zip(("electron_affinity", "ionisation_potential"),
+                        band_edges(float(wf_v[0]), gap)))
+               if wf_v is not None and not metal_like
+               and not v.startswith("out-of-domain") else {}),
             interval90=self.cal["scale90"] * unc,
             typical_error=self.cal["tier_mae"].get(tier_key(v)),
             gap_type=gap_type, p_indirect=p_ind,
@@ -493,6 +522,10 @@ class Predictor:
                 is_metal_like=metal_like, latent_distance=ld,
                 work_function=None if wfv is None else float(wfv[j]),
                 work_function_unc=None if wfu is None else float(wfu[j]),
+                **(dict(zip(("electron_affinity", "ionisation_potential"),
+                            band_edges(float(wfv[j]), gap)))
+                   if wfv is not None and not metal_like
+                   and not v.startswith("out-of-domain") else {}),
                 interval90=self.cal["scale90"] * unc,
                 typical_error=self.cal["tier_mae"].get(tier_key(v)),
                 gap_type=None if pt is None else ("indirect" if pt >= self.type_thr else "direct"),
