@@ -294,6 +294,12 @@ def main():
     ap.add_argument("--n-rbf", type=int, default=40)
     ap.add_argument("--seed", type=int, default=0, help="split seed and first model seed")
     ap.add_argument("--ensemble", type=int, default=1, help="train N members with seeds seed..seed+N-1")
+    ap.add_argument("--bootstrap", action="store_true",
+                    help="bagging: resample the training set per ensemble member instead of "
+                         "showing every member identical data. Without it the spread between "
+                         "members only reflects initialisation, so a chemistry with one "
+                         "training example produces confident agreement; with it roughly a "
+                         "third of members never see that example and disagree.")
     ap.add_argument("--pretrained", help="checkpoint to initialise the trunk from (transfer learning)")
     ap.add_argument("--type-threshold", type=float, default=0.1,
                     help="task=type: direct if gap_dir - gap_ind < threshold (eV)")
@@ -356,7 +362,13 @@ def main():
     for k in range(args.ensemble):
         seed = args.seed + k
         print(f"\n=== model {k + 1}/{args.ensemble}  seed {seed} ===")
-        state, test, val = train_one(args, graphs, tr, va, te, mean, std, pos_weight, device, seed)
+        tr_k = tr
+        if args.bootstrap:
+            rng = np.random.default_rng(seed)
+            tr_k = rng.choice(tr, size=len(tr), replace=True)
+            print(f"  bootstrap resample: {len(np.unique(tr_k))} unique of {len(tr)} "
+                  f"({100 * len(np.unique(tr_k)) / len(tr):.0f}%)")
+        state, test, val = train_one(args, graphs, tr_k, va, te, mean, std, pos_weight, device, seed)
         states.append(state)
         tests.append(test)
         vals.append(val)
@@ -388,7 +400,8 @@ def main():
         print("\nensemble test:", json.dumps(metrics["ensemble"]))
 
     meta = {"created": dt.datetime.now().isoformat(timespec="seconds"), "git": git_commit(),
-            "torch": str(torch.__version__), "args": vars(args)}
+            "torch": str(torch.__version__), "args": vars(args),
+            "bagged": bool(args.bootstrap)}
     ck = {"mean": mean, "std": std, "cutoff": args.cutoff, "n_rbf": args.n_rbf,
           "h": args.h, "n_conv": args.n_conv, "meta": meta}
     if args.task == "gap" and args.ensemble > 1:

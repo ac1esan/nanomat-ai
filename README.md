@@ -262,6 +262,17 @@ python scripts/calibrate_uncertainty.py --weights weights/cgcnn_2d_ensemble.pt \
     --data alignn_data_alex_2d --split weights/cgcnn_2d_ensemble.split.json
 ```
 
+```bash
+python scripts/fit_gap_corrections.py --write    # quasiparticle + optical corrections
+```
+
+Adding `--bootstrap` to the training command resamples the training set per ensemble
+member instead of showing all five identical data. The spread between members then
+reflects sparse chemistry as well as initialisation, which is the weakness the
+latent-distance check currently compensates for. It costs some accuracy per member,
+since each sees about 63% of the unique structures, so it is worth measuring rather
+than assuming.
+
 Training writes `*.metrics.json` (test MAE with bootstrap CI, ensemble calibration)
 and `*.split.json` (exact file lists). The calibration step fits the interval
 scale, measures both out-of-domain signals and embeds them, plus the reference
