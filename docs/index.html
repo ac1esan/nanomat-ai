@@ -153,11 +153,14 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
 <header>
   <h1 id="t-title">NanoMatAI — 2D band gap screening</h1>
   <p id="t-lede"></p>
+  <!-- target=_blank is required, not cosmetic: on Hugging Face this page is served
+       inside a sandboxed iframe that forbids top-level navigation, and GitHub refuses
+       to render inside a frame, so a same-frame link lands on a blank page. -->
   <div class="links">
-    <a href="https://github.com/ac1esan/nanomat-ai">GitHub</a>
-    <a href="https://github.com/ac1esan/nanomat-ai/blob/main/MODEL_CARD.md" id="t-mc">Model card</a>
-    <a href="https://github.com/ac1esan/nanomat-ai#knowing-when-not-to-believe-it" id="t-how">How the verdict works</a>
-    <a href="https://github.com/ac1esan/nanomat-ai#quick-start" id="t-own">Run your own structure</a>
+    <a href="https://github.com/ac1esan/nanomat-ai" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a href="https://github.com/ac1esan/nanomat-ai/blob/main/MODEL_CARD.md" target="_blank" rel="noopener noreferrer" id="t-mc">Model card</a>
+    <a href="https://github.com/ac1esan/nanomat-ai#knowing-when-not-to-believe-it" target="_blank" rel="noopener noreferrer" id="t-how">How the verdict works</a>
+    <a href="https://github.com/ac1esan/nanomat-ai#quick-start" target="_blank" rel="noopener noreferrer" id="t-own">Run your own structure</a>
   </div>
 </header>
 
