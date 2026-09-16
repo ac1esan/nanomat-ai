@@ -181,15 +181,6 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
   </div>
 </header>
 
-<div class="tabs" role="tablist">
-  <button class="tab" role="tab" aria-selected="true" data-panel="browse" id="t-tab1">Browse</button>
-  <button class="tab" role="tab" aria-selected="false" data-panel="fam" id="t-tab3">Families</button>
-  <button class="tab" role="tab" aria-selected="false" data-panel="trust" id="t-tab2">Trust map</button>
-</div>
-
-<div class="loading" id="loading">Loading 28 372 predictions…</div>
-
-<section class="panel" id="panel-browse" hidden>
   <div class="filters">
     <div class="field">
       <label id="t-f-pop">Population</label>
@@ -231,6 +222,16 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
     <button class="preset" id="f-reset">Reset</button>
   </div>
   <div id="pop-warning"></div>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" aria-selected="true" data-panel="browse" id="t-tab1">Browse</button>
+  <button class="tab" role="tab" aria-selected="false" data-panel="fam" id="t-tab3">Families</button>
+  <button class="tab" role="tab" aria-selected="false" data-panel="trust" id="t-tab2">Trust map</button>
+</div>
+
+<div class="loading" id="loading">Loading 28 372 predictions…</div>
+
+<section class="panel" id="panel-browse" hidden>
   <p class="count" id="count"></p>
 
   <div class="chartbox">
@@ -260,10 +261,6 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
     <div class="field">
       <label id="t-fam-pick">Prototype</label>
       <select id="fam-pick"></select>
-    </div>
-    <div class="field">
-      <label id="t-fam-pop">Population</label>
-      <select id="fam-pop"></select>
     </div>
     <div class="ramp" style="margin:0">
       <span id="t-fam-lo"></span><span class="bar"></span><span id="t-fam-hi"></span>
@@ -323,10 +320,10 @@ const I18N = {
     fam_axis_a: "single site", fam_axis_b: "doubled site",
     fam_axis_note: "Rows and columns are structural positions, not chemical roles: the row element occupies the single site of the prototype and the column element the doubled one. For Rb₂O that puts oxygen in the row, which is what the structure says even though the chemistry reads the other way.",
     fam_opt: (label, n, pairs) => `${label} — ${n} structures, ${pairs} pairs`,
-    fam_count: (shown, total) => `<b>${shown}</b> element pairs in this prototype${total ? ` of ${total} across all populations` : ""}`,
-    fam_empty: "No structures of this prototype in the selected population.",
+    fam_count: (shown, total) => `<b>${shown}</b> of ${total} element pairs in this prototype pass the filters above`,
+    fam_empty: "No pairs of this prototype survive the current filters. The honest default hides most of a family, because most of it was used in training.",
     fam_multi: n => `${n} entries for this pair; the one with the smallest ensemble spread is shown`,
-    fam_prose: `<h2>How to read it</h2><p>Each cell is one element pair in the chosen prototype, coloured by predicted band gap. A dashed border means the tool does not place that prediction in its reliable tier. A dot in the corner means the model trained on that structure, so the number is reproduced from memory rather than predicted — its error is about 0.08 eV instead of the honest 0.26.</p><p>Unlike the other two tabs this one opens on the whole population, because restricting it to structures held out from training leaves nine pairs out of ninety-seven, and a grid full of holes shows nothing about a family. The cost is that the calibrated intervals do not strictly hold here; use the grid to compare within a family, and the browser tab for absolute numbers.</p><p>Where a pair has several entries, the one with the smallest ensemble spread is shown. Nothing is generated: every cell is a structure somebody computed, which is why a family can have holes at all.</p>`,
+    fam_prose: `<h2>How to read it</h2><p>Each cell is one element pair in the chosen prototype, coloured by predicted band gap. A dashed border means the tool does not place that prediction in its reliable tier. A dot in the corner means the model trained on that structure, so the number is reproduced from memory rather than predicted — its error is about 0.08 eV instead of the honest 0.26.</p><p>The filters above govern this grid as well, which is why the honest default leaves most of a family empty: most of it was used in training. <b>Show everything</b> fills the grid in, at the cost that the calibrated intervals no longer strictly hold — use the grid to compare within a family, and the browser tab for absolute numbers.</p><p>Where a pair has several entries, the one with the smallest ensemble spread is shown. Nothing is generated: every cell is a structure somebody computed, which is why a family can have holes at all.</p>`,
     f_pop: "Population", f_gap: "Band gap, eV", f_preset: "Quick range",
     f_tier: "Trust", f_type: "Gap type", f_has: "Must contain",
     f_not: "Must not contain", f_search: "Formula",
@@ -362,9 +359,11 @@ const I18N = {
     d_stop: "<b>Out of the model's domain.</b> The gap above is shown for transparency, not for use. The calibrated interval assumes the ensemble spread is meaningful, and out-of-domain is exactly where it is not.",
     d_note: (mae) => `Ensemble of five CGCNN models, test MAE ${mae} eV on compositions never seen in training. The band gap above is at the PBE level, which underestimates what any measurement returns; the two corrected values are what to quote.`,
     role: ["never seen", "trained on", "validation", "held-out test"],
-    tm_lede: (n) => `Where does the model actually work? Each element is coloured by the mean error over the ${n} Alexandria structures containing it that the ensemble never trained on. This answers the first question a lab asks: is it any good for my chemistry?`,
+    tm_lede: (n) => `Where does the model actually work? Each element is coloured by the mean error over the ${n} Alexandria structures in the current selection that the ensemble never trained on. Change the filters above and the map follows. This answers the first question a lab asks: is it any good for my chemistry?`,
     tm_lo: "accurate", tm_hi: "unreliable",
     tm_nodata: "too few structures to measure",
+    tm_thin: (n, min) => `The current filters leave ${n} Alexandria structures the model never trained on, which is not enough to measure an element on (${min} needed per element).`,
+    widen: "Show everything",
     tm_sparse: "thinly measured (under 60 structures)",
     tm_prose: `<h2>How to read it</h2><p>Dark cells are chemistries where the model is weak, and they are not the chemistries you might expect. Error tracks how densely a chemistry appears in the training data, not how hard its physics is: transition-metal and heavy-element compounds, which fill Alexandria, come out most accurate, while light main-group elements carry the long tail.</p><p>An element with no colour had fewer than five structures to measure on. That is itself information — a prediction on such a chemistry rests on almost nothing, which is the failure mode that made phosphorene come out at 0.82 eV against an experimental 2.0.</p>`,
     footer: `Data regenerated by <code>scripts/precompute_screening.py</code> and <code>scripts/build_site_data.py</code>. Model, weights and method: MIT licence. Structures from Alexandria (CC-BY 4.0), C2DB and JARVIS-DFT.`,
@@ -381,10 +380,7 @@ const int = x => x.toLocaleString("en-US").replace(/,/g, " ");
 const S = {
   meta: null, rows: [], view: [], sel: null,
   sort: { key: "g", dir: 1 },
-  // the family view defaults to the whole population on purpose: restricting it to
-  // held-out rows leaves 9 pairs of 97, and a grid full of holes defeats the point
-  // of looking at a family. Memorised rows are marked instead of hidden.
-  fam: { pick: 0, pop: 2, sel: null },
+  fam: { pick: 0, sel: null },
   f: { pop: 0, gmin: null, gmax: null, tiers: [true, true, false], type: -1,
        has: [], not: [], q: "", notrain: false },
   hiddenByTier: 0,
@@ -452,6 +448,8 @@ function apply() {
   S.view = out;
   if (S.sel && !out.includes(S.sel)) S.sel = null;
   renderCount(); renderWarning(); drawChart(); renderTable(); renderDetail();
+  if (S.fam.sel && !out.includes(S.fam.sel)) S.fam.sel = null;
+  renderFamilies(); renderTrust();
 }
 
 /* --------------------------------------------------------------------- render */
@@ -657,28 +655,30 @@ function renderDetail(hostId = "detail", row = undefined) {
 
 /* families ---------------------------------------------------------------- */
 function famRows() {
-  const code = S.meta.families[S.fam.pick].code;
-  const pop = S.fam.pop;
-  const best = new Map();                       // "A|B" -> строка с наименьшим разбросом
+  // built from the same filtered set as every other view, so one filter bar governs
+  // all three tabs and a number never means two different things on two tabs
+  const best = new Map();                       // "A|B" -> row with the smallest spread
   const count = new Map();
-  for (const r of S.rows) {
+  for (const r of S.view) {
     if (r.fm !== S.fam.pick) continue;
-    if (pop === 0 && !(r.b === 1 && r.r !== 1)) continue;
-    if (pop === 1 && r.b !== 1) continue;
     const k = r.fa + "|" + r.fb;
     count.set(k, (count.get(k) || 0) + 1);
     const cur = best.get(k);
     if (!cur || r.u < cur.u) best.set(k, r);
   }
-  return { code, best, count };
+  return { best, count };
 }
 function renderFamilies() {
   const { best, count } = famRows();
   const host = document.getElementById("famgrid");
   const meta = S.meta.families[S.fam.pick];
-  document.getElementById("fam-count").innerHTML = t("fam_count", best.size, meta.pairs);
+  const thin = best.size < meta.pairs;
+  document.getElementById("fam-count").innerHTML =
+    t("fam_count", best.size, meta.pairs) +
+    (thin ? ` <button class="preset" id="fam-widen" style="margin-left:8px">${t("widen")}</button>` : "");
   if (!best.size) {
-    host.innerHTML = `<div class="empty">${t("fam_empty")}</div>`;
+    host.innerHTML = `<div class="empty">${t("fam_empty")}
+      <br><br><button class="preset" id="fam-widen">${t("widen")}</button></div>`;
     renderDetail("fam-detail", null);
     return;
   }
@@ -730,8 +730,42 @@ function mix(a, b, u) {
   const q = v => Math.round(v).toString(16).padStart(2, "0");
   return "#" + q(r1 + (r2 - r1) * u) + q(g1 + (g2 - g1) * u) + q(b1 + (b2 - b1) * u);
 }
+function trustFromView() {
+  // Recomputed from whatever is on screen, so the map answers "for the selection I
+  // am looking at". Restricted to Alexandria rows the ensemble never trained on:
+  // mixing sources would mix DFT functionals into one error, and training rows
+  // would report memory rather than skill.
+  const per = new Map();
+  let used = 0;
+  for (const r of S.view) {
+    if (r.s !== 0 || r.r === 1 || r.d === null) continue;
+    used++;
+    const err = Math.abs(r.g - r.d);
+    for (const el of r.e) {
+      const a = per.get(el) || [0, 0];
+      per.set(el, [a[0] + err, a[1] + 1]);
+    }
+  }
+  const MIN_N = S.meta.trust_map_basis.min_n || 20;
+  const SPARSE = S.meta.trust_map_basis.sparse_below || 60;
+  const tm = {};
+  for (const [el, [sum, n]] of per) {
+    if (n >= MIN_N) tm[el] = { n, mae: sum / n, sparse: n < SPARSE ? 1 : 0 };
+  }
+  return { tm, used };
+}
 function renderTrust() {
-  const { trust_map: tm, ptable: pt, trust_map_basis: basis } = S.meta;
+  const { ptable: pt } = S.meta;
+  const { tm, used } = trustFromView();
+  const host = document.getElementById("ptable");
+  if (Object.keys(tm).length < 3) {
+    host.innerHTML = `<div class="empty">${t("tm_thin", int(used), S.meta.trust_map_basis.min_n || 20)}
+      <br><br><button class="preset" id="tm-widen">${t("widen")}</button></div>`;
+    document.getElementById("t-tm-lede").textContent = t("tm_lede", int(used));
+    document.getElementById("tm-prose").innerHTML = t("tm_prose");
+    return;
+  }
+  const basis = { n_structures: used };
   const vals = Object.values(tm).map(v => v.mae);
   const lo = Math.min(...vals), hi = Math.max(...vals);
   const cs = getComputedStyle(document.body);
@@ -753,7 +787,7 @@ function renderTrust() {
         <b>${sym}</b><small>${fmt(d.mae, 2)}</small></div>`);
     }
   }
-  document.getElementById("ptable").innerHTML = cells.join("");
+  host.innerHTML = cells.join("");
   document.getElementById("t-tm-lede").textContent = t("tm_lede", int(basis.n_structures));
   document.getElementById("t-tm-lo").textContent = `${t("tm_lo")} ${fmt(lo, 2)}`;
   document.getElementById("t-tm-hi").textContent = `${fmt(hi, 2)} eV ${t("tm_hi")}`;
@@ -797,16 +831,13 @@ function buildUI() {
   document.getElementById("t-tab3").textContent = t("tab_fam");
   document.getElementById("t-fam-lede").textContent = t("fam_lede");
   document.getElementById("t-fam-pick").textContent = t("fam_pick");
-  document.getElementById("t-fam-pop").textContent = t("fam_pop");
   document.getElementById("t-fam-unsure").textContent = t("fam_unsure");
   document.getElementById("t-fam-trained").textContent = t("fam_trained");
   document.getElementById("fam-prose").innerHTML = t("fam_prose");
   document.getElementById("fam-axisnote").textContent = t("fam_axis_note");
   document.getElementById("fam-pick").innerHTML = S.meta.families.map((f, i) =>
     `<option value="${i}">${t("fam_opt", f.label, int(f.n), f.pairs)}</option>`).join("");
-  document.getElementById("fam-pop").innerHTML = pop.innerHTML;
-  document.getElementById("fam-pop").value = String(S.fam.pop);
-  renderTHead(); renderTrust(); renderFamilies();
+  renderTHead();
   document.getElementById("panel-browse").hidden = false;
 }
 
@@ -841,6 +872,15 @@ document.addEventListener("click", e => {
     const k = sortBtn.dataset.sort;
     S.sort = { key: k, dir: S.sort.key === k ? -S.sort.dir : (k === "f" ? 1 : 1) };
     renderTHead(); apply(); return;
+  }
+  if (e.target.id === "fam-widen" || e.target.id === "tm-widen") {
+    // "everything" has to mean everything, or the count will not reach the total
+    // the same line just quoted and the button looks broken
+    S.f.pop = 2; S.f.notrain = false; S.f.tiers = [true, true, true];
+    document.getElementById("f-pop").value = "2";
+    document.getElementById("f-notrain").checked = false;
+    document.querySelectorAll(".chip[data-tier]").forEach(c => c.setAttribute("aria-pressed", "true"));
+    apply(); return;
   }
   const cell = e.target.closest(".famcell[data-fa]");
   if (cell) {
@@ -877,8 +917,6 @@ for (const [id, key, cast] of [["f-gmin", "gmin", 1], ["f-gmax", "gmax", 1],
   });
 document.getElementById("fam-pick").addEventListener("change", e => {
   S.fam.pick = +e.target.value; S.fam.sel = null; renderFamilies(); });
-document.getElementById("fam-pop").addEventListener("change", e => {
-  S.fam.pop = +e.target.value; S.fam.sel = null; renderFamilies(); });
 document.getElementById("scroller").addEventListener("scroll", e => paintRows(e.target.scrollTop));
 cv().addEventListener("mousemove", e => {
   const b = cv().getBoundingClientRect();
