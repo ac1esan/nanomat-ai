@@ -35,3 +35,6 @@ screening_table.csv
 # лабораторный журнал: контекст для Claude Code, намеренно не публикуется
 # (удалён из репозитория коммитом 770f5cd; файл остаётся локально)
 CLAUDE.md
+
+# собранная папка для Hugging Face Space (воспроизводится scripts/deploy_space.py)
+build/

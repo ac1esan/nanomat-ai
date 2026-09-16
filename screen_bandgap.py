@@ -29,6 +29,11 @@ warnings.filterwarnings("ignore")
 from nanomat import Predictor
 from nanomat.predict import METAL_GAP, read_structure
 
+BROWSER_URL = "https://ac1esan.github.io/nanomat-ai/"
+REPO_URL = "https://github.com/ac1esan/nanomat-ai"
+# Row count of the published browser; printed by scripts/build_site_data.py.
+BROWSE_N = 28372
+
 # Validated strain window (scripts/geometry_sensitivity.py): the response is smooth
 # and correct in sign under tension, but breaks down below -2% compression.
 STRAIN_MIN, STRAIN_MAX = -0.02, 0.06
@@ -225,7 +230,11 @@ def build_demo(weights_dir: str | None = None):
             "# NanoMatAI — band gap of 2D materials from structure\n"
             "Upload a monolayer structure (CIF / POSCAR / .vasp) **or** paste it as text. "
             "A graph neural network predicts the PBE band gap with an uncertainty estimate "
-            "in well under a second on CPU, instead of hours of DFT."
+            "in well under a second on CPU, instead of hours of DFT.\n\n"
+            f"No structure file to hand? [Browse {BROWSE_N:,} precomputed predictions]"
+            f"({BROWSER_URL}) instead — filter by element, gap range and trust verdict, and "
+            f"see a periodic-table map of where the model actually works. "
+            f"[Source and method]({REPO_URL})."
         )
         with gr.Row():
             with gr.Column(scale=1):
