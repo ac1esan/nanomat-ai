@@ -53,6 +53,7 @@ MED_UNC = DEFAULT_CAL["unc_median"]  # kept for backwards compatibility
 
 WEIGHT_FILES = {
     "ensemble": "cgcnn_2d_ensemble.pt",
+    "workfunction": "cgcnn_2d_workfunction.pt",
     "single": "cgcnn_2d_bandgap.pt",
     "type": "cgcnn_2d_typed.pt",
     "metal": "cgcnn_2d_metal.pt",
@@ -110,6 +111,44 @@ def tier_key(v: str) -> str:
         "check" if v.startswith("check") else "out_of_domain")
 
 
+class PropertyEnsemble:
+    """A second regression head on the same graphs, loaded from its own checkpoint.
+
+    The band gap is not the only thing a 2D material is chosen for. The work
+    function decides which metal makes an ohmic contact and where the Schottky
+    barrier sits, and it is a separate model with its own normalisation and its own
+    calibration — sharing a trunk would tie their accuracies together for no reason.
+    Optional: absent weights simply mean the property is not reported.
+    """
+
+    def __init__(self, path: str, log=print):
+        ck = torch.load(path, map_location="cpu")
+        self.cutoff = float(ck.get("cutoff", DEFAULT_CUTOFF))
+        self.n_rbf = int(ck.get("n_rbf", DEFAULT_N_RBF))
+        self.mean, self.std = float(ck["mean"]), float(ck["std"])
+        self.cal = dict(ck.get("calibration", {}))
+        states = ck.get("state_dicts") or [ck["state_dict"]]
+        self.models = []
+        for sd in states:
+            m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf)
+            m.load_state_dict(sd)
+            m.eval()
+            self.models.append(m)
+        log(f"Loaded {os.path.basename(path)}: {len(self.models)} models"
+            + (f", test MAE {self.cal['test_mae']:.3f}" if "test_mae" in self.cal else ""))
+
+    @torch.no_grad()
+    def predict(self, graphs: list) -> tuple[np.ndarray, np.ndarray] | tuple[None, None]:
+        """(values, spreads) for a list of graphs; spread is 0 for a single model."""
+        if not graphs:
+            return None, None
+        batch = Batch.from_data_list(graphs)
+        preds = torch.stack([m(batch) * self.std + self.mean for m in self.models])
+        spread = (preds.std(0, unbiased=False) if len(self.models) > 1
+                  else torch.zeros(preds.shape[1]))
+        return preds.mean(0).cpu().numpy(), spread.cpu().numpy()
+
+
 @dataclass
 class Prediction:
     formula: str
@@ -119,6 +158,8 @@ class Prediction:
     verdict: str
     exp_gap_est: float | None  # eV, after PBE->exp correction (None for metals)
     is_metal_like: bool        # gap < METAL_GAP
+    work_function: float | None = None      # eV, only when the second model is present
+    work_function_unc: float | None = None
     gap_quasiparticle: float | None = None  # eV, HSE-level estimate (photoemission / transport)
     latent_distance: float | None = None  # 1 - mean cosine sim to 10 nearest training structures
     interval90: float | None = None  # eV, half-width of the calibrated 90% interval
@@ -134,6 +175,8 @@ class Prediction:
             "formula": self.formula,
             "natoms": self.natoms,
             "band_gap_PBE_eV": round(self.gap, 3),
+            "work_function_eV": None if self.work_function is None else round(self.work_function, 3),
+            "work_function_unc_eV": None if self.work_function_unc is None else round(self.work_function_unc, 3),
             "gap_quasiparticle_eV": None if self.gap_quasiparticle is None else round(self.gap_quasiparticle, 3),
             "exp_gap_est_eV": None if self.exp_gap_est is None else round(self.exp_gap_est, 3),
             "uncertainty_eV": round(self.unc, 3),
@@ -173,6 +216,8 @@ class Predictor:
         self._load_gap_models()
         self.type_model, self.type_thr = self._load_cls("type")
         self.metal_model, self.metal_thr = self._load_cls("metal")
+        wf_path = self._path("workfunction")
+        self.wf = PropertyEnsemble(wf_path, self._log) if os.path.exists(wf_path) else None
 
     # --- loading -------------------------------------------------------------
     def _path(self, key: str) -> str:
@@ -316,6 +361,7 @@ class Predictor:
         g = to_graph(st, self.cutoff)
         ld = self.latent_distance([g])
         ld = None if ld is None else float(ld[0])
+        wf_v, wf_u = (self.wf.predict([g]) if self.wf else (None, None))
         p_metal = self.predict_metal(st)
         gap_type, p_ind = self.predict_type(st)
         v = verdict(unc, self.cal, ld)
@@ -331,6 +377,8 @@ class Predictor:
             exp_gap_est=None if metal_like else correct(gap, "optical", self.corr),
             gap_quasiparticle=None if metal_like else correct(gap, "quasiparticle", self.corr),
             is_metal_like=metal_like, latent_distance=ld,
+            work_function=None if wf_v is None else float(wf_v[0]),
+            work_function_unc=None if wf_u is None else float(wf_u[0]),
             interval90=self.cal["scale90"] * unc,
             typical_error=self.cal["tier_mae"].get(tier_key(v)),
             gap_type=gap_type, p_indirect=p_ind,
@@ -411,6 +459,12 @@ class Predictor:
             if m is not None:
                 m.to(device)
         gaps, uncs, p_type, p_metal = self._forward_many(graphs, batch_size, device, mc)
+        wfv = wfu = None
+        if self.wf is not None and graphs:
+            parts = [self.wf.predict(graphs[i:i + batch_size])
+                     for i in range(0, len(graphs), batch_size)]
+            wfv = np.concatenate([a for a, _ in parts])
+            wfu = np.concatenate([b for _, b in parts])
         lat = None
         if self.ref_emb is not None and graphs:
             lat = np.concatenate([self.latent_distance(graphs[i:i + batch_size])
@@ -437,6 +491,8 @@ class Predictor:
                 exp_gap_est=None if metal_like else correct(gap, "optical", self.corr),
                 gap_quasiparticle=None if metal_like else correct(gap, "quasiparticle", self.corr),
                 is_metal_like=metal_like, latent_distance=ld,
+                work_function=None if wfv is None else float(wfv[j]),
+                work_function_unc=None if wfu is None else float(wfu[j]),
                 interval90=self.cal["scale90"] * unc,
                 typical_error=self.cal["tier_mae"].get(tier_key(v)),
                 gap_type=None if pt is None else ("indirect" if pt >= self.type_thr else "direct"),
