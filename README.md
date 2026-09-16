@@ -259,6 +259,36 @@ for a future "pick the elements, get a prediction" interface:
 
 <p align="center"><img src="figures/strain_response.png" width="660" alt="Predicted gap under biaxial strain"></p>
 
+### A hypothesis that was right and still lost
+
+Every plain ensemble member trains on the same data, so a chemistry represented once
+is learned identically by all of them and they agree — which is exactly how
+phosphorene came out confidently wrong. Bagging should fix that at the source, since
+a third of the members never see any given structure. It was trained and compared on
+one test set:
+
+| | plain | bagged |
+|---|---|---|
+| MAE, eV | **0.261** | 0.306 |
+| Spearman, spread vs error | 0.450 | **0.495** |
+| worst uncertainty quartile / best | 4.08× | **4.34×** |
+| phosphorene spread, eV | 0.035 | **0.380** |
+
+The hypothesis held: phosphorene's spread rises by a factor of **10.8**, and the
+spread alone now catches the case it used to miss. It was still not adopted, for
+three reasons that only appear once you measure.
+
+Accuracy costs 17%, since each member sees about 64% of the structures. The
+**combined** out-of-domain signal barely moves — 0.500 to 0.511 — because distance
+to the training set in latent space already covered that ground, so bagging buys a
+second route to a place the tool could already reach. And a noisier spread raises
+false alarms on materials that are fine: WSe₂ drops from `check` to `out-of-domain`
+and MoSe₂ from `reliable` to `check`, both well-characterised monolayers.
+
+Paying 17% of accuracy for 2% of combined ranking, and getting more false alarms
+with it, is not a trade worth making. The flag stays in the trainer with this
+measurement attached, so nobody has to rediscover it.
+
 ## Honest limits
 
 - Trained on semiconductors only; the metal gate is the first stage, not a
@@ -309,12 +339,9 @@ python scripts/calibrate_uncertainty.py --weights weights/cgcnn_2d_ensemble.pt \
 python scripts/fit_gap_corrections.py --write    # quasiparticle + optical corrections
 ```
 
-Adding `--bootstrap` to the training command resamples the training set per ensemble
-member instead of showing all five identical data. The spread between members then
-reflects sparse chemistry as well as initialisation, which is the weakness the
-latent-distance check currently compensates for. It costs some accuracy per member,
-since each sees about 63% of the unique structures, so it is worth measuring rather
-than assuming.
+`--bootstrap` resamples the training set per ensemble member instead of showing all
+five identical data. It was measured and **not adopted**; the numbers are below,
+under "A hypothesis that was right and still lost".
 
 Training writes `*.metrics.json` (test MAE with bootstrap CI, ensemble calibration)
 and `*.split.json` (exact file lists). The calibration step fits the interval
