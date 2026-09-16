@@ -30,6 +30,7 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+from nanomat.families import FAMILIES  # noqa: E402
 from nanomat.predict import DEFAULT_CORRECTIONS, METAL_GAP  # noqa: E402
 
 TABLE = os.path.join(ROOT, "screening_table.csv")
@@ -38,6 +39,7 @@ ENSEMBLE = os.path.join(ROOT, "weights", "cgcnn_2d_ensemble.pt")
 OUT_DIR = os.path.join(ROOT, "docs", "data")
 
 SOURCES = ["alexandria", "c2db", "jarvis_dft2d"]
+FAM_CODES = list(FAMILIES)
 TIERS = ["reliable", "check", "out-of-domain"]
 ROLES = ["unseen", "train", "val", "test"]
 TYPES = ["direct", "indirect"]
@@ -80,6 +82,10 @@ def main():
         "w": df["verdict"].map(tier_code).astype(int),
         "r": df["in_training_set"].map({v: k for k, v in enumerate(ROLES)}).fillna(0).astype(int),
         "b": df["b"],
+        # structural prototype, -1 when the structure matches none of them
+        "fm": df["family"].map({c: i for i, c in enumerate(FAM_CODES)}).fillna(-1).astype(int),
+        "fa": df["family_a"].fillna(""),
+        "fb": df["family_b"].fillna(""),
     })
     csv_path = os.path.join(OUT_DIR, "screening.csv")
     out.to_csv(csv_path, index=False)
@@ -145,6 +151,10 @@ def main():
         "generated_from": "screening_table.csv",
         "n_rows": int(len(out)),
         "sources": SOURCES,
+        "families": [{"code": c, "label": FAMILIES[c][0], "note": FAMILIES[c][1],
+                      "n": int((df.family == c).sum()),
+                      "pairs": int(df[df.family == c].groupby(["family_a", "family_b"]).ngroups)}
+                     for c in FAM_CODES],
         "tiers": TIERS,
         "roles": ROLES,
         "types": TYPES,

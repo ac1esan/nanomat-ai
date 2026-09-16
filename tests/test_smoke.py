@@ -139,3 +139,37 @@ def test_batched_matches_single_structure(P):
         assert abs(a.unc - b.unc) < 1e-4, (key, a.unc, b.unc)
         assert a.verdict == b.verdict, key
         assert a.gap_type == b.gap_type, key
+
+
+def test_prototype_classification():
+    """The family view is only as good as the prototype tags behind it.
+
+    1H against 1T is the distinction that matters: same composition, different
+    coordination, genuinely different gaps. Collapsing them into one MX2 family
+    would average two different materials into a single cell.
+    """
+    from pymatgen.core import Lattice, Structure
+    from nanomat.families import classify
+
+    for name, expected in [("MoS2", ("1H-MX2", "Mo", "S")),
+                           ("WSe2", ("1H-MX2", "W", "Se")),
+                           ("hBN", ("hc-AB", "B", "N")),
+                           ("graphene", ("hc-A", "C", "C"))]:
+        assert classify(read_structure(os.path.join(EX, f"{name}.vasp"))) == expected, name
+
+    # phosphorene is none of these prototypes and must not be forced into one
+    assert classify(read_structure(os.path.join(EX, "phosphorene.vasp")))[0] is None
+
+    # same composition and lattice as 1H, chalcogens staggered instead of eclipsed
+    lat = Lattice.hexagonal(3.19, 22.0)
+    one_t = Structure(lat, ["Mo", "S", "S"],
+                      [[0, 0, 0.5], [1 / 3, 2 / 3, 0.57], [2 / 3, 1 / 3, 0.43]])
+    assert classify(one_t)[0] == "1T-MX2"
+    one_h = Structure(lat, ["Mo", "S", "S"],
+                      [[1 / 3, 2 / 3, 0.5], [2 / 3, 1 / 3, 0.57], [2 / 3, 1 / 3, 0.43]])
+    assert classify(one_h)[0] == "1H-MX2"
+
+    # a cubic cell is not a 2D hexagonal prototype whatever its composition
+    cubic = Structure(Lattice.cubic(5.0), ["Mo", "S", "S"],
+                      [[0, 0, 0], [0.5, 0.5, 0.5], [0.25, 0.25, 0.25]])
+    assert classify(cubic)[0] is None

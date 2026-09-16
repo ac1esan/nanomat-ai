@@ -32,6 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 from nanomat import Predictor  # noqa: E402
+from nanomat.families import classify  # noqa: E402
 
 
 def read_index(folder: str) -> list[tuple[str, float | None]]:
@@ -83,6 +84,9 @@ def main():
                     continue
             elements = {k: " ".join(sorted(e.symbol for e in st.composition.elements))
                         for k, st in items}
+            # structural prototype, so predictions can be pivoted into the families
+            # people actually think in (MX2 across the chalcogens, and so on)
+            fams = {k: classify(st) for k, st in items}
             for key, r in P.run_many(items, batch_size=args.batch):
                 if r is None:
                     continue
@@ -90,6 +94,9 @@ def main():
                     "id": os.path.splitext(key)[0], "source": label,
                     "formula": r.formula,
                     "elements": elements.get(key),
+                    "family": fams.get(key, (None, None, None))[0],
+                    "family_a": fams.get(key, (None, None, None))[1],
+                    "family_b": fams.get(key, (None, None, None))[2],
                     "natoms": r.natoms,
                     "dft_gap_eV": refs.get(key),
                     "pred_gap_eV": round(r.gap, 3),
@@ -113,6 +120,13 @@ def main():
     df.to_csv(args.out, index=False)
 
     print(f"\n{len(df)} rows -> {args.out}  ({time.time() - t0:.0f}s)")
+    fam = df[df.family.notna()]
+    if len(fam):
+        print(f"\nstructural prototypes recognised in {len(fam)} rows:")
+        for name, g in fam.groupby("family"):
+            pairs = g.groupby(["family_a", "family_b"]).ngroups
+            print(f"  {name:10s} {len(g):5d} rows, {pairs} distinct element pairs")
+
     print("\nby verdict:")
     print(df["verdict"].str.split(" (", regex=False).str[0].value_counts().to_string())
     seen = df[df.in_training_set == "train"]

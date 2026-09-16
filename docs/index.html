@@ -129,6 +129,23 @@ canvas{display:block;width:100%;height:320px;cursor:crosshair}
   font-size:12px;color:var(--text-2);line-height:1.45}
 .detail .stop{background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--text-1)}
 
+/* families */
+.famgrid{overflow-x:auto;margin:14px 0 6px}
+.famgrid table{border-collapse:separate;border-spacing:3px}
+.famgrid th{font-size:11px;font-weight:600;color:var(--text-2);padding:2px 6px;text-align:center}
+.famgrid th.rowh{text-align:right}
+.famcell{width:58px;height:44px;border-radius:4px;border:1px solid transparent;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15}
+.famcell b{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.famcell small{font-size:9px;opacity:.8}
+.famcell.none{background:var(--surface-3);cursor:default;border-color:var(--border)}
+.famcell.unsure{border-style:dashed;border-color:currentColor}
+.famcell.sel{outline:2px solid var(--accent);outline-offset:1px}
+.famcell.trained{position:relative}
+.famcell.trained::after{content:"";position:absolute;top:3px;right:3px;width:5px;height:5px;
+  border-radius:50%;background:currentColor;opacity:.65}
+.famhead{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap}
+
 /* trust map */
 .ptable{display:grid;grid-template-columns:repeat(18,minmax(0,1fr));gap:3px;margin:16px 0 8px}
 .cell{aspect-ratio:1;border-radius:4px;display:flex;flex-direction:column;align-items:center;
@@ -166,6 +183,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
 
 <div class="tabs" role="tablist">
   <button class="tab" role="tab" aria-selected="true" data-panel="browse" id="t-tab1">Browse</button>
+  <button class="tab" role="tab" aria-selected="false" data-panel="fam" id="t-tab3">Families</button>
   <button class="tab" role="tab" aria-selected="false" data-panel="trust" id="t-tab2">Trust map</button>
 </div>
 
@@ -236,6 +254,36 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
   </div>
 </section>
 
+<section class="panel" id="panel-fam" hidden>
+  <div class="prose"><p id="t-fam-lede"></p></div>
+  <div class="famhead">
+    <div class="field">
+      <label id="t-fam-pick">Prototype</label>
+      <select id="fam-pick"></select>
+    </div>
+    <div class="field">
+      <label id="t-fam-pop">Population</label>
+      <select id="fam-pop"></select>
+    </div>
+    <div class="ramp" style="margin:0">
+      <span id="t-fam-lo"></span><span class="bar"></span><span id="t-fam-hi"></span>
+      <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
+        <span class="famcell unsure" style="width:16px;height:16px;background:var(--ramp-lo);
+          border-color:var(--text-2)"></span><span id="t-fam-unsure"></span></span>
+      <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
+        <span class="famcell trained" style="width:16px;height:16px;background:var(--ramp-lo);
+          color:var(--text-2)"></span><span id="t-fam-trained"></span></span>
+    </div>
+  </div>
+  <p class="count" id="fam-count"></p>
+  <div class="results">
+    <div class="famgrid" id="famgrid"></div>
+    <aside class="detail" id="fam-detail"></aside>
+  </div>
+  <p class="prose" id="fam-axisnote" style="margin:4px 0 0"></p>
+  <div class="prose" id="fam-prose"></div>
+</section>
+
 <section class="panel" id="panel-trust" hidden>
   <div class="prose">
     <p id="t-tm-lede"></p>
@@ -267,7 +315,18 @@ const I18N = {
   en: {
     title: "NanoMatAI — 2D band gap screening",
     lede: n => `Predicted band gaps for ${n} two-dimensional structures, each with a calibrated interval and an explicit verdict on whether to believe it. Nothing is computed here: this is a graph neural network's output, precomputed once and served as a static table.`,
-    tab_browse: "Browse", tab_trust: "Trust map",
+    tab_browse: "Browse", tab_trust: "Trust map", tab_fam: "Families",
+    fam_lede: "Nobody asks what the gap of one database entry is. They ask what happens across a family when the chalcogen changes. This pivots the same predictions into that shape: pick a prototype, read the grid.",
+    fam_pick: "Prototype", fam_pop: "Population",
+    fam_lo: "narrow", fam_hi: "wide", fam_unsure: "not in the reliable tier",
+    fam_trained: "the model trained on this one",
+    fam_axis_a: "single site", fam_axis_b: "doubled site",
+    fam_axis_note: "Rows and columns are structural positions, not chemical roles: the row element occupies the single site of the prototype and the column element the doubled one. For Rb₂O that puts oxygen in the row, which is what the structure says even though the chemistry reads the other way.",
+    fam_opt: (label, n, pairs) => `${label} — ${n} structures, ${pairs} pairs`,
+    fam_count: (shown, total) => `<b>${shown}</b> element pairs in this prototype${total ? ` of ${total} across all populations` : ""}`,
+    fam_empty: "No structures of this prototype in the selected population.",
+    fam_multi: n => `${n} entries for this pair; the one with the smallest ensemble spread is shown`,
+    fam_prose: `<h2>How to read it</h2><p>Each cell is one element pair in the chosen prototype, coloured by predicted band gap. A dashed border means the tool does not place that prediction in its reliable tier. A dot in the corner means the model trained on that structure, so the number is reproduced from memory rather than predicted — its error is about 0.08 eV instead of the honest 0.26.</p><p>Unlike the other two tabs this one opens on the whole population, because restricting it to structures held out from training leaves nine pairs out of ninety-seven, and a grid full of holes shows nothing about a family. The cost is that the calibrated intervals do not strictly hold here; use the grid to compare within a family, and the browser tab for absolute numbers.</p><p>Where a pair has several entries, the one with the smallest ensemble spread is shown. Nothing is generated: every cell is a structure somebody computed, which is why a family can have holes at all.</p>`,
     f_pop: "Population", f_gap: "Band gap, eV", f_preset: "Quick range",
     f_tier: "Trust", f_type: "Gap type", f_has: "Must contain",
     f_not: "Must not contain", f_search: "Formula",
@@ -322,6 +381,10 @@ const int = x => x.toLocaleString("en-US").replace(/,/g, " ");
 const S = {
   meta: null, rows: [], view: [], sel: null,
   sort: { key: "g", dir: 1 },
+  // the family view defaults to the whole population on purpose: restricting it to
+  // held-out rows leaves 9 pairs of 97, and a grid full of holes defeats the point
+  // of looking at a family. Memorised rows are marked instead of hidden.
+  fam: { pick: 0, pop: 2, sel: null },
   f: { pop: 0, gmin: null, gmax: null, tiers: [true, true, false], type: -1,
        has: [], not: [], q: "", notrain: false },
   hiddenByTier: 0,
@@ -347,6 +410,7 @@ async function load() {
       i: c[ix.i], s: +c[ix.s], f: c[ix.f], e: c[ix.e].split(" "), n: +c[ix.n],
       d: num(c[ix.d]), g: +c[ix.g], u: +c[ix.u], l: num(c[ix.l]), m: num(c[ix.m]),
       t: num(c[ix.t]), p: num(c[ix.p]), w: +c[ix.w], r: +c[ix.r], b: +c[ix.b],
+      fm: +c[ix.fm], fa: c[ix.fa], fb: c[ix.fb],
     };
   }
   document.getElementById("loading").hidden = true;
@@ -544,9 +608,9 @@ function renderTHead() {
 }
 
 /* detail ------------------------------------------------------------------ */
-function renderDetail() {
-  const el = document.getElementById("detail");
-  const r = S.sel;
+function renderDetail(hostId = "detail", row = undefined) {
+  const el = document.getElementById(hostId);
+  const r = row === undefined ? S.sel : row;
   if (!r) { el.innerHTML = `<p class="sub" style="margin:0">${t("d_empty")}</p>`; return; }
   const cal = S.meta.calibration, C = S.meta.corrections;
   const ood = r.w === 2;
@@ -589,6 +653,74 @@ function renderDetail() {
         ${t("d_exciton", fmt(qp - exp, 2))}</div>` : ""}
     ${(!ood && r.g < S.meta.metal_gap_eV) ? `<div class="note">${t("d_metallike", fmt(S.meta.metal_gap_eV, 1))}</div>` : ""}
     <div class="note">${t("d_note", fmt(cal.test_mae, 2))}</div>`;
+}
+
+/* families ---------------------------------------------------------------- */
+function famRows() {
+  const code = S.meta.families[S.fam.pick].code;
+  const pop = S.fam.pop;
+  const best = new Map();                       // "A|B" -> строка с наименьшим разбросом
+  const count = new Map();
+  for (const r of S.rows) {
+    if (r.fm !== S.fam.pick) continue;
+    if (pop === 0 && !(r.b === 1 && r.r !== 1)) continue;
+    if (pop === 1 && r.b !== 1) continue;
+    const k = r.fa + "|" + r.fb;
+    count.set(k, (count.get(k) || 0) + 1);
+    const cur = best.get(k);
+    if (!cur || r.u < cur.u) best.set(k, r);
+  }
+  return { code, best, count };
+}
+function renderFamilies() {
+  const { best, count } = famRows();
+  const host = document.getElementById("famgrid");
+  const meta = S.meta.families[S.fam.pick];
+  document.getElementById("fam-count").innerHTML = t("fam_count", best.size, meta.pairs);
+  if (!best.size) {
+    host.innerHTML = `<div class="empty">${t("fam_empty")}</div>`;
+    renderDetail("fam-detail", null);
+    return;
+  }
+  const order = e => {
+    const p = S.meta.ptable[e];
+    return p ? p[0] * 100 + p[1] : 9999;        // порядок таблицы Менделеева
+  };
+  const As = [...new Set([...best.values()].map(r => r.fa))].sort((x, y) => order(x) - order(y));
+  const Bs = [...new Set([...best.values()].map(r => r.fb))].sort((x, y) => order(x) - order(y));
+  const gaps = [...best.values()].map(r => r.g);
+  const lo = Math.min(...gaps), hi = Math.max(...gaps);
+  const cs = getComputedStyle(document.body);
+  const c0 = cs.getPropertyValue("--ramp-lo").trim(), c1 = cs.getPropertyValue("--ramp-hi").trim();
+  const dark = cs.getPropertyValue("--surface-1").trim() === "#1a1a19";
+
+  let html = `<table><tr><th class="rowh" style="font-weight:400;color:var(--text-3)">` +
+             `${t("fam_axis_a")} ↓<br>${t("fam_axis_b")} →</th>` +
+             Bs.map(b => `<th>${b}</th>`).join("") + "</tr>";
+  for (const a of As) {
+    html += `<tr><th class="rowh">${a}</th>`;
+    for (const b of Bs) {
+      const r = best.get(a + "|" + b);
+      if (!r) { html += `<td><div class="famcell none"></div></td>`; continue; }
+      const u = hi > lo ? (r.g - lo) / (hi - lo) : .5;
+      const bg = mix(c0, c1, u);
+      const fg = (dark ? u < .45 : u > .5) ? "#ffffff" : "#0b0b0b";
+      const n = count.get(a + "|" + b);
+      const cls = "famcell" + (r.w !== 0 ? " unsure" : "") +
+                  (r.r === 1 ? " trained" : "") + (S.fam.sel === r ? " sel" : "");
+      const tip = `${r.f} — ${fmt(r.g, 2)} eV, ${t("tier")[r.w]}` +
+                  (r.r === 1 ? " · " + t("badge_train") : "") +
+                  (n > 1 ? " · " + t("fam_multi", n) : "");
+      html += `<td><div class="${cls}" style="background:${bg};color:${fg}"
+        data-fa="${a}" data-fb="${b}" title="${tip}">
+        <b>${fmt(r.g, 2)}</b><small>${r.f}</small></div></td>`;
+    }
+    html += "</tr>";
+  }
+  document.getElementById("t-fam-lo").textContent = `${t("fam_lo")} ${fmt(lo, 2)}`;
+  document.getElementById("t-fam-hi").textContent = `${fmt(hi, 2)} eV ${t("fam_hi")}`;
+  host.innerHTML = html + "</table>";
+  renderDetail("fam-detail", S.fam.sel);
 }
 
 /* trust map --------------------------------------------------------------- */
@@ -662,7 +794,19 @@ function buildUI() {
   document.getElementById("f-presets").innerHTML =
     [["IR", 0.3, 1.6], ["visible", 1.6, 3.2], ["wide", 3.2, null]]
       .map(([l, a, b]) => `<button class="preset" data-a="${a}" data-b="${b === null ? "" : b}">${l}</button>`).join("");
-  renderTHead(); renderTrust();
+  document.getElementById("t-tab3").textContent = t("tab_fam");
+  document.getElementById("t-fam-lede").textContent = t("fam_lede");
+  document.getElementById("t-fam-pick").textContent = t("fam_pick");
+  document.getElementById("t-fam-pop").textContent = t("fam_pop");
+  document.getElementById("t-fam-unsure").textContent = t("fam_unsure");
+  document.getElementById("t-fam-trained").textContent = t("fam_trained");
+  document.getElementById("fam-prose").innerHTML = t("fam_prose");
+  document.getElementById("fam-axisnote").textContent = t("fam_axis_note");
+  document.getElementById("fam-pick").innerHTML = S.meta.families.map((f, i) =>
+    `<option value="${i}">${t("fam_opt", f.label, int(f.n), f.pairs)}</option>`).join("");
+  document.getElementById("fam-pop").innerHTML = pop.innerHTML;
+  document.getElementById("fam-pop").value = String(S.fam.pop);
+  renderTHead(); renderTrust(); renderFamilies();
   document.getElementById("panel-browse").hidden = false;
 }
 
@@ -672,6 +816,7 @@ document.addEventListener("click", e => {
   if (tab) {
     document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b === tab));
     document.getElementById("panel-browse").hidden = tab.dataset.panel !== "browse";
+    document.getElementById("panel-fam").hidden = tab.dataset.panel !== "fam";
     document.getElementById("panel-trust").hidden = tab.dataset.panel !== "trust";
     if (tab.dataset.panel === "browse") drawChart();
     return;
@@ -696,6 +841,12 @@ document.addEventListener("click", e => {
     const k = sortBtn.dataset.sort;
     S.sort = { key: k, dir: S.sort.key === k ? -S.sort.dir : (k === "f" ? 1 : 1) };
     renderTHead(); apply(); return;
+  }
+  const cell = e.target.closest(".famcell[data-fa]");
+  if (cell) {
+    const { best } = famRows();
+    S.fam.sel = best.get(cell.dataset.fa + "|" + cell.dataset.fb) || null;
+    renderFamilies(); return;
   }
   const row = e.target.closest(".row[data-k]");
   if (row) { S.sel = S.view[+row.dataset.k]; renderTable(); renderDetail(); drawChart(); }
@@ -724,6 +875,10 @@ for (const [id, key, cast] of [["f-gmin", "gmin", 1], ["f-gmax", "gmax", 1],
     S.f[key] = cast === 1 ? (v === "" ? null : +v) : cast === 2 ? syms(v) : v;
     apply();
   });
+document.getElementById("fam-pick").addEventListener("change", e => {
+  S.fam.pick = +e.target.value; S.fam.sel = null; renderFamilies(); });
+document.getElementById("fam-pop").addEventListener("change", e => {
+  S.fam.pop = +e.target.value; S.fam.sel = null; renderFamilies(); });
 document.getElementById("scroller").addEventListener("scroll", e => paintRows(e.target.scrollTop));
 cv().addEventListener("mousemove", e => {
   const b = cv().getBoundingClientRect();
@@ -745,7 +900,8 @@ cv().addEventListener("click", e => {
   if (r) { S.sel = r; renderTable(); renderDetail(); drawChart(); }
 });
 addEventListener("resize", () => { drawChart(); renderTable(); });
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawChart(); renderTrust(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  drawChart(); renderTrust(); renderFamilies(); });
 
 load().catch(err => {
   document.getElementById("loading").textContent = "Could not load the data: " + err.message;

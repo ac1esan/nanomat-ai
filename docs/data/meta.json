@@ -6,6 +6,36 @@
   "c2db",
   "jarvis_dft2d"
  ],
+ "families": [
+  {
+   "code": "1H-MX2",
+   "label": "1H-MX\u2082",
+   "note": "trigonal prismatic, the MoS\u2082 prototype",
+   "n": 160,
+   "pairs": 97
+  },
+  {
+   "code": "1T-MX2",
+   "label": "1T-MX\u2082",
+   "note": "octahedral, the CdI\u2082 prototype",
+   "n": 207,
+   "pairs": 98
+  },
+  {
+   "code": "hc-AB",
+   "label": "honeycomb AB",
+   "note": "two elements, the h-BN prototype",
+   "n": 66,
+   "pairs": 50
+  },
+  {
+   "code": "hc-A",
+   "label": "honeycomb A",
+   "note": "one element, the graphene prototype",
+   "n": 9,
+   "pairs": 7
+  }
+ ],
  "tiers": [
   "reliable",
   "check",

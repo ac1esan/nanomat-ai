@@ -299,6 +299,7 @@ transfer). The composition baseline is
 
 ```
 docs/                     the static browser published on GitHub Pages (index.html + data/)
+nanomat/families.py       structural prototype tags (1H/1T MX2, honeycomb) for the family view
 nanomat/                  graph.py (structure -> graph, vacuum checks), model.py (CGCNN),
                           predict.py (Predictor, batched inference, verdicts, calibration)
 screen_bandgap.py         CLI batch screening + Gradio UI      app.py: Hugging Face Spaces entry
@@ -318,8 +319,9 @@ figures/                  README figures and the scripts that regenerate them
 1. Host the uploader somewhere free. Hugging Face now requires a paid subscription
    for a Gradio Space even on free CPU, so `python screen_bandgap.py --app` is the
    local answer and `scripts/deploy_space.py --kind gradio` waits for another host.
-2. A family browser: pick a prototype and two elements, get a heatmap. Needs lattice
-   constants from the relaxed database, not from covalent radii.
+2. Extend the target beyond the band gap. Work function is available for all 3 520
+   C2DB structures and matters more for contacts than a third digit of the gap;
+   effective masses in JARVIS dft_2d are unusable (WS2 comes out at 3 000 000).
 3. Bagging the ensemble over data subsets, so the spread itself reflects sparse
    chemistry instead of relying on the latent-distance check.
 4. Replace the five-point PBE correction with a PBE → HSE/GW model fitted on C2DB.
