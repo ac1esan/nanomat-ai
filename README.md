@@ -148,7 +148,15 @@ Composition baseline (Magpie + RandomForest/XGBoost, 5-fold CV) versus CGCNN:
 | C2DB (PBE) | 1 115 | 0.445 | ≈ 0.42 | random |
 | Alexandria 2D, ehull ≤ 0.1 | 13 349 | 0.360 | 0.215 | random |
 | Alexandria 2D, ehull ≤ 0.2 | 26 561 | 0.419 | 0.262 | random |
-| **Alexandria 2D, ehull ≤ 0.1** | **13 349** | — | **0.261** | **composition-disjoint** |
+| **Alexandria 2D, ehull ≤ 0.1** | **13 349** | **0.430** | **0.261** | **composition-disjoint** |
+
+The composition figures in the first rows are five-fold cross-validation, which is
+not the same protocol as a composition-disjoint split and should not be compared
+against it. Scored properly on the very same test set, composition gives 0.430 eV,
+not 0.360 — so structure wins by 39%, not the 27% this project claimed until the
+comparison was redone with
+[`scripts/composition_baseline.py`](scripts/composition_baseline.py). The error was
+in our favour to correct.
 
 The shipped ensemble scores **MAE 0.261 eV (95% CI 0.242–0.283), RMSE 0.454,
 R² 0.889** on 1 326 held-out structures whose compositions never appear in
@@ -171,6 +179,40 @@ Two more things the numbers say:
   transition-metal chemistries where Alexandria is dense and worst on light
   main-group compounds. Error does not grow with the size of the gap. The same
   lesson explains both the metal gate and the phosphorene failure above.
+
+### A second property: work function, and the band edges it unlocks
+
+| | Composition | Structure | n_test |
+|---|---|---|---|
+| Band gap | 0.430 | **0.261** | 1 326 |
+| Work function | 0.314 | **0.254** | 337 |
+
+Trained on the 3 505 C2DB structures carrying a work function, same architecture,
+same protocol, its own checkpoint. Structure wins by 19% here against 39% for the
+gap, which is what you would expect: the work function leans more on chemistry and
+less on geometry.
+
+The number alone is the less interesting half. The trained target is vacuum minus
+Fermi level; for a metal that is the work function proper, but DFT puts the Fermi
+level mid-gap in an undoped semiconductor, so on its own it is a reference level
+rather than something a probe reads. That is why h-BN comes out at 3.4 eV where the
+literature quotes 4.5 — and the database agrees with the model, at 3.49.
+
+Combined with the gap it places **both band edges relative to vacuum**, which is
+the pair a contact metal is matched against:
+
+| | Electron affinity | published | Ionisation potential | published |
+|---|---|---|---|---|
+| MoS₂ | 4.41 | 4.0 | 6.10 | 6.1 |
+| MoSe₂ | 3.95 | 3.9 | 5.49 | 5.5 |
+| WS₂ | 3.98 | 3.9 | 5.92 | 6.0 |
+| WSe₂ | 3.79 | 3.6 | 5.05 | 5.2 |
+
+The edges inherit the gap's verdict, so a prediction the tool has disowned cannot
+reappear as two derived numbers. Graphene is the documented failure: one
+elemental-carbon structure exists in the whole dataset and it is in the test split,
+so the model predicts 3.18 against the database's 4.25 — with a spread of 0.32
+against 0.03 for the TMDs, which is the signal firing correctly on a wrong number.
 
 ### External validation against experiment
 

@@ -124,7 +124,15 @@ def format_markdown(r, cal: dict | None = None) -> str:
         lines.append(f"| **Work function** | **{r.work_function:.2f} ± {r.work_function_unc:.2f} eV** "
                      "<br><sub>which metal makes an ohmic contact, and where the Schottky "
                      "barrier sits" + (f"; separate model, test MAE {wfn:.2f} eV" if wfn else "") +
-                     "</sub> |")
+                     ". Vacuum minus Fermi level: for a metal that is the work function "
+                     "proper, for a semiconductor it is a reference level and the band edges "
+                     "below are what to use.</sub> |")
+    if r.electron_affinity is not None:
+        lines.append(f"| **Band edges vs vacuum** | **{r.electron_affinity:.2f} / "
+                     f"{r.ionisation_potential:.2f} eV** <br><sub>conduction edge (electron "
+                     "affinity) and valence edge (ionisation potential) — the pair a contact "
+                     "metal is matched against. Assumes the Fermi level sits mid-gap, the DFT "
+                     "convention for an undoped semiconductor.</sub> |")
     if r.gap_type is not None:
         conf = r.p_indirect if r.gap_type == "indirect" else 1 - r.p_indirect
         lines.append(f"| Gap type | {r.gap_type} (p = {conf:.2f}) |")

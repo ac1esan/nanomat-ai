@@ -16,7 +16,7 @@ feature = distance, atomic number embedded at the nodes.
 | **Ensemble** | 5 members, seeds 0–4, 200 epochs, batch 64, Adam 1e-3 with plateau decay and early stopping |
 | **Test performance** | **MAE 0.261 eV** (95% bootstrap CI 0.242–0.283), RMSE 0.454, R² 0.889. Members: 0.281 / 0.305 / 0.274 / 0.277 / 0.319 |
 | **Control** | Identical code and data on a random split: MAE 0.252. The honest split costs ≈ 0.01 eV |
-| **Composition baseline** | Magpie + RandomForest/XGBoost on the same data: CV MAE 0.360 eV |
+| **Composition baseline** | **0.430 eV** on the identical test set (`scripts/composition_baseline.py`), so structure wins by 39%. The 0.360 eV quoted previously came from five-fold cross-validation, a different protocol that leaks near-duplicate compositions; comparing it against a composition-disjoint number understated this model's advantage |
 | **Checksum** | SHA-256 `b2a4644a81a65d273346c555fb0cb1c425687381ae11ddb871986ff0ca67c075` |
 
 The checkpoint also carries its own `calibration` block, both gap corrections and
@@ -84,6 +84,36 @@ An Alexandria-only version scored a higher ROC-AUC (0.952) and was useless where
 mattered — `p(metal) = 0.00` on graphene, because only two of its 19 691 training
 structures were carbon-only and both were labelled semiconductors. The merged model
 returns 1.00 on graphene with no false positives on MoS₂, MoSe₂, WS₂, WSe₂ or h-BN.
+
+## Work function — `weights/cgcnn_2d_workfunction.pt`
+
+| | |
+|---|---|
+| **Task** | Vacuum level minus Fermi level, in eV, from the structure |
+| **Training data** | The 3 505 C2DB structures carrying a work function, values outside 1.5–8 eV dropped as failed calculations. Metals included: the quantity is defined for them too |
+| **Split / performance** | Composition-disjoint, 5-model ensemble. **MAE 0.254 eV** (95% CI 0.229–0.280), RMSE 0.358, R² 0.871, n_test 337. Members 0.242–0.298 |
+| **Composition baseline** | 0.314 eV on the same test set, so structure wins by 19% |
+| **Calibration** | Raw ±1σ covers 25%; a validation-fitted ×7.09 gives 93% on the held-out split. Spearman against error: spread 0.351, latent distance 0.277, product 0.372 |
+| **Checksum** | SHA-256 `b1d23e1645904766d0092508c198f97191aad1a095bcc600ef093ff7f8d131d3` |
+
+**What the number is, and is not.** For a metal, vacuum minus Fermi level is the
+work function proper. For an undoped semiconductor DFT places the Fermi level
+mid-gap, so the value is a reference level rather than something a probe measures.
+h-BN illustrates this: the model returns 3.4 eV where the literature quotes 4.5, and
+C2DB itself has 3.49 — the model is right about its target, and the target is not
+the quantity the literature means.
+
+**What it unlocks.** With the gap it fixes both band edges relative to vacuum:
+electron affinity = work function − gap/2, ionisation potential = work function +
+gap/2. Against published monolayer values the ionisation potentials land within
+0.15 eV (MoS₂ 6.10 vs 6.1, MoSe₂ 5.49 vs 5.5, WS₂ 5.92 vs 6.0, WSe₂ 5.05 vs 5.2)
+and the affinities within 0.4 eV. The mid-gap assumption is a convention, not a law.
+The edges inherit the gap's verdict, so an out-of-domain prediction yields no edges.
+
+**Known failure.** Graphene: predicted 3.18 against the database's 4.25. The whole
+dataset holds one elemental-carbon structure and it sits in the test split, so the
+model never saw carbon — the same shape of failure as phosphorene for the gap. Its
+spread is 0.32 against 0.03 for the TMDs, so the signal fires.
 
 ## Gap type — `weights/cgcnn_2d_typed.pt`
 
