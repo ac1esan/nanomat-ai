@@ -47,7 +47,16 @@ def main():
     ap.add_argument("--ehull-max", type=float, default=0.1,
                     help="только для alex_2d: фильтр стабильности e_above_hull<=X эВ/атом (по умолч. 0.1)")
     ap.add_argument("--keep-metals", action="store_true",
-                    help="не отсекать металлы (по умолчанию убираем gap<=0.01)")
+                    help="не отсекать металлы (по умолчанию убираем gap<=0.01). "
+                         "Действует ТОЛЬКО когда таргет — щель: отсечение по значению "
+                         "другого свойства (напр. работы выхода) не имеет смысла")
+    ap.add_argument("--target-min", type=float, default=None,
+                    help="отбросить структуры со значением таргета ниже этого. Нужно для "
+                         "свойств с физичным диапазоном: у работы выхода значения вне "
+                         "1–8 эВ — сорвавшиеся расчёты, а на MSE один такой выброс весит "
+                         "как сотни нормальных точек")
+    ap.add_argument("--target-max", type=float, default=None,
+                    help="то же сверху")
     ap.add_argument("--extra-target", default=None,
                     help="второе поле в id_prop.csv (напр. band_gap_dir для классификатора типа щели)")
     args = ap.parse_args()
@@ -60,6 +69,9 @@ def main():
                        "alex_2d": "band_gap_ind"}[args.source]
     if args.out_dir is None:
         args.out_dir = f"alignn_data_{args.source}"
+    gap_like = "gap" in args.target.lower()
+    if not gap_like:
+        print(f"Таргет «{args.target}» — не щель, фильтр металлов выключен.")
 
     from jarvis.db.figshare import data as jarvis_data
     from jarvis.core.atoms import Atoms
@@ -75,6 +87,7 @@ def main():
     n_skip_metal = 0
     n_skip_struct = 0
     n_skip_ehull = 0   # только alex_2d: нестабильные
+    n_skip_range = 0   # вне --target-min/--target-max
 
     for e in raw:
         # --- фильтр стабильности (только Alexandria) ---
@@ -89,7 +102,14 @@ def main():
         if pd.isna(gap):
             n_skip_target += 1
             continue
-        if not args.keep_metals and gap <= 0.01:
+        if (args.target_min is not None and gap < args.target_min) or \
+           (args.target_max is not None and gap > args.target_max):
+            n_skip_range += 1
+            continue
+        # Фильтр металлов осмыслен только для таргета-щели. Для работы выхода или
+        # любого другого свойства «значение <= 0.01» ничего про металличность не
+        # говорит, поэтому фильтр молча выключается.
+        if gap_like and not args.keep_metals and gap <= 0.01:
             n_skip_metal += 1
             continue
 
@@ -125,7 +145,9 @@ def main():
     if args.source == "alex_2d":
         print(f"  Пропущено (нестабильные) : {n_skip_ehull} (e_above_hull>{args.ehull_max})")
     print(f"  Пропущено (плохой таргет): {n_skip_target}")
-    if not args.keep_metals:
+    if args.target_min is not None or args.target_max is not None:
+        print(f"  Пропущено (вне диапазона): {n_skip_range}")
+    if gap_like and not args.keep_metals:
         print(f"  Пропущено (металлы)      : {n_skip_metal}")
     print(f"  Пропущено (структура)    : {n_skip_struct}")
     print(f"  Папка                    : {args.out_dir}/")

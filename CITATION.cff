@@ -1,0 +1,46 @@
+cff-version: 1.2.0
+message: If you use this software or its predictions, please cite it as below.
+title: "NanoMatAI: band gaps of 2D semiconductors from crystal structure, with a calibrated trust verdict"
+abstract: >-
+  A CGCNN ensemble that predicts the band gap of a two-dimensional monolayer from
+  its crystal structure on CPU, together with a calibrated uncertainty interval and
+  an explicit verdict on whether the prediction is usable. Trained on 13 349 stable
+  2D semiconductors from Alexandria and evaluated on a composition-disjoint split
+  (MAE 0.26 eV). Three independent out-of-domain checks decide the verdict: a
+  metal/semiconductor gate, the spread between ensemble members, and the distance
+  to the training set in the model's own latent space. Predictions for 28 372
+  public 2D structures are published as a browsable table.
+type: software
+authors:
+  # Replace with your legal name before this is cited anywhere that matters —
+  # a handle is fine for GitHub, less so for a reference list.
+  - name: ac1esan
+    alias: ac1esan
+repository-code: https://github.com/ac1esan/nanomat-ai
+url: https://ac1esan.github.io/nanomat-ai/
+license: MIT
+keywords:
+  - 2D materials
+  - band gap
+  - graph neural network
+  - uncertainty quantification
+  - materials screening
+  - nanoelectronics
+references:
+  - type: data
+    title: "Alexandria: a database of two-dimensional materials (PBE)"
+    notes: Training data, accessed through JARVIS-Tools. CC-BY 4.0.
+    authors:
+      - name: Alexandria Materials Database
+  - type: data
+    title: "C2DB: the Computational 2D Materials Database"
+    notes: Work function and gap data, accessed through JARVIS-Tools.
+    authors:
+      - name: Computational 2D Materials Database
+  - type: data
+    title: JARVIS-DFT two-dimensional materials dataset
+    notes: >-
+      Reference monolayer structures and the HSE06 gaps used to fit the
+      quasiparticle correction.
+    authors:
+      - name: National Institute of Standards and Technology

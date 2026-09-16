@@ -38,3 +38,7 @@ CLAUDE.md
 
 # собранная папка для Hugging Face Space (воспроизводится scripts/deploy_space.py)
 build/
+data_c2db_wf/
+data_c2db_all/
+data_dft2d_all/
+data_metal_merged/
