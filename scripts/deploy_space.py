@@ -1,21 +1,26 @@
 #!/usr/bin/env python
-"""Assemble (and optionally publish) the Hugging Face Space for the uploader.
+"""Publish to Hugging Face Spaces.
 
-The Space is the half of the interface that needs a runtime: it loads torch and
-runs the ensemble on a structure you upload. The other half — browsing the
-precomputed predictions — is a static page on GitHub Pages and needs no server.
+Two things could go to a Space, and only one of them is free:
 
-    python scripts/deploy_space.py                      # build build/hf_space/ only
-    python scripts/deploy_space.py --push               # build, then create + upload
-    python scripts/deploy_space.py --push --repo you/name
+  static  (default)  The browser over the precomputed predictions. Pure HTML, CSS
+                     and data, no Python at run time. Static Spaces are free, and
+                     unlike GitHub Pages they sit in a browsable gallery, which is
+                     the whole reason to publish a second copy of the same page.
+  gradio             The uploader, which needs torch to run the ensemble on a
+                     structure you supply. As of September 2026 Hugging Face
+                     requires a PRO subscription to host a Gradio Space even on
+                     free CPU hardware, so this mode exists for whoever has one or
+                     wants to move the same folder to another host. Locally the
+                     uploader needs nothing: `python screen_bandgap.py --app`.
 
-Publishing needs `pip install huggingface_hub` and a token, either from
-`huggingface-cli login` or in the HF_TOKEN environment variable. The token is
-read by huggingface_hub itself; this script never handles or prints it.
+    python scripts/deploy_space.py                          # build the static payload
+    python scripts/deploy_space.py --push                   # create + upload it
+    python scripts/deploy_space.py --kind gradio --push     # needs HF PRO
 
-Why a separate folder rather than pointing the Space at the GitHub repo: a Space
-needs a README.md whose YAML front matter declares the SDK, and that front matter
-would render as a stray table at the top of the project README on GitHub.
+Publishing needs `pip install huggingface_hub` and a token, from `hf auth login`
+or HF_TOKEN. The token is read by huggingface_hub itself; this script never
+handles or prints it.
 """
 
 from __future__ import annotations
@@ -28,62 +33,73 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 DEFAULT_REPO = "ac1esan/nanomat-ai"
-DEFAULT_OUT = os.path.join(ROOT, "build", "hf_space")
+BROWSER_URL = "https://ac1esan.github.io/nanomat-ai/"
+REPO_URL = "https://github.com/ac1esan/nanomat-ai"
 
-# Only what the uploader actually imports at run time. The training scripts, the
-# precomputed table and the browser stay out: the Space cold-starts faster and
-# there is less to keep in sync.
-FILES = ["app.py", "screen_bandgap.py"]
-DIRS = ["nanomat", "examples"]
+# gradio payload: only what the uploader imports at run time
+GRADIO_FILES = ["app.py", "screen_bandgap.py"]
+GRADIO_DIRS = ["nanomat", "examples"]
 WEIGHTS = ["cgcnn_2d_ensemble.pt", "cgcnn_2d_metal.pt", "cgcnn_2d_typed.pt"]
 
-SPACE_README = """---
+FRONT_MATTER = """---
 title: NanoMatAI 2D Band Gap
 emoji: ⚡
 colorFrom: blue
 colorTo: green
-sdk: gradio
-app_file: app.py
-pinned: false
+sdk: {sdk}
+{extra}pinned: false
 license: mit
-short_description: Band gap of a 2D monolayer from its structure, with a calibrated uncertainty
+short_description: Band gaps of 28 372 2D structures, with a verdict
 ---
 
-# NanoMatAI — band gap of 2D materials from structure
+"""
 
-Upload a monolayer structure (CIF / POSCAR / .vasp) and get its band gap at the
-PBE level in under a second on CPU, together with a calibrated interval and an
-explicit verdict on whether the number is usable.
+STATIC_BODY = """# NanoMatAI — band gaps of 2D materials, with a verdict on each
+
+Browse predicted band gaps for **28 372 two-dimensional structures**. Filter by
+element, gap range and trust verdict, and see a periodic-table map of where the
+model actually works.
 
 A CGCNN ensemble of five models trained on 13 349 stable 2D semiconductors from
-Alexandria. Test MAE is **0.26 eV** on a split where no composition is shared
-between training and test.
+Alexandria. Test MAE **0.26 eV** on a split where no composition is shared between
+training and test. Nothing is computed in this page: the predictions were made
+once and are served as a static table.
 
 **The verdict is the point.** Three independent checks decide whether to trust a
 prediction, and each exists because the previous one was caught failing on a real
 case: a metal gate that rejects metals outright, the spread between ensemble
-members, and the distance to the training set in the model's own latent space.
-The last one exists because every ensemble member shares one training set, so a
+members, and the distance to the training set in the model's own latent space. The
+last one exists because every ensemble member shares one training set, so a
 chemistry none of them saw produces confident agreement — phosphorene came out at
 0.82 eV against an experimental 2.0 with a spread of 0.035 eV.
 
-An out-of-domain result deliberately hides its interval instead of showing a tight
-number next to a prediction the tool has disowned.
+Two corrected values are reported alongside the raw PBE number, because they are
+different physical quantities: the **quasiparticle gap** that photoemission and
+transport see, and the **optical gap** that absorption sees. They differ by the
+exciton binding energy, about 0.55 eV on the TMDs.
 
-- **[Browse 28 372 precomputed predictions]({browser})** — no upload needed, plus a
-  periodic-table map of where the model actually works.
 - **[Source, method and model card]({repo})**
+- **[The same page on GitHub Pages]({browser})**
 
-Limits worth knowing: the target is the PBE gap, which underestimates real gaps;
-the correction to experiment is fitted on five reference monolayers. Inputs must
-be relaxed monolayers with a vacuum gap. The calibration holds for stable 2D
-semiconductors and is optimistic outside that population.
+To run a structure of your own, clone the repository and use the uploader locally:
+`python screen_bandgap.py --app`. It is not hosted here because a Gradio Space now
+requires a paid subscription, and the model itself is free.
+"""
+
+GRADIO_BODY = """# NanoMatAI — band gap of 2D materials from structure
+
+Upload a monolayer structure (CIF / POSCAR / .vasp) and get its band gap in under
+a second on CPU, with a calibrated interval and an explicit verdict on whether the
+number is usable.
+
+- **[Browse 28 372 precomputed predictions]({browser})** — no upload needed.
+- **[Source, method and model card]({repo})**
 """
 
 GITATTRIBUTES = "*.pt filter=lfs diff=lfs merge=lfs -text\n"
 
-REQUIREMENTS = """# CPU wheels keep the Space image small and the cold start short;
-# the default PyPI torch wheel for Linux drags in CUDA and is several GB.
+REQUIREMENTS = """# CPU wheels keep the image small and the cold start short; the default
+# PyPI torch wheel for Linux drags in CUDA and is several GB.
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch>=2.4
 torch_geometric>=2.5
@@ -95,33 +111,49 @@ matplotlib>=3.8
 """
 
 
-def build(out_dir: str, browser: str, repo_url: str) -> None:
-    if os.path.exists(out_dir):
-        shutil.rmtree(out_dir)
-    os.makedirs(out_dir)
+def build_static(out_dir: str) -> None:
+    """The published browser: index.html plus its data, straight from docs/."""
+    src = os.path.join(ROOT, "docs")
+    index = os.path.join(src, "index.html")
+    if not os.path.exists(index):
+        raise SystemExit(f"missing {index} — run scripts/build_site_data.py first")
+    shutil.copy(index, out_dir)
+    shutil.copytree(os.path.join(src, "data"), os.path.join(out_dir, "data"))
+    with open(os.path.join(out_dir, "README.md"), "w") as f:
+        f.write(FRONT_MATTER.format(sdk="static", extra="app_file: index.html\n"))
+        f.write(STATIC_BODY.format(repo=REPO_URL, browser=BROWSER_URL))
 
-    for name in FILES:
+
+def build_gradio(out_dir: str) -> None:
+    for name in GRADIO_FILES:
         shutil.copy(os.path.join(ROOT, name), out_dir)
-    for name in DIRS:
+    for name in GRADIO_DIRS:
         shutil.copytree(os.path.join(ROOT, name), os.path.join(out_dir, name),
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.csv"))
     os.makedirs(os.path.join(out_dir, "weights"))
     for name in WEIGHTS:
         src = os.path.join(ROOT, "weights", name)
         if not os.path.exists(src):
-            raise SystemExit(f"missing {src} — the Space needs the shipped weights")
+            raise SystemExit(f"missing {src} — the uploader needs the shipped weights")
         shutil.copy(src, os.path.join(out_dir, "weights", name))
-
     with open(os.path.join(out_dir, "README.md"), "w") as f:
-        f.write(SPACE_README.format(browser=browser, repo=repo_url))
+        f.write(FRONT_MATTER.format(sdk="gradio", extra="app_file: app.py\n"))
+        f.write(GRADIO_BODY.format(repo=REPO_URL, browser=BROWSER_URL))
     with open(os.path.join(out_dir, "requirements.txt"), "w") as f:
         f.write(REQUIREMENTS)
     with open(os.path.join(out_dir, ".gitattributes"), "w") as f:
         f.write(GITATTRIBUTES)
 
+
+def build(kind: str, out_dir: str) -> None:
+    if os.path.exists(out_dir):
+        shutil.rmtree(out_dir)
+    os.makedirs(out_dir)
+    (build_static if kind == "static" else build_gradio)(out_dir)
+
     total = sum(os.path.getsize(os.path.join(dp, f))
                 for dp, _, fs in os.walk(out_dir) for f in fs)
-    print(f"built {out_dir}  ({total / 1e6:.1f} MB)")
+    print(f"built {kind} payload in {out_dir}  ({total / 1e6:.1f} MB)")
     for dp, _, fs in sorted(os.walk(out_dir)):
         rel = os.path.relpath(dp, out_dir)
         for f in sorted(fs):
@@ -129,35 +161,43 @@ def build(out_dir: str, browser: str, repo_url: str) -> None:
             print(f"  {path:44s} {os.path.getsize(os.path.join(dp, f)) / 1000:8.0f} kB")
 
 
-def push(out_dir: str, repo_id: str) -> None:
+def push(kind: str, out_dir: str, repo_id: str) -> None:
     try:
         from huggingface_hub import HfApi
     except ImportError:
-        raise SystemExit("pip install huggingface_hub, then `huggingface-cli login`")
+        raise SystemExit("pip install huggingface_hub, then `hf auth login`")
     api = HfApi()
-    api.create_repo(repo_id, repo_type="space", space_sdk="gradio", exist_ok=True)
+    try:
+        api.create_repo(repo_id, repo_type="space", space_sdk=kind, exist_ok=True)
+    except Exception as e:
+        if "402" in str(e):
+            raise SystemExit(
+                "Hugging Face refused: hosting a Gradio Space needs a PRO subscription.\n"
+                "Static Spaces are free — run without --kind gradio to publish the browser,\n"
+                "and run the uploader locally with `python screen_bandgap.py --app`.")
+        raise
     api.upload_folder(folder_path=out_dir, repo_id=repo_id, repo_type="space",
-                      commit_message="Deploy NanoMatAI uploader")
-    print(f"\npushed to https://huggingface.co/spaces/{repo_id}")
-    print("First build takes a few minutes while torch installs. The free tier "
-          "sleeps after inactivity and wakes in about 30 s.")
+                      commit_message=f"Deploy NanoMatAI ({kind})")
+    url = f"https://huggingface.co/spaces/{repo_id}"
+    print(f"\npushed to {url}")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=DEFAULT_OUT)
+    ap.add_argument("--kind", choices=["static", "gradio"], default="static",
+                    help="static = the browser (free); gradio = the uploader (needs HF PRO)")
+    ap.add_argument("--out", help="build directory (default build/hf_<kind>)")
     ap.add_argument("--repo", default=DEFAULT_REPO, help="Hugging Face Space id, owner/name")
-    ap.add_argument("--browser", default="https://ac1esan.github.io/nanomat-ai/")
-    ap.add_argument("--repo-url", default="https://github.com/ac1esan/nanomat-ai")
     ap.add_argument("--push", action="store_true", help="create the Space and upload")
     args = ap.parse_args()
 
-    build(args.out, args.browser, args.repo_url)
+    out = args.out or os.path.join(ROOT, "build", f"hf_{args.kind}")
+    build(args.kind, out)
     if args.push:
-        push(args.out, args.repo)
+        push(args.kind, out, args.repo)
     else:
-        print(f"\nnot pushed. To publish:  python {os.path.relpath(__file__, os.getcwd())} "
-              f"--push --repo {args.repo}")
+        print(f"\nnot pushed. To publish:  python scripts/deploy_space.py "
+              f"--kind {args.kind} --push --repo {args.repo}")
 
 
 if __name__ == "__main__":

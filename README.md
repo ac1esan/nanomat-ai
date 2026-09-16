@@ -9,6 +9,7 @@
 **[Browse the predictions →](https://ac1esan.github.io/nanomat-ai/)** — 28 372
 structures with a calibrated interval and a verdict on each, plus a periodic-table
 map of where the model actually works. No install, no upload.
+Same page on [Hugging Face Spaces](https://huggingface.co/spaces/ac1esan/nanomat-ai).
 
 A graph neural network that predicts the band gap of a 2D monolayer from its
 crystal structure in under a second on a laptop CPU — and, more importantly,
@@ -314,7 +315,9 @@ figures/                  README figures and the scripts that regenerate them
 
 ## Roadmap
 
-1. Deploy the uploader (`app.py`) on Hugging Face Spaces and link it from the browser.
+1. Host the uploader somewhere free. Hugging Face now requires a paid subscription
+   for a Gradio Space even on free CPU, so `python screen_bandgap.py --app` is the
+   local answer and `scripts/deploy_space.py --kind gradio` waits for another host.
 2. A family browser: pick a prototype and two elements, get a heatmap. Needs lattice
    constants from the relaxed database, not from covalent radii.
 3. Bagging the ensemble over data subsets, so the spread itself reflects sparse
