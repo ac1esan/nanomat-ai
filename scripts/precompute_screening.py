@@ -8,7 +8,9 @@ mistaken for prediction.
 
     python scripts/precompute_screening.py \
         --data alignn_data_alex_2d_eh02:alexandria alignn_data_c2db:c2db alignn_data:jarvis_dft2d \
-        --split weights/cgcnn_2d_ensemble.split.json --out screening_table.csv
+        --split weights/cgcnn_2d_ensemble.split.json \
+        --wf-ref data_c2db_wf:weights/cgcnn_2d_workfunction.split.json \
+        --out screening_table.csv
 
 Each --data entry is `folder` or `folder:source_label`. Runs on CPU; ~28 000
 structures take a few minutes on a laptop.
@@ -53,6 +55,12 @@ def main():
     ap.add_argument("--data", nargs="+", required=True,
                     help="folders, optionally as folder:source_label")
     ap.add_argument("--split", help="split.json of the shipped ensemble, to tag training rows")
+    ap.add_argument("--wf-ref", metavar="FOLDER:SPLIT",
+                    help="the work-function training folder and its split.json, e.g. "
+                         "data_c2db_wf:weights/cgcnn_2d_workfunction.split.json. Rows whose "
+                         "file appears there get a reference work function and a tag saying "
+                         "which of the two models had already seen them - the second model "
+                         "has its own training set, so one tag cannot cover both")
     ap.add_argument("--out", default="screening_table.csv")
     ap.add_argument("--chunk", type=int, default=2000, help="structures held in RAM at once")
     ap.add_argument("--batch", type=int, default=256)
@@ -65,6 +73,19 @@ def main():
         for name in ("train", "val", "test"):
             for f in sp[name]:
                 role[f] = name
+
+    wf_ref, wf_role = {}, {}
+    if args.wf_ref:
+        folder, _, spath = args.wf_ref.partition(":")
+        for fname, value in read_index(folder):
+            if value is not None:
+                wf_ref[fname] = value
+        sp = json.load(open(spath))
+        for name in ("train", "val", "test"):
+            for f in sp[name]:
+                wf_role[f] = name
+        print(f"work-function reference: {len(wf_ref)} values, "
+              f"{len(wf_role)} of them in that model's split")
 
     P = Predictor(args.weights)
     rows, t0 = [], time.time()
@@ -109,13 +130,28 @@ def main():
                     "exp_gap_est_eV": None if r.exp_gap_est is None else round(r.exp_gap_est, 3),
                     "verdict": r.verdict,
                     "in_training_set": role.get(key, "unseen"),
+                    # second property: its own number, its own spread, its own verdict
+                    # against its own training set, and the band edges the pair unlocks
+                    "work_function_eV": None if r.work_function is None else round(r.work_function, 3),
+                    "wf_uncertainty_eV": None if r.work_function_unc is None else round(r.work_function_unc, 3),
+                    "wf_latent_distance": None if r.work_function_latent is None else round(r.work_function_latent, 3),
+                    "wf_verdict": r.work_function_verdict,
+                    "electron_affinity_eV": None if r.electron_affinity is None else round(r.electron_affinity, 3),
+                    "ionisation_potential_eV": None if r.ionisation_potential is None else round(r.ionisation_potential, 3),
+                    "dft_wf_eV": wf_ref.get(key),
+                    "in_wf_training_set": wf_role.get(key, "unseen") if wf_ref else None,
                 })
             done = len(rows)
             rate = done / max(time.time() - t0, 1e-6)
             print(f"  {start + len(chunk)}/{len(index)}  ({done} rows, {rate:.0f}/s)", flush=True)
 
     df = pd.DataFrame(rows)
+    # to_numeric: a column of all-None (a source with no reference for that property)
+    # arrives as object dtype and would not subtract
+    for col in ("dft_gap_eV", "dft_wf_eV", "work_function_eV"):
+        df[col] = pd.to_numeric(df[col], errors="coerce")
     df["error_eV"] = (df["pred_gap_eV"] - df["dft_gap_eV"]).abs().round(3)
+    df["wf_error_eV"] = (df["work_function_eV"] - df["dft_wf_eV"]).abs().round(3)
     df = df.sort_values("pred_gap_eV").reset_index(drop=True)
     df.to_csv(args.out, index=False)
 
@@ -126,6 +162,34 @@ def main():
         for name, g in fam.groupby("family"):
             pairs = g.groupby(["family_a", "family_b"]).ngroups
             print(f"  {name:10s} {len(g):5d} rows, {pairs} distinct element pairs")
+
+    if df["work_function_eV"].notna().any():
+        edges = df["electron_affinity_eV"].notna().sum()
+        print(f"\nwork function predicted for {df['work_function_eV'].notna().sum()} rows; "
+              f"band edges shown for {edges} ({100 * edges / len(df):.0f}%)")
+        wv = df["wf_verdict"].str.split(" (", regex=False).str[0]
+        for src, g in df.groupby("source"):
+            share = wv[g.index].value_counts(normalize=True)
+            print(f"  {src:12s} " + "  ".join(f"{k} {100*v:.0f}%" for k, v in share.items()))
+        print("  the second model was trained on C2DB alone, so on Alexandria it is "
+              "frequently\n  outside its own training distribution and says so - the edges "
+              "are withheld there.")
+
+        ref = df.dropna(subset=["wf_error_eV"])
+        if len(ref):
+            import numpy as np
+            print(f"\nwork function against its DFT reference, {len(ref)} rows with one:")
+            for tag, g in ref.groupby("in_wf_training_set"):
+                print(f"  {tag:7s} n={len(g):5d}  MAE={g['wf_error_eV'].mean():.3f} eV")
+            held = ref[ref.in_wf_training_set.isin(["test", "unseen"])]
+            if len(held):
+                print("  does its own verdict rank its own error? (rows it never trained on)")
+                tiers = held["wf_verdict"].str.split(" (", regex=False).str[0]
+                for t in ("reliable", "check", "out-of-domain"):
+                    g = held[tiers == t]
+                    if len(g):
+                        print(f"    {t:14s} n={len(g):5d}  MAE={g['wf_error_eV'].mean():.3f}  "
+                              f"p90={np.quantile(g['wf_error_eV'], 0.9):.3f}")
 
     print("\nby verdict:")
     print(df["verdict"].str.split(" (", regex=False).str[0].value_counts().to_string())

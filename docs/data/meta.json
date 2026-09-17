@@ -63,7 +63,14 @@
    "out-of-domain": 11163
   },
   "stable": 13349,
-  "default_view": 2616
+  "default_view": 2616,
+  "work_function": 28372,
+  "band_edges": 8210,
+  "by_wf_tier": {
+   "reliable": 7220,
+   "check": 5615,
+   "out-of-domain": 15537
+  }
  },
  "calibration": {
   "n_val": 1290,
@@ -102,6 +109,42 @@
   },
   "type_threshold": 0.32657402276992803,
   "metal_threshold": 0.6476057171821595
+ },
+ "wf_calibration": {
+  "n_val": 345,
+  "n_test": 337,
+  "test_mae": 0.2536854495051778,
+  "scale68": 3.5369502708717184,
+  "scale90": 7.09302930759627,
+  "unc_q25": 0.055423881858587265,
+  "unc_median": 0.0885322168469429,
+  "unc_q75": 0.13156428933143616,
+  "tier_mae": {
+   "reliable": 0.17879114589667477,
+   "check": 0.22086652009780758,
+   "out_of_domain": 0.4264501557481289
+  },
+  "raw_coverage_1sigma": 0.24925816023738873,
+  "test_coverage68": 0.7240356083086054,
+  "test_coverage90": 0.9347181008902077,
+  "test_coverage90_by_unc_quartile": [
+   0.8292682926829268,
+   0.9222222222222223,
+   1.0,
+   0.9887640449438202
+  ],
+  "global_conformal90_eV": 0.6938163604116907,
+  "latent_q25": 0.14518165588378906,
+  "latent_median": 0.19841688871383667,
+  "latent_q75": 0.2589828372001648,
+  "latent_q90": 0.31408168077468873,
+  "spearman_unc": 0.35098489732135013,
+  "spearman_latent": 0.2769141096292431,
+  "spearman_combined": 0.3715745564638511,
+  "latent_tier_mae": {
+   "near": 0.219135488488945,
+   "far": 0.36467719926982556
+  }
  },
  "corrections": {
   "quasiparticle": {

@@ -26,8 +26,9 @@ weights/cgcnn_2d_multi.pt
 # Gradio
 .gradio/
 
-# third-party Claude Code skills
+# third-party Claude Code skills and local preview config
 .claude/skills/
+.claude/launch.json
 
 # предпосчитанная таблица скрининга (воспроизводится scripts/precompute_screening.py)
 screening_table.csv

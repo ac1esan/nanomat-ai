@@ -121,7 +121,9 @@ def format_markdown(r, cal: dict | None = None) -> str:
                      "error 0.71 eV, so treat it as an indication</sub> |")
     if r.work_function is not None:
         wfn = (cal.get("wf", {}) or {}).get("test_mae")
+        wfv = r.work_function_verdict or ""
         lines.append(f"| **Work function** | **{r.work_function:.2f} ± {r.work_function_unc:.2f} eV** "
+                     + (f"— {wfv} " if wfv else "") +
                      "<br><sub>which metal makes an ohmic contact, and where the Schottky "
                      "barrier sits" + (f"; separate model, test MAE {wfn:.2f} eV" if wfn else "") +
                      ". Vacuum minus Fermi level: for a metal that is the work function "
@@ -133,6 +135,11 @@ def format_markdown(r, cal: dict | None = None) -> str:
                      "affinity) and valence edge (ionisation potential) — the pair a contact "
                      "metal is matched against. Assumes the Fermi level sits mid-gap, the DFT "
                      "convention for an undoped semiconductor.</sub> |")
+    elif r.work_function is not None and (r.work_function_verdict or "").startswith("out-of-domain"):
+        # the second model has its own training set, so it can disown a structure the
+        # gap model is perfectly happy with
+        lines.append("| Band edges vs vacuum | not shown — the work-function model places "
+                     "this structure outside its own training distribution |")
     if r.gap_type is not None:
         conf = r.p_indirect if r.gap_type == "indirect" else 1 - r.p_indirect
         lines.append(f"| Gap type | {r.gap_type} (p = {conf:.2f}) |")

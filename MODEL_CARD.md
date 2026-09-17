@@ -108,12 +108,28 @@ electron affinity = work function − gap/2, ionisation potential = work functio
 gap/2. Against published monolayer values the ionisation potentials land within
 0.15 eV (MoS₂ 6.10 vs 6.1, MoSe₂ 5.49 vs 5.5, WS₂ 5.92 vs 6.0, WSe₂ 5.05 vs 5.2)
 and the affinities within 0.4 eV. The mid-gap assumption is a convention, not a law.
-The edges inherit the gap's verdict, so an out-of-domain prediction yields no edges.
 
-**Known failure.** Graphene: predicted 3.18 against the database's 4.25. The whole
-dataset holds one elemental-carbon structure and it sits in the test split, so the
-model never saw carbon — the same shape of failure as phosphorene for the gap. Its
-spread is 0.32 against 0.03 for the TMDs, so the signal fires.
+**The edges need both models to stand behind their half**, so they are withheld
+whenever either verdict says out-of-domain. This model has its own trust layer, not
+a share of the gap model's: its own uncertainty quartiles, its own ×7.09 interval and
+its own latent distance against its own 2 823 training embeddings. That matters
+because the two were trained on different databases — C2DB here, Alexandria for the
+gap — so a structure can be routine for one and unseen for the other. On a sample of
+400 Alexandria structures this model calls 56% of them out of its own distribution
+and says so; on C2DB the figure is 15%.
+
+**Known failure, now caught.** Graphene: predicted 3.18 against the database's 4.25.
+The whole dataset holds one elemental-carbon structure and it sits in the test split,
+so the model never saw carbon — the same shape of failure as phosphorene for the gap.
+Its spread is 0.32 against 0.03 for the TMDs and its latent distance is 0.382 against
+a q90 of 0.314, so its own verdict reads out-of-domain and no band edges are offered.
+Phosphorene and h-BN are rejected the same way.
+
+**Does that verdict rank its own error?** Measured on the 1 107 C2DB rows in the
+screening table that carry a reference work function, restricted to rows this model
+never trained on: MAE 0.130 eV in the reliable tier, 0.233 in check, 0.445 in
+out-of-domain. The same rows split by training role give 0.102 eV for rows it
+trained on against 0.263 for held-out ones, which is why the browser tags them.
 
 ## Gap type — `weights/cgcnn_2d_typed.pt`
 

@@ -98,7 +98,8 @@ def correct(gap: float, kind: str, corrections: dict | None = None) -> float:
     return c["a"] * gap + c["b"]
 
 
-def verdict(unc: float, cal: dict | None = None, latent: float | None = None) -> str:
+def verdict(unc: float, cal: dict | None = None, latent: float | None = None,
+            high_unc_reason: str = "possibly metal / unusual structure") -> str:
     """Trust tier from two independent signals.
 
     `unc` is the ensemble spread: it ranks errors well, but every member shares one
@@ -107,6 +108,10 @@ def verdict(unc: float, cal: dict | None = None, latent: float | None = None) ->
     `latent` is the distance to the nearest training structures in the model's own
     embedding space, which catches exactly that case. Thresholds are quartiles
     measured on a held-out split by scripts/calibrate_uncertainty.py.
+
+    `high_unc_reason` is the wording for the top tier, because the reason differs per
+    property: a metal has no gap to predict, but it does have a work function, and
+    C2DB's metals are in that model's training set.
     """
     cal = cal or DEFAULT_CAL
     if unc <= cal["unc_median"]:
@@ -114,7 +119,7 @@ def verdict(unc: float, cal: dict | None = None, latent: float | None = None) ->
     elif unc <= cal["unc_q75"]:
         tier = "check (elevated uncertainty)"
     else:
-        tier = "out-of-domain (possibly metal / unusual structure)"
+        tier = f"out-of-domain ({high_unc_reason})"
     if latent is not None:
         if latent > cal.get("latent_q90", float("inf")):
             return "out-of-domain (chemistry unlike anything in training)"
@@ -135,15 +140,25 @@ class PropertyEnsemble:
     function decides which metal makes an ohmic contact and where the Schottky
     barrier sits, and it is a separate model with its own normalisation and its own
     calibration — sharing a trunk would tie their accuracies together for no reason.
+    It carries its own trust layer for the same reason the gap has one: the spread
+    and the latent distance are measured against ITS training set, which is a
+    different one (C2DB, 2823 structures). A structure can be ordinary for the gap
+    model and unseen for this one. Graphene is the worked example - 3.18 eV against
+    4.25 in C2DB, spread 0.32 against 0.03 on the TMDs.
+
     Optional: absent weights simply mean the property is not reported.
     """
 
-    def __init__(self, path: str, log=print):
+    def __init__(self, path: str, log=print, high_unc_reason: str = "unusual structure"):
         ck = torch.load(path, map_location="cpu")
         self.cutoff = float(ck.get("cutoff", DEFAULT_CUTOFF))
         self.n_rbf = int(ck.get("n_rbf", DEFAULT_N_RBF))
         self.mean, self.std = float(ck["mean"]), float(ck["std"])
         self.cal = dict(ck.get("calibration", {}))
+        self.high_unc_reason = high_unc_reason
+        self.ref_emb: torch.Tensor | None = None
+        if ck.get("reference_embeddings") is not None:
+            self.ref_emb = ck["reference_embeddings"].float()
         states = ck.get("state_dicts") or [ck["state_dict"]]
         self.models = []
         for sd in states:
@@ -165,6 +180,56 @@ class PropertyEnsemble:
                   else torch.zeros(preds.shape[1]))
         return preds.mean(0).cpu().numpy(), spread.cpu().numpy()
 
+    @torch.no_grad()
+    def latent_distance(self, graphs: list, k: int = 10) -> np.ndarray | None:
+        """Distance to this model's own training set, in this model's own space."""
+        if self.ref_emb is None or not graphs:
+            return None
+        e = self.models[0].encode(Batch.from_data_list(graphs))
+        e = e / e.norm(dim=1, keepdim=True).clamp_min(1e-9)
+        sims = e @ self.ref_emb.T
+        k = min(k, sims.shape[1])
+        return (1 - sims.topk(k, dim=1).values.mean(1)).cpu().numpy()
+
+    def judge(self, unc: float, latent: float | None) -> str | None:
+        """This property's own verdict, from its own calibrated thresholds.
+
+        None when the checkpoint carries no calibration - falling back to the gap's
+        thresholds would put one model's quartiles on another model's spread.
+        """
+        if "unc_median" not in self.cal:
+            return None
+        return verdict(unc, self.cal, latent, self.high_unc_reason)
+
+    def interval90(self, unc: float) -> float | None:
+        s = self.cal.get("scale90")
+        return None if s is None else float(s) * unc
+
+
+def _wf_fields(wf: "PropertyEnsemble | None", value, spread, latent,
+               gap: float, gap_verdict: str, metal_like: bool) -> dict:
+    """Prediction fields for the second property, plus the band edges it unlocks.
+
+    The edges are a subtraction between two models, so they are only shown when
+    neither model has disowned its half: a gap the tool has just called
+    out-of-domain must not reappear as two band positions, and neither must a work
+    function from a chemistry the second model has never seen.
+    """
+    if value is None:
+        return {}
+    v, u = float(value), float(spread)
+    ld = None if latent is None else float(latent)
+    wf_verdict = wf.judge(u, ld) if wf is not None else None
+    out = {"work_function": v, "work_function_unc": u, "work_function_latent": ld,
+           "work_function_verdict": wf_verdict,
+           "work_function_interval90": wf.interval90(u) if wf is not None else None}
+    both_hold = (not metal_like
+                 and not gap_verdict.startswith("out-of-domain")
+                 and not (wf_verdict or "").startswith("out-of-domain"))
+    if both_hold:
+        out["electron_affinity"], out["ionisation_potential"] = band_edges(v, gap)
+    return out
+
 
 @dataclass
 class Prediction:
@@ -177,8 +242,13 @@ class Prediction:
     is_metal_like: bool        # gap < METAL_GAP
     work_function: float | None = None      # eV, only when the second model is present
     work_function_unc: float | None = None
+    # the second model's own trust signals, against its own training set
+    work_function_verdict: str | None = None
+    work_function_latent: float | None = None
+    work_function_interval90: float | None = None
     # Band edges relative to the vacuum level, the pair a contact is actually chosen
-    # on. Derived from the two models together rather than predicted directly.
+    # on. Derived from the two models together rather than predicted directly, so
+    # they are withheld unless BOTH models stand behind their half.
     electron_affinity: float | None = None   # vacuum -> conduction band minimum
     ionisation_potential: float | None = None  # vacuum -> valence band maximum
     gap_quasiparticle: float | None = None  # eV, HSE-level estimate (photoemission / transport)
@@ -200,6 +270,7 @@ class Prediction:
             "electron_affinity_eV": None if self.electron_affinity is None else round(self.electron_affinity, 3),
             "ionisation_potential_eV": None if self.ionisation_potential is None else round(self.ionisation_potential, 3),
             "work_function_unc_eV": None if self.work_function_unc is None else round(self.work_function_unc, 3),
+            "work_function_verdict": self.work_function_verdict,
             "gap_quasiparticle_eV": None if self.gap_quasiparticle is None else round(self.gap_quasiparticle, 3),
             "exp_gap_est_eV": None if self.exp_gap_est is None else round(self.exp_gap_est, 3),
             "uncertainty_eV": round(self.unc, 3),
@@ -385,6 +456,7 @@ class Predictor:
         ld = self.latent_distance([g])
         ld = None if ld is None else float(ld[0])
         wf_v, wf_u = (self.wf.predict([g]) if self.wf else (None, None))
+        wf_l = self.wf.latent_distance([g]) if self.wf else None
         p_metal = self.predict_metal(st)
         gap_type, p_ind = self.predict_type(st)
         v = verdict(unc, self.cal, ld)
@@ -400,14 +472,9 @@ class Predictor:
             exp_gap_est=None if metal_like else correct(gap, "optical", self.corr),
             gap_quasiparticle=None if metal_like else correct(gap, "quasiparticle", self.corr),
             is_metal_like=metal_like, latent_distance=ld,
-            work_function=None if wf_v is None else float(wf_v[0]),
-            work_function_unc=None if wf_u is None else float(wf_u[0]),
-            # derived from the gap, so it inherits the gap's verdict: a number the
-            # tool has just disowned must not reappear as two numbers
-            **(dict(zip(("electron_affinity", "ionisation_potential"),
-                        band_edges(float(wf_v[0]), gap)))
-               if wf_v is not None and not metal_like
-               and not v.startswith("out-of-domain") else {}),
+            **_wf_fields(self.wf, None if wf_v is None else wf_v[0],
+                         None if wf_u is None else wf_u[0],
+                         None if wf_l is None else wf_l[0], gap, v, metal_like),
             interval90=self.cal["scale90"] * unc,
             typical_error=self.cal["tier_mae"].get(tier_key(v)),
             gap_type=gap_type, p_indirect=p_ind,
@@ -488,12 +555,15 @@ class Predictor:
             if m is not None:
                 m.to(device)
         gaps, uncs, p_type, p_metal = self._forward_many(graphs, batch_size, device, mc)
-        wfv = wfu = None
+        wfv = wfu = wfl = None
         if self.wf is not None and graphs:
             parts = [self.wf.predict(graphs[i:i + batch_size])
                      for i in range(0, len(graphs), batch_size)]
             wfv = np.concatenate([a for a, _ in parts])
             wfu = np.concatenate([b for _, b in parts])
+            if self.wf.ref_emb is not None:
+                wfl = np.concatenate([self.wf.latent_distance(graphs[i:i + batch_size])
+                                      for i in range(0, len(graphs), batch_size)])
         lat = None
         if self.ref_emb is not None and graphs:
             lat = np.concatenate([self.latent_distance(graphs[i:i + batch_size])
@@ -520,12 +590,9 @@ class Predictor:
                 exp_gap_est=None if metal_like else correct(gap, "optical", self.corr),
                 gap_quasiparticle=None if metal_like else correct(gap, "quasiparticle", self.corr),
                 is_metal_like=metal_like, latent_distance=ld,
-                work_function=None if wfv is None else float(wfv[j]),
-                work_function_unc=None if wfu is None else float(wfu[j]),
-                **(dict(zip(("electron_affinity", "ionisation_potential"),
-                            band_edges(float(wfv[j]), gap)))
-                   if wfv is not None and not metal_like
-                   and not v.startswith("out-of-domain") else {}),
+                **_wf_fields(self.wf, None if wfv is None else wfv[j],
+                             None if wfu is None else wfu[j],
+                             None if wfl is None else wfl[j], gap, v, metal_like),
                 interval90=self.cal["scale90"] * unc,
                 typical_error=self.cal["tier_mae"].get(tier_key(v)),
                 gap_type=None if pt is None else ("indirect" if pt >= self.type_thr else "direct"),

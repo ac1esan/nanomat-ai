@@ -36,6 +36,7 @@ from nanomat.predict import DEFAULT_CORRECTIONS, METAL_GAP  # noqa: E402
 TABLE = os.path.join(ROOT, "screening_table.csv")
 STABLE_INDEX = os.path.join(ROOT, "alignn_data_alex_2d", "id_prop.csv")
 ENSEMBLE = os.path.join(ROOT, "weights", "cgcnn_2d_ensemble.pt")
+WORKFUNCTION = os.path.join(ROOT, "weights", "cgcnn_2d_workfunction.pt")
 OUT_DIR = os.path.join(ROOT, "docs", "data")
 
 SOURCES = ["alexandria", "c2db", "jarvis_dft2d"]
@@ -86,6 +87,16 @@ def main():
         "fm": df["family"].map({c: i for i, c in enumerate(FAM_CODES)}).fillna(-1).astype(int),
         "fa": df["family_a"].fillna(""),
         "fb": df["family_b"].fillna(""),
+        # second property. Its verdict and its training-set role are its own: the
+        # work-function model was trained on C2DB while the gap model was trained on
+        # Alexandria, so a row can be memorised by one and unseen by the other.
+        # The band edges are not shipped - they are a subtraction the browser does.
+        "k": df["work_function_eV"].round(3),
+        "ku": df["wf_uncertainty_eV"].round(3),
+        "kl": df["wf_latent_distance"].round(3),
+        "kw": df["wf_verdict"].map(tier_code, na_action="ignore"),
+        "kr": df["in_wf_training_set"].map({v: k for k, v in enumerate(ROLES)}).fillna(0).astype(int),
+        "kd": df["dft_wf_eV"].round(3),
     })
     csv_path = os.path.join(OUT_DIR, "screening.csv")
     out.to_csv(csv_path, index=False)
@@ -104,6 +115,13 @@ def main():
         fp = os.path.join(ROOT, "weights", fname)
         if os.path.exists(fp):
             cal[key] = float(torch.load(fp, map_location="cpu").get("threshold", 0.5))
+
+    # the second property carries its own calibration, fitted on its own split
+    wf_cal = {}
+    if os.path.exists(WORKFUNCTION):
+        wf_cal = dict(torch.load(WORKFUNCTION, map_location="cpu").get("calibration", {}))
+        wf_cal.pop("fitted_on", None)
+        wf_cal.pop("verified_on", None)
 
     # --- trust map: mean error per element, Alexandria rows never trained on ---
     unseen = df[(df.source == "alexandria") & (df.in_training_set != "train")].dropna(
@@ -163,8 +181,12 @@ def main():
             "by_tier": {TIERS[k]: int((out.w == k).sum()) for k in range(3)},
             "stable": int(out.b.sum()),
             "default_view": int(((out.b == 1) & (out.r != 1)).sum()),
+            "work_function": int(out.k.notna().sum()),
+            "band_edges": int(df["electron_affinity_eV"].notna().sum()),
+            "by_wf_tier": {TIERS[k]: int((out.kw == k).sum()) for k in range(3)},
         },
         "calibration": cal,
+        "wf_calibration": wf_cal,
         "corrections": corrections,
         "metal_gap_eV": METAL_GAP,
         "trust_map": trust,

@@ -58,6 +58,8 @@ header p{margin:0;color:var(--text-2);max-width:70ch}
 input[type=text],input[type=number],select{background:var(--surface-1);color:var(--text-1);
   border:1px solid var(--border-strong);border-radius:5px;padding:5px 7px;font:inherit;font-size:13px}
 input[type=number]{width:72px}
+.field.edges input[type=number]{width:58px}
+.edgetag{font-size:11px;color:var(--text-3);font-weight:600;letter-spacing:.03em}
 .chips{display:flex;gap:5px}
 .chip{border:1px solid var(--border-strong);background:var(--surface-1);color:var(--text-2);
   border-radius:99px;padding:4px 11px;font:inherit;font-size:12px;cursor:pointer;display:flex;
@@ -98,13 +100,13 @@ canvas{display:block;width:100%;height:320px;cursor:crosshair}
 .results{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;margin-top:16px;align-items:start}
 @media (max-width:900px){.results{grid-template-columns:1fr}}
 .tablebox{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface-2)}
-.thead{display:grid;grid-template-columns:1.5fr .9fr .8fr .8fr 1.4fr;gap:8px;padding:8px 12px;
+.thead{display:grid;grid-template-columns:1.4fr .9fr .75fr .8fr .85fr 1.3fr;gap:8px;padding:8px 12px;
   background:var(--surface-3);border-bottom:1px solid var(--border);font-size:11px;
   text-transform:uppercase;letter-spacing:.04em;color:var(--text-3)}
 .thead button{all:unset;cursor:pointer;display:flex;align-items:center;gap:4px}
 .thead button:hover{color:var(--text-1)}
 .scroller{height:420px;overflow-y:auto;position:relative}
-.row{display:grid;grid-template-columns:1.5fr .9fr .8fr .8fr 1.4fr;gap:8px;padding:7px 12px;
+.row{display:grid;grid-template-columns:1.4fr .9fr .75fr .8fr .85fr 1.3fr;gap:8px;padding:7px 12px;
   border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;align-items:center}
 .row:hover{background:var(--surface-3)}
 .row[aria-selected="true"]{background:var(--surface-3);box-shadow:inset 3px 0 0 var(--accent)}
@@ -197,6 +199,19 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
     <div class="field">
       <label id="t-f-preset">Quick range</label>
       <div class="presets" id="f-presets"></div>
+    </div>
+    <div class="field edges">
+      <label id="t-f-edge">Band edges vs vacuum, eV</label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="edgetag" title="electron affinity">χ</span>
+        <input type="number" id="f-eamin" step="0.1" placeholder="min">
+        <span style="color:var(--text-3)">–</span>
+        <input type="number" id="f-eamax" step="0.1" placeholder="max">
+        <span class="edgetag" style="margin-left:7px" title="ionisation potential">IP</span>
+        <input type="number" id="f-ipmin" step="0.1" placeholder="min">
+        <span style="color:var(--text-3)">–</span>
+        <input type="number" id="f-ipmax" step="0.1" placeholder="max">
+      </div>
     </div>
     <div class="field">
       <label id="t-f-tier">Trust</label>
@@ -314,7 +329,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
 const I18N = {
   en: {
     title: "NanoMatAI — 2D band gap screening",
-    lede: n => `Predicted band gaps for ${n} two-dimensional structures, each with a calibrated interval and an explicit verdict on whether to believe it. Nothing is computed here: this is a graph neural network's output, precomputed once and served as a static table.`,
+    lede: n => `Predicted band gaps for ${n} two-dimensional structures, each with a calibrated interval and an explicit verdict on whether to believe it. A second ensemble adds the vacuum-referenced work function, and the two together place the band edges — the pair a contact metal is chosen on. Nothing is computed here: this is a graph neural network's output, precomputed once and served as a static table.`,
     tab_browse: "Browse", tab_trust: "Trust map", tab_fam: "Families",
     fam_lede: "Nobody asks what the gap of one database entry is. They ask what happens across a family when the chalcogen changes. This pivots the same predictions into that shape: pick a prototype, read the grid.",
     fam_pick: "Prototype", fam_pop: "Population",
@@ -328,6 +343,7 @@ const I18N = {
     fam_multi: n => `${n} entries for this pair; the one with the smallest ensemble spread is shown`,
     fam_prose: `<h2>How to read it</h2><p>Each cell is one element pair in the chosen prototype, coloured by predicted band gap. A dashed border means the tool does not place that prediction in its reliable tier. A dot in the corner means the model trained on that structure, so the number is reproduced from memory rather than predicted — its error is about 0.08 eV instead of the honest 0.26.</p><p>The filters above govern this grid as well, which is why the honest default leaves most of a family empty: most of it was used in training. <b>Show everything</b> fills the grid in, at the cost that the calibrated intervals no longer strictly hold — use the grid to compare within a family, and the browser tab for absolute numbers.</p><p>Where a pair has several entries, the one with the smallest ensemble spread is shown. Nothing is generated: every cell is a structure somebody computed, which is why a family can have holes at all.</p>`,
     f_pop: "Population", f_gap: "Band gap, eV", f_preset: "Quick range",
+    f_edge: "Band edges vs vacuum, eV",
     f_tier: "Trust", f_type: "Gap type", f_has: "Must contain",
     f_not: "Must not contain", f_search: "Formula",
     f_notrain: "Exclude training rows", reset: "Reset",
@@ -339,6 +355,8 @@ const I18N = {
     count: (n, total) => `<b>${n}</b> of ${total} structures match`,
     count_hidden: n => ` · ${n} more are hidden because the model disowns them`,
     count_none: "No structures match these filters",
+    count_edges: n => ` · ${n} structures in this selection have band edges at all`,
+    count_none_edges: "No structures match. Band edges exist only where both models stand behind their half — the gap model and the work-function model each have their own training set and their own verdict.",
     warn_all: "<b>Outside the calibrated population.</b> The intervals and tier errors shown here were fitted on stable Alexandria structures. On metastable entries and other DFT functionals the verdict still ranks error correctly, but a 90% interval covers about 78% of cases instead of 90%. Use the ordering, not the absolute numbers.",
     warn_train: "<b>Includes structures the model trained on.</b> Rows badged “trained on” are reproduced from memory, not predicted; their error is about 0.08 eV rather than the honest 0.26 eV.",
     c_title: "Predicted gap against the model's own uncertainty",
@@ -346,7 +364,8 @@ const I18N = {
     crowd: n => n === 1 ? "1 more structure under the cursor" : `${n} more structures under the cursor`,
     reset_zoom: "Fit to data",
     ax_gap: "predicted band gap, eV", ax_unc: "ensemble spread, eV (log)",
-    th_formula: "Formula", th_gap: "Gap, eV", th_unc: "Spread", th_type: "Type", th_verdict: "Verdict",
+    th_formula: "Formula", th_gap: "Gap, eV", th_unc: "Spread", th_type: "Type",
+    th_ea: "Affinity", th_verdict: "Verdict",
     badge_train: "trained on",
     d_empty: "Select a structure in the chart or the table.",
     d_gap: "Band gap (PBE)", d_interval: "90% interval",
@@ -354,6 +373,16 @@ const I18N = {
     d_qp_note: n => `photoemission and transport · fitted against HSE06 on ${n} structures, leave-one-out error 0.19 eV`,
     d_opt_note: n => `absorption onset · only ${n} reference monolayers behind this fit, leave-one-out error 0.71 eV — an indication, not a measurement`,
     d_exciton: d => `The two differ by ${d} eV. That difference is the exciton binding energy, which is why an absorption measurement and a photoemission measurement disagree on the same material.`,
+    d_wf: "Work function", d_wf_spread: "Work function spread",
+    d_wf_verdict: "Work function verdict", d_wf_iv: "90% interval, work function",
+    d_ea: "Electron affinity, χ", d_ip: "Ionisation potential",
+    d_wf_dft: "Work function, DFT reference", d_wf_err: "Error against that reference",
+    d_wf_role: "Role in the work-function model's training",
+    d_edges_note: mae => `<b>Band edges.</b> A second ensemble predicts the vacuum-referenced level (C2DB's <i>wf</i>), test MAE ${mae} eV on compositions it never saw. The edges are that level ± half the gap, which is the pair a contact metal is chosen on: χ for an n-type contact, the ionisation potential for a p-type one. Checked against published monolayer values, the ionisation potentials land within 0.15 eV on the four TMDs and the affinities within 0.4 eV.`,
+    d_edges_caveat: "For an undoped semiconductor DFT places the Fermi level mid-gap, so the work function on its own is a reference level rather than something a probe returns. The edges derived from it are placements, and they carry the error of both models at once.",
+    d_wf_stop: "<b>The second model disowns this one.</b> It was trained on C2DB alone and this chemistry sits outside what it saw, so the band edges are withheld even though the gap stands. Graphene is the worked example: 3.18 eV against 4.25 in the database, with ten times the spread of a TMD.",
+    d_wf_gapstop: "No band edges: they are half the gap away from the work function, and the gap above has been disowned.",
+    d_wf_none: "No work function for this structure.",
     d_type: "Gap type", d_metal: "Metal gate, p(metal)", d_spread: "Ensemble spread",
     d_type_val: (label, p, thr) => `${label} · p(indirect) = ${p}, threshold ${thr}`,
     d_latent: "Distance to training data", d_verdict: "Verdict", d_tiererr: "Typical error of this tier",
@@ -391,9 +420,13 @@ const S = {
   zoom: null,
   hover: null,
   f: { pop: 0, gmin: null, gmax: null, tiers: [true, true, false], type: -1,
-       has: [], not: [], q: "", notrain: false },
+       has: [], not: [], q: "", notrain: false,
+       eamin: null, eamax: null, ipmin: null, ipmax: null },
   hiddenByTier: 0,
 };
+const BLANK_FILTERS = () => ({ pop: 0, gmin: null, gmax: null, tiers: [true, true, false],
+  type: -1, has: [], not: [], q: "", notrain: false,
+  eamin: null, eamax: null, ipmin: null, ipmax: null });
 const TIERVAR = ["--tier-0", "--tier-1", "--tier-2"];
 const tierColor = i => getComputedStyle(document.body).getPropertyValue(TIERVAR[i]).trim();
 
@@ -407,7 +440,8 @@ async function load() {
   const lines = csv.trim().split("\n");
   const H = lines[0].split(",");
   const ix = Object.fromEntries(H.map((h, i) => [h, i]));
-  const num = v => (v === "" ? null : +v);
+  // undefined, not just empty: an older data file may not carry every column
+  const num = v => (v === "" || v === undefined ? null : +v);
   S.rows = new Array(lines.length - 1);
   for (let k = 1; k < lines.length; k++) {
     const c = lines[k].split(",");
@@ -416,11 +450,31 @@ async function load() {
       d: num(c[ix.d]), g: +c[ix.g], u: +c[ix.u], l: num(c[ix.l]), m: num(c[ix.m]),
       t: num(c[ix.t]), p: num(c[ix.p]), w: +c[ix.w], r: +c[ix.r], b: +c[ix.b],
       fm: +c[ix.fm], fa: c[ix.fa], fb: c[ix.fb],
+      // second property: value, spread, latent distance, its own tier, its own
+      // training role, and the DFT reference where one exists
+      k: num(c[ix.k]), ku: num(c[ix.ku]), kl: num(c[ix.kl]),
+      kw: num(c[ix.kw]), kr: num(c[ix.kr]) ?? 0, kd: num(c[ix.kd]),
     };
   }
+  for (const r of S.rows) setEdges(r);
   document.getElementById("loading").hidden = true;
   buildUI();
   apply();
+}
+
+/* --------------------------------------------------------------- band edges */
+// Not shipped in the data: the edges are a subtraction between the two models,
+// so the page does it here and can state the condition in one place. They exist
+// only when NEITHER model has disowned its half — a gap the tool just called
+// out-of-domain must not reappear as two band positions, and neither must a work
+// function from a chemistry the second model has never seen. Note IP = χ + gap,
+// so the gap filter already constrains the ionisation potential indirectly.
+// Computed once per row after the data loads, so the table can also sort on it.
+function setEdges(r) {
+  const off = r.k === null || r.kw === null || r.w === 2 || r.kw === 2
+              || r.g < S.meta.metal_gap_eV;
+  r.ea = off ? null : r.k - r.g / 2;
+  r.ip = off ? null : r.k + r.g / 2;
 }
 
 /* ------------------------------------------------------------------ filtering */
@@ -432,8 +486,9 @@ function passPopulation(row) {
 function apply() {
   const f = S.f;
   const q = f.q.trim().toLowerCase();
+  const edgeFilterOn = [f.eamin, f.eamax, f.ipmin, f.ipmax].some(v => v !== null);
   const out = [];
-  let hidden = 0;
+  let hidden = 0, eligible = 0;   // eligible: passes everything except the edge range
   for (const row of S.rows) {
     if (!passPopulation(row)) continue;
     if (f.notrain && row.r === 1) continue;
@@ -444,6 +499,16 @@ function apply() {
     if (q && !row.f.toLowerCase().includes(q)) continue;
     if (f.has.length && !f.has.every(el => row.e.includes(el))) continue;
     if (f.not.length && f.not.some(el => row.e.includes(el))) continue;
+    if (row.ea !== null) eligible++;
+    if (edgeFilterOn) {
+      // a row with no band edges cannot satisfy a band-edge range, and dropping it
+      // is better than quietly letting it through
+      if (row.ea === null) continue;
+      if (f.eamin !== null && row.ea < f.eamin) continue;
+      if (f.eamax !== null && row.ea > f.eamax) continue;
+      if (f.ipmin !== null && row.ip < f.ipmin) continue;
+      if (f.ipmax !== null && row.ip > f.ipmax) continue;
+    }
     out.push(row);
   }
   const { key, dir } = S.sort;
@@ -454,6 +519,8 @@ function apply() {
     return dir * (x - y);
   });
   S.hiddenByTier = hidden;
+  S.edgeEligible = eligible;
+  S.edgeFilterOn = edgeFilterOn;
   S.view = out;
   S.hover = null;
   if (S.sel && !out.includes(S.sel)) S.sel = null;
@@ -465,8 +532,13 @@ function apply() {
 /* --------------------------------------------------------------------- render */
 function renderCount() {
   const el = document.getElementById("count");
-  const base = S.view.length ? t("count", int(S.view.length), int(S.meta.n_rows)) : t("count_none");
-  el.innerHTML = base + (S.hiddenByTier ? `<span style="color:var(--text-3)">${t("count_hidden", int(S.hiddenByTier))}</span>` : "");
+  const base = S.view.length ? t("count", int(S.view.length), int(S.meta.n_rows))
+             : (S.edgeFilterOn ? t("count_none_edges") : t("count_none"));
+  const extra = S.hiddenByTier ? t("count_hidden", int(S.hiddenByTier)) : "";
+  // with a band-edge range set, the honest denominator is not the whole selection
+  // but the part of it that has edges at all
+  const edges = S.edgeFilterOn ? t("count_edges", int(S.edgeEligible)) : "";
+  el.innerHTML = base + `<span style="color:var(--text-3)">${extra}${edges}</span>`;
 }
 function renderWarning() {
   const box = document.getElementById("pop-warning");
@@ -513,6 +585,23 @@ function drawChart() {
   // past it would spread the axes over empty space and squeeze every point into a
   // few pixels, which reads as the data vanishing
   const FULL = { gmin, gmax, lylo: Math.log10(ULO), lyhi: Math.log10(UHI) };
+  // A zoom window belongs to the data it was drawn on. Change the filters and the
+  // data can move out from under it, leaving an empty frame that reads as broken.
+  // Re-clamp it to the new extent, and drop it when the two no longer overlap.
+  if (S.zoom) {
+    const z = S.zoom;
+    if (z.gmax <= FULL.gmin || z.gmin >= FULL.gmax ||
+        z.lyhi <= FULL.lylo || z.lylo >= FULL.lyhi) {
+      S.zoom = null;
+    } else {
+      const [a, b] = clampSpan(z.gmin, z.gmax, FULL.gmin, FULL.gmax, 0.05);
+      const [c2, d2] = clampSpan(z.lylo, z.lyhi, FULL.lylo, FULL.lyhi, 0.15);
+      S.zoom = (b - a >= FULL.gmax - FULL.gmin - 1e-9 &&
+                d2 - c2 >= FULL.lyhi - FULL.lylo - 1e-9)
+               ? null : { gmin: a, gmax: b, lylo: c2, lyhi: d2 };
+    }
+    document.getElementById("chart-reset").hidden = !S.zoom;
+  }
   if (S.zoom) {
     gmin = S.zoom.gmin; gmax = S.zoom.gmax;
     ULO = Math.pow(10, S.zoom.lylo); UHI = Math.pow(10, S.zoom.lyhi);
@@ -644,13 +733,15 @@ function paintRows(top) {
       <span class="num">${fmt(r.g, 2)} <span style="color:var(--text-3)">${iv}</span></span>
       <span class="num" style="color:var(--text-2)">${fmt(r.u, 3)}</span>
       <span style="color:var(--text-2)">${r.t === null ? "—" : (r.t ? t("type_indirect") : t("type_direct"))}</span>
+      <span class="num" style="color:var(--text-2)">${fmt(r.ea, 2)}</span>
       <span class="v"><i class="tierdot" style="background:var(${TIERVAR[r.w]})"></i>${t("tier")[r.w]}</span>
     </div>`;
   }
   host.innerHTML = html;
 }
 function renderTHead() {
-  const cols = [["f", "th_formula"], ["g", "th_gap"], ["u", "th_unc"], ["t", "th_type"], ["w", "th_verdict"]];
+  const cols = [["f", "th_formula"], ["g", "th_gap"], ["u", "th_unc"], ["t", "th_type"],
+                ["ea", "th_ea"], ["w", "th_verdict"]];
   document.getElementById("thead").innerHTML = cols.map(([k, lbl]) =>
     `<button data-sort="${k}">${t(lbl)}${S.sort.key === k ? (S.sort.dir > 0 ? " ↑" : " ↓") : ""}</button>`).join("");
 }
@@ -661,6 +752,7 @@ function renderDetail(hostId = "detail", row = undefined) {
   const r = row === undefined ? S.sel : row;
   if (!r) { el.innerHTML = `<p class="sub" style="margin:0">${t("d_empty")}</p>`; return; }
   const cal = S.meta.calibration, C = S.meta.corrections;
+  const wfcal = S.meta.wf_calibration || {};
   const ood = r.w === 2;
   const iv = cal.scale90 * r.u;
   const exp = C.optical.a * r.g + C.optical.b;
@@ -671,6 +763,10 @@ function renderDetail(hostId = "detail", row = undefined) {
   if (!ood && r.g >= S.meta.metal_gap_eV) {
     rows.push([t("d_qp"), "≈ " + fmt(qp, 2) + " eV"]);
     rows.push([t("d_opt"), "≈ " + fmt(exp, 2) + " eV"]);
+  }
+  if (r.ea !== null) {
+    rows.push([t("d_ea"), fmt(r.ea, 2) + " eV"]);
+    rows.push([t("d_ip"), fmt(r.ip, 2) + " eV"]);
   }
   if (r.t !== null) rows.push([t("d_type"), t("d_type_val",
       r.t ? t("type_indirect") : t("type_direct"), fmt(r.p, 2),
@@ -686,6 +782,21 @@ function renderDetail(hostId = "detail", row = undefined) {
     rows.push([t("d_dft"), fmt(r.d, 2) + " eV"]);
     rows.push([t("d_err"), fmt(Math.abs(r.g - r.d), 2) + " eV"]);
   }
+  // the second property keeps its own block: its own spread, its own verdict, and
+  // its own training role, because it was trained on a different set entirely
+  if (r.k !== null) {
+    rows.push([t("d_wf"), fmt(r.k, 2) + " eV"]);
+    if (wfcal.scale90 && r.kw !== 2)
+      rows.push([t("d_wf_iv"), "± " + fmt(wfcal.scale90 * r.ku, 2) + " eV"]);
+    rows.push([t("d_wf_spread"), fmt(r.ku, 3) + " eV"]);
+    if (r.kw !== null) rows.push([t("d_wf_verdict"), `<span class="v" style="justify-content:flex-end">
+       <i class="tierdot" style="background:var(${TIERVAR[r.kw]})"></i>${t("tier")[r.kw]}</span>`]);
+    if (r.kd !== null) {
+      rows.push([t("d_wf_dft"), fmt(r.kd, 2) + " eV"]);
+      rows.push([t("d_wf_err"), fmt(Math.abs(r.k - r.kd), 2) + " eV"]);
+      rows.push([t("d_wf_role"), t("role")[r.kr]]);
+    }
+  }
   rows.push([t("d_atoms"), String(r.n)]);
   rows.push([t("d_source"), S.meta.sources[r.s]]);
   rows.push([t("d_role"), t("role")[r.r]]);
@@ -700,6 +811,10 @@ function renderDetail(hostId = "detail", row = undefined) {
         <b>${t("d_opt")}</b> — ${t("d_opt_note", C.optical.n)}<br><br>
         ${t("d_exciton", fmt(qp - exp, 2))}</div>` : ""}
     ${(!ood && r.g < S.meta.metal_gap_eV) ? `<div class="note">${t("d_metallike", fmt(S.meta.metal_gap_eV, 1))}</div>` : ""}
+    ${r.ea !== null ? `<div class="note">${t("d_edges_note", fmt(wfcal.test_mae, 2))}<br><br>
+        ${t("d_edges_caveat")}</div>` : ""}
+    ${(r.k !== null && r.ea === null && r.kw === 2) ? `<div class="note stop">${t("d_wf_stop")}</div>` : ""}
+    ${(r.k !== null && r.ea === null && r.kw !== 2 && ood) ? `<div class="note">${t("d_wf_gapstop")}</div>` : ""}
     <div class="note">${t("d_note", fmt(cal.test_mae, 2))}</div>`;
 }
 
@@ -857,6 +972,7 @@ function buildUI() {
   for (const [id, k] of [["t-f-pop", "f_pop"], ["t-f-gap", "f_gap"], ["t-f-preset", "f_preset"],
                          ["t-f-tier", "f_tier"], ["t-f-type", "f_type"], ["t-f-has", "f_has"],
                          ["t-f-not", "f_not"], ["t-f-search", "f_search"], ["t-f-notrain", "f_notrain"],
+                         ["t-f-edge", "f_edge"],
                          ["t-mc", "mc"], ["t-how", "how"], ["t-own", "own"]])
     document.getElementById(id).textContent = t(k);
   document.getElementById("f-reset").textContent = t("reset");
@@ -946,12 +1062,13 @@ document.addEventListener("click", e => {
   if (row) { S.sel = S.view[+row.dataset.k]; renderTable(); renderDetail(); drawChart(); }
 });
 document.getElementById("f-reset").addEventListener("click", () => {
-  S.f = { pop: 0, gmin: null, gmax: null, tiers: [true, true, false], type: -1,
-          has: [], not: [], q: "", notrain: false };
+  S.f = BLANK_FILTERS();
   S.sel = null;
   document.getElementById("f-pop").value = "0";
   document.getElementById("f-type").value = "-1";
-  for (const id of ["f-gmin", "f-gmax", "f-has", "f-not", "f-q"]) document.getElementById(id).value = "";
+  for (const id of ["f-gmin", "f-gmax", "f-has", "f-not", "f-q",
+                    "f-eamin", "f-eamax", "f-ipmin", "f-ipmax"])
+    document.getElementById(id).value = "";
   document.getElementById("f-notrain").checked = false;
   document.querySelectorAll(".chip[data-tier]").forEach(c =>
     c.setAttribute("aria-pressed", String(S.f.tiers[+c.dataset.tier])));
@@ -963,6 +1080,8 @@ document.getElementById("f-pop").addEventListener("change", e => { S.f.pop = +e.
 document.getElementById("f-type").addEventListener("change", e => { S.f.type = +e.target.value; apply(); });
 document.getElementById("f-notrain").addEventListener("change", e => { S.f.notrain = e.target.checked; apply(); });
 for (const [id, key, cast] of [["f-gmin", "gmin", 1], ["f-gmax", "gmax", 1],
+                               ["f-eamin", "eamin", 1], ["f-eamax", "eamax", 1],
+                               ["f-ipmin", "ipmin", 1], ["f-ipmax", "ipmax", 1],
                                ["f-has", "has", 2], ["f-not", "not", 2], ["f-q", "q", 0]])
   document.getElementById(id).addEventListener("input", e => {
     const v = e.target.value;

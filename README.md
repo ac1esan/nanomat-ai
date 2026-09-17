@@ -208,11 +208,20 @@ the pair a contact metal is matched against:
 | WS₂ | 3.98 | 3.9 | 5.92 | 6.0 |
 | WSe₂ | 3.79 | 3.6 | 5.05 | 5.2 |
 
-The edges inherit the gap's verdict, so a prediction the tool has disowned cannot
-reappear as two derived numbers. Graphene is the documented failure: one
-elemental-carbon structure exists in the whole dataset and it is in the test split,
-so the model predicts 3.18 against the database's 4.25 — with a spread of 0.32
-against 0.03 for the TMDs, which is the signal firing correctly on a wrong number.
+The edges are a subtraction between two models, so they need **both** to stand
+behind their half and are withheld when either verdict says out-of-domain. This
+model carries its own trust layer rather than a share of the gap model's — its own
+uncertainty quartiles, its own interval scale and its own latent distance against
+its own training embeddings — because the two were trained on different databases.
+A structure can be routine for one and unseen for the other.
+
+Graphene is the documented failure, and it is now caught by that second verdict:
+one elemental-carbon structure exists in the whole dataset and it sits in the test
+split, so the model predicts 3.18 against the database's 4.25 — with a spread of
+0.32 against 0.03 for the TMDs and a latent distance past the q90 threshold. Its
+verdict reads out-of-domain and no band edges are offered. On the C2DB rows that
+carry a reference and were never trained on, that verdict separates MAE 0.130 /
+0.233 / 0.445 eV across the three tiers.
 
 ### External validation against experiment
 

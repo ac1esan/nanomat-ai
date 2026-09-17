@@ -173,3 +173,43 @@ def test_prototype_classification():
     cubic = Structure(Lattice.cubic(5.0), ["Mo", "S", "S"],
                       [[0, 0, 0], [0.5, 0.5, 0.5], [0.25, 0.25, 0.25]])
     assert classify(cubic)[0] is None
+
+
+def test_work_function_has_its_own_verdict(P):
+    """The second model is trained on a different set, so it judges independently.
+
+    Graphene is the worked case: the gap model rejects it through the metal gate,
+    but even on its own terms the work-function model has seen one carbon-only
+    structure and disagrees with itself about it. Band edges must be withheld
+    whenever either model disowns its half, because the edges are a subtraction
+    between the two.
+    """
+    if P.wf is None:
+        pytest.skip("work-function weights not present")
+    for name in ("MoS2", "WS2"):
+        r = P.run(read_structure(os.path.join(EX, f"{name}.vasp")))
+        assert r.work_function_verdict.startswith("reliable"), name
+        assert r.electron_affinity is not None, name
+        # the edges are the work function plus/minus half the gap, nothing else
+        assert abs(r.ionisation_potential - r.electron_affinity - r.gap) < 1e-6
+        assert abs((r.ionisation_potential + r.electron_affinity) / 2 - r.work_function) < 1e-6
+
+    for name in ("graphene", "phosphorene"):
+        r = P.run(read_structure(os.path.join(EX, f"{name}.vasp")))
+        assert r.work_function is not None, name
+        assert r.work_function_verdict.startswith("out-of-domain"), name
+        assert r.electron_affinity is None and r.ionisation_potential is None, name
+
+
+def test_work_function_thresholds_are_its_own(P):
+    """Its quartiles must come from its checkpoint, never from the gap model's.
+
+    Applying one model's uncertainty quartiles to another model's spread would put
+    every structure in the wrong tier while looking entirely plausible.
+    """
+    if P.wf is None:
+        pytest.skip("work-function weights not present")
+    assert P.wf.cal["unc_median"] != P.cal["unc_median"]
+    assert P.wf.ref_emb is not None, "latent distance needs the reference embeddings"
+    assert P.wf.ref_emb.shape[0] != (0 if P.ref_emb is None else P.ref_emb.shape[0]), \
+        "the two models were trained on different sets; the embedding counts differ"
