@@ -151,10 +151,12 @@ canvas{display:block;width:100%;height:320px;cursor:crosshair}
 .famcell b{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
 .famcell small{font-size:9px;opacity:.8}
 .famcell.none{background:var(--surface-3);cursor:default;border-color:var(--border)}
-/* exists in the table but the filters above exclude it: still readable, visibly
-   second-class, so the shape of a family survives an honest default */
-.famcell.muted{background:var(--surface-3);border-color:var(--border);opacity:.62}
-.famcell.muted b{font-weight:400;color:var(--text-2)}
+/* exists in the table but the filters above exclude it. It has to stay READABLE:
+   an earlier version used opacity and in dark mode the grid turned into a black
+   rectangle, which is worse than the empty grid it was meant to fix. The difference
+   from a passing cell is the colour ramp against a neutral background, not dimness. */
+.famcell.muted{background:var(--surface-3);border-color:var(--border-strong)}
+.famcell.muted b{font-weight:500;color:var(--text-2)}
 .famcell.muted small{color:var(--text-3)}
 .famcell.unsure{border-style:dashed;border-color:currentColor}
 .famcell.sel{outline:2px solid var(--accent);outline-offset:1px}
@@ -171,8 +173,11 @@ canvas{display:block;width:100%;height:320px;cursor:crosshair}
 .cell small{font-size:9px;opacity:.85;font-variant-numeric:tabular-nums}
 .cell.void{background:none}
 .cell.nodata{background:var(--surface-3);color:var(--text-3);border-color:var(--border)}
-.ramp{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);margin:4px 0 16px}
-.ramp .bar{height:11px;width:190px;border-radius:3px;
+/* wrap: the legend grew to four items and on a phone a non-wrapping row pushed the
+   whole page 180px wider than the viewport */
+.ramp{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;font-size:12px;
+  color:var(--text-2);margin:4px 0 16px}
+.ramp .bar{height:11px;max-width:190px;flex:1 1 90px;border-radius:3px;
   background:linear-gradient(to right,var(--ramp-lo),var(--ramp-hi));border:1px solid var(--border)}
 .prose{max-width:76ch;color:var(--text-2);font-size:13px}
 .prose h2{color:var(--text-1);font-size:15px;margin:20px 0 6px}
@@ -296,15 +301,19 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
       <label id="t-fam-pick">Prototype</label>
       <select id="fam-pick"></select>
     </div>
+    <div class="field">
+      <label id="t-fam-scope">Population</label>
+      <select id="fam-scope"></select>
+    </div>
     <div class="ramp" style="margin:0">
       <span id="t-fam-lo"></span><span class="bar"></span><span id="t-fam-hi"></span>
-      <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
+      <span style="display:flex;align-items:center;gap:6px">
         <span class="famcell unsure" style="width:16px;height:16px;background:var(--ramp-lo);
           border-color:var(--text-2)"></span><span id="t-fam-unsure"></span></span>
-      <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
+      <span style="display:flex;align-items:center;gap:6px">
         <span class="famcell trained" style="width:16px;height:16px;background:var(--ramp-lo);
           color:var(--text-2)"></span><span id="t-fam-trained"></span></span>
-      <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
+      <span style="display:flex;align-items:center;gap:6px">
         <span class="famcell muted" style="width:16px;height:16px"></span>
         <span id="t-fam-greyed"></span></span>
     </div>
@@ -314,6 +323,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
     <div class="famgrid" id="famgrid"></div>
     <aside class="detail" id="fam-detail"></aside>
   </div>
+  <p class="prose" id="t-fam-scopenote" style="margin:4px 0 0"></p>
   <p class="prose" id="fam-axisnote" style="margin:4px 0 0"></p>
   <div class="prose" id="fam-prose"></div>
 </section>
@@ -325,11 +335,11 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
   <div class="ptable" id="ptable"></div>
   <div class="ramp">
     <span id="t-tm-lo"></span><span class="bar"></span><span id="t-tm-hi"></span>
-    <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
+    <span style="display:flex;align-items:center;gap:6px">
       <span class="cell" style="width:16px;height:16px;min-height:0;aspect-ratio:auto;
         background:var(--ramp-lo);border-style:dashed;border-color:var(--text-2)"></span>
       <span id="t-tm-sparse"></span></span>
-    <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
+    <span style="display:flex;align-items:center;gap:6px">
       <span class="cell nodata" style="width:16px;height:16px;min-height:0;aspect-ratio:auto"></span>
       <span id="t-tm-nodata"></span></span>
   </div>
@@ -352,17 +362,20 @@ const I18N = {
     tab_browse: "Browse", tab_trust: "Trust map", tab_fam: "Families",
     fam_lede: "Nobody asks what the gap of one database entry is. They ask what happens across a family when the chalcogen changes. This pivots the same predictions into that shape: pick a prototype, read the grid.",
     fam_pick: "Prototype", fam_pop: "Population",
+    fam_scope_all: "Every structure of this prototype",
+    fam_scope_browse: "Only what the filters above keep",
+    fam_scope_note: "A family is a comparison, so this tab starts from all of it. Every cell still says what it is: a dot for a structure the model trained on, a dashed border for anything outside the reliable tier. The calibrated intervals belong to the Browse tab's population, not to this grid.",
     fam_lo: "narrow", fam_hi: "wide", fam_unsure: "not in the reliable tier",
     fam_trained: "the model trained on this one",
     fam_filtered: "outside the current filters",
     fam_greyed: "greyed: excluded by the filters above",
-    fam_count: (shown, total) => `<b>${shown}</b> of ${total} element pairs in this prototype pass the filters above; the rest of the family is greyed rather than hidden`,
+    fam_count: (shown, total) => `<b>${shown}</b> of ${total} element pairs in this prototype are in view; the rest of the family is greyed rather than hidden`,
     fam_axis_a: "single site", fam_axis_b: "doubled site",
     fam_axis_note: "Rows and columns are structural positions, not chemical roles: the row element occupies the single site of the prototype and the column element the doubled one. For Rb₂O that puts oxygen in the row, which is what the structure says even though the chemistry reads the other way.",
     fam_opt: (label, n, pairs) => `${label} — ${n} structures, ${pairs} pairs`,
     fam_empty: "No structure in the table matches this prototype.",
     fam_multi: n => `${n} entries for this pair; the one with the smallest ensemble spread is shown`,
-    fam_prose: `<h2>How to read it</h2><p>Each cell is one element pair in the chosen prototype, coloured by predicted band gap. A dashed border means the tool does not place that prediction in its reliable tier. A dot in the corner means the model trained on that structure, so the number is reproduced from memory rather than predicted — its error is about 0.08 eV instead of the honest 0.26.</p><p>The filters above govern this grid too, but they grey cells out instead of removing them, because the shape of a family is a fact about the data and not about the current filter. The default population is the one the intervals were calibrated on — stable, held out from training — and for most prototypes that is a small minority of the family, so most of the grid starts grey. <b>Show everything</b> promotes all of it, at the cost that the calibrated intervals no longer strictly hold. Use the grid to compare within a family, and the browser tab for absolute numbers.</p><p>Where a pair has several entries, the one with the smallest ensemble spread is shown. Nothing is generated: every cell is a structure somebody computed, which is why a family still has holes.</p>`,
+    fam_prose: `<h2>How to read it</h2><p>Each cell is one element pair in the chosen prototype, coloured by predicted band gap. A dashed border means the tool does not place that prediction in its reliable tier. A dot in the corner means the model trained on that structure, so the number is reproduced from memory rather than predicted — its error is about 0.08 eV instead of the honest 0.26.</p><p>The chemistry and band-gap filters above govern this grid, but the population does not: this tab has its own, and it starts from the whole prototype. Sharing the Browse tab's honest default left one pair of ninety-eight visible, and a grid of blanks is not an honest answer, it is an unreadable one. The per-cell marks carry the same information instead. Switch the population to <i>only what the filters above keep</i> to see exactly which cells that default endorses; what falls outside is greyed rather than deleted, because the shape of a family is a fact about the data and not about the current filter.</p><p>Where a pair has several entries, the one with the smallest ensemble spread is shown. Nothing is generated: every cell is a structure somebody computed, which is why a family still has holes.</p>`,
     f_pop: "Population", f_gap: "Band gap, eV", f_preset: "Quick range",
     f_edge: "Band edges vs vacuum, eV",
     f_tier: "Trust", f_type: "Gap type", f_has: "Must contain",
@@ -439,7 +452,12 @@ const int = x => x.toLocaleString("en-US").replace(/,/g, " ");
 const S = {
   meta: null, rows: [], view: [], sel: null,
   sort: { key: "g", dir: 1 },
-  fam: { pick: 0, sel: null },
+  // The families tab keeps its own population. Sharing the browser's meant that the
+  // honest default - stable, held out from training - left 1 of 98 pairs for 1T-MX2
+  // and none at all for the honeycombs, and a grid of blanks teaches nobody
+  // anything. Every cell still carries its own marks: a dot for a training row, a
+  // dashed border for anything outside the reliable tier.
+  fam: { pick: 0, sel: null, scope: 0 },
   // chart viewport. null = fit to the filtered data. Set by wheel-zoom and drag-pan,
   // which is the only way to tell points apart once 28 000 of them overlap.
   zoom: null,
@@ -555,19 +573,19 @@ function apply() {
   const f = S.f;
   const q = f.q.trim().toLowerCase();
   const edgeFilterOn = [f.eamin, f.eamax, f.ipmin, f.ipmax].some(v => v !== null);
-  const out = [];
+  const out = [], outFam = [];
   let hidden = 0, eligible = 0;   // eligible: passes everything except the edge range
   for (const row of S.rows) {
-    if (!passPopulation(row)) continue;
-    if (f.notrain && row.r === 1) continue;
-    if (!f.tiers[row.w]) { hidden++; continue; }
+    const inPopulation = passPopulation(row) && !(f.notrain && row.r === 1);
+    if (!inPopulation && S.fam.scope === 1) continue;
+    if (!f.tiers[row.w]) { if (inPopulation) hidden++; continue; }
     if (f.gmin !== null && row.g < f.gmin) continue;
     if (f.gmax !== null && row.g > f.gmax) continue;
     if (f.type >= 0 && row.t !== f.type) continue;
     if (q && !row.f.toLowerCase().includes(q)) continue;
     if (f.has.length && !f.has.every(el => row.e.includes(el))) continue;
     if (f.not.length && f.not.some(el => row.e.includes(el))) continue;
-    if (row.ea !== null) eligible++;
+    if (inPopulation && row.ea !== null) eligible++;
     if (edgeFilterOn) {
       // a row with no band edges cannot satisfy a band-edge range, and dropping it
       // is better than quietly letting it through
@@ -577,7 +595,8 @@ function apply() {
       if (f.ipmin !== null && row.ip < f.ipmin) continue;
       if (f.ipmax !== null && row.ip > f.ipmax) continue;
     }
-    out.push(row);
+    if (row.fm >= 0) outFam.push(row);   // chemistry and gap filters, any population
+    if (inPopulation) out.push(row);
   }
   const { key, dir } = S.sort;
   out.sort((a, b) => {
@@ -586,6 +605,7 @@ function apply() {
     if (x === null) x = Infinity; if (y === null) y = Infinity;
     return dir * (x - y);
   });
+  S.viewFam = outFam;
   S.hiddenByTier = hidden;
   S.edgeEligible = eligible;
   S.edgeFilterOn = edgeFilterOn;
@@ -593,7 +613,7 @@ function apply() {
   S.hover = null;
   if (S.sel && !out.includes(S.sel)) S.sel = null;
   renderCount(); renderWarning(); drawChart(); renderTable(); renderDetail();
-  if (S.fam.sel && !out.includes(S.fam.sel)) S.fam.sel = null;
+  if (S.fam.sel && !outFam.includes(S.fam.sel)) S.fam.sel = null;
   renderFamilies(); renderTrust();
 }
 
@@ -907,13 +927,14 @@ function famRows() {
   const best = new Map();                       // "A|B" -> row with the smallest spread
   const count = new Map();
   const all = new Map();
+  const source = S.fam.scope === 1 ? S.view : S.viewFam;
   for (const r of S.rows) {
     if (r.fm !== S.fam.pick) continue;
     const k = r.fa + "|" + r.fb;
     const cur = all.get(k);
     if (!cur || r.u < cur.u) all.set(k, r);
   }
-  for (const r of S.view) {
+  for (const r of source) {
     if (r.fm !== S.fam.pick) continue;
     const k = r.fa + "|" + r.fb;
     count.set(k, (count.get(k) || 0) + 1);
@@ -926,7 +947,7 @@ function renderFamilies() {
   const { best, count, all } = famRows();
   const host = document.getElementById("famgrid");
   const meta = S.meta.families[S.fam.pick];
-  const thin = best.size < meta.pairs;
+  const thin = best.size < meta.pairs && S.fam.scope === 1;
   document.getElementById("fam-count").innerHTML =
     t("fam_count", best.size, meta.pairs) +
     (thin ? ` <button class="preset" id="fam-widen" style="margin-left:8px">${t("widen")}</button>` : "");
@@ -1094,6 +1115,11 @@ function buildUI() {
   document.getElementById("t-tab3").textContent = t("tab_fam");
   document.getElementById("t-fam-lede").textContent = t("fam_lede");
   document.getElementById("t-fam-pick").textContent = t("fam_pick");
+  document.getElementById("t-fam-scope").textContent = t("fam_pop");
+  document.getElementById("fam-scope").innerHTML =
+    [t("fam_scope_all"), t("fam_scope_browse")]
+      .map((l, i) => `<option value="${i}">${l}</option>`).join("");
+  document.getElementById("t-fam-scopenote").textContent = t("fam_scope_note");
   document.getElementById("t-fam-unsure").textContent = t("fam_unsure");
   document.getElementById("t-fam-trained").textContent = t("fam_trained");
   document.getElementById("t-fam-greyed").textContent = t("fam_greyed");
@@ -1194,6 +1220,8 @@ for (const [id, key, cast] of [["f-gmin", "gmin", 1], ["f-gmax", "gmax", 1],
   });
 document.getElementById("fam-pick").addEventListener("change", e => {
   S.fam.pick = +e.target.value; S.fam.sel = null; renderFamilies(); });
+document.getElementById("fam-scope").addEventListener("change", e => {
+  S.fam.scope = +e.target.value; S.fam.sel = null; apply(); });
 document.getElementById("scroller").addEventListener("scroll", e => paintRows(e.target.scrollTop));
 let DRAG = null;
 function clampSpan(lo, hi, fullLo, fullHi, minSpan) {
