@@ -432,9 +432,14 @@ const tierColor = i => getComputedStyle(document.body).getPropertyValue(TIERVAR[
 
 /* ---------------------------------------------------------------------- load */
 async function load() {
+  // no-cache, not no-store: the page and its data are deployed together, and a
+  // visitor holding a stale copy of one and a fresh copy of the other would see
+  // columns silently go missing. This revalidates, so an unchanged file still
+  // comes back as a 304 and none of the 2.9 MB is re-downloaded.
+  const get = u => fetch(u, { cache: "no-cache" });
   const [meta, csv] = await Promise.all([
-    fetch("data/meta.json").then(r => r.json()),
-    fetch("data/screening.csv").then(r => r.text()),
+    get("data/meta.json").then(r => r.json()),
+    get("data/screening.csv").then(r => r.text()),
   ]);
   S.meta = meta;
   const lines = csv.trim().split("\n");
