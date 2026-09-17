@@ -141,6 +141,11 @@ canvas{display:block;width:100%;height:320px;cursor:crosshair}
 .famcell b{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
 .famcell small{font-size:9px;opacity:.8}
 .famcell.none{background:var(--surface-3);cursor:default;border-color:var(--border)}
+/* exists in the table but the filters above exclude it: still readable, visibly
+   second-class, so the shape of a family survives an honest default */
+.famcell.muted{background:var(--surface-3);border-color:var(--border);opacity:.62}
+.famcell.muted b{font-weight:400;color:var(--text-2)}
+.famcell.muted small{color:var(--text-3)}
 .famcell.unsure{border-style:dashed;border-color:currentColor}
 .famcell.sel{outline:2px solid var(--accent);outline-offset:1px}
 .famcell.trained{position:relative}
@@ -288,6 +293,9 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
       <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
         <span class="famcell trained" style="width:16px;height:16px;background:var(--ramp-lo);
           color:var(--text-2)"></span><span id="t-fam-trained"></span></span>
+      <span style="margin-left:14px;display:flex;align-items:center;gap:6px">
+        <span class="famcell muted" style="width:16px;height:16px"></span>
+        <span id="t-fam-greyed"></span></span>
     </div>
   </div>
   <p class="count" id="fam-count"></p>
@@ -335,13 +343,15 @@ const I18N = {
     fam_pick: "Prototype", fam_pop: "Population",
     fam_lo: "narrow", fam_hi: "wide", fam_unsure: "not in the reliable tier",
     fam_trained: "the model trained on this one",
+    fam_filtered: "outside the current filters",
+    fam_greyed: "greyed: excluded by the filters above",
+    fam_count: (shown, total) => `<b>${shown}</b> of ${total} element pairs in this prototype pass the filters above; the rest of the family is greyed rather than hidden`,
     fam_axis_a: "single site", fam_axis_b: "doubled site",
     fam_axis_note: "Rows and columns are structural positions, not chemical roles: the row element occupies the single site of the prototype and the column element the doubled one. For Rb₂O that puts oxygen in the row, which is what the structure says even though the chemistry reads the other way.",
     fam_opt: (label, n, pairs) => `${label} — ${n} structures, ${pairs} pairs`,
-    fam_count: (shown, total) => `<b>${shown}</b> of ${total} element pairs in this prototype pass the filters above`,
-    fam_empty: "No pairs of this prototype survive the current filters. The honest default hides most of a family, because most of it was used in training.",
+    fam_empty: "No structure in the table matches this prototype.",
     fam_multi: n => `${n} entries for this pair; the one with the smallest ensemble spread is shown`,
-    fam_prose: `<h2>How to read it</h2><p>Each cell is one element pair in the chosen prototype, coloured by predicted band gap. A dashed border means the tool does not place that prediction in its reliable tier. A dot in the corner means the model trained on that structure, so the number is reproduced from memory rather than predicted — its error is about 0.08 eV instead of the honest 0.26.</p><p>The filters above govern this grid as well, which is why the honest default leaves most of a family empty: most of it was used in training. <b>Show everything</b> fills the grid in, at the cost that the calibrated intervals no longer strictly hold — use the grid to compare within a family, and the browser tab for absolute numbers.</p><p>Where a pair has several entries, the one with the smallest ensemble spread is shown. Nothing is generated: every cell is a structure somebody computed, which is why a family can have holes at all.</p>`,
+    fam_prose: `<h2>How to read it</h2><p>Each cell is one element pair in the chosen prototype, coloured by predicted band gap. A dashed border means the tool does not place that prediction in its reliable tier. A dot in the corner means the model trained on that structure, so the number is reproduced from memory rather than predicted — its error is about 0.08 eV instead of the honest 0.26.</p><p>The filters above govern this grid too, but they grey cells out instead of removing them, because the shape of a family is a fact about the data and not about the current filter. The default population is the one the intervals were calibrated on — stable, held out from training — and for most prototypes that is a small minority of the family, so most of the grid starts grey. <b>Show everything</b> promotes all of it, at the cost that the calibrated intervals no longer strictly hold. Use the grid to compare within a family, and the browser tab for absolute numbers.</p><p>Where a pair has several entries, the one with the smallest ensemble spread is shown. Nothing is generated: every cell is a structure somebody computed, which is why a family still has holes.</p>`,
     f_pop: "Population", f_gap: "Band gap, eV", f_preset: "Quick range",
     f_edge: "Band edges vs vacuum, eV",
     f_tier: "Trust", f_type: "Gap type", f_has: "Must contain",
@@ -834,10 +844,22 @@ function renderDetail(hostId = "detail", row = undefined) {
 
 /* families ---------------------------------------------------------------- */
 function famRows() {
-  // built from the same filtered set as every other view, so one filter bar governs
-  // all three tabs and a number never means two different things on two tabs
+  // Two passes over the same prototype. `best` is the filtered set, so one filter bar
+  // still governs all three tabs. `all` ignores the filters and exists only to draw
+  // the grid: the honest default leaves 6 of 97 pairs for 1H-MX2 and none at all for
+  // the honeycombs, and a grid built from the survivors alone collapsed to three
+  // cells and read as a broken page. The family's shape is a fact about the data, not
+  // about the current filter, so it is always drawn; what the filter excludes is
+  // greyed out rather than deleted.
   const best = new Map();                       // "A|B" -> row with the smallest spread
   const count = new Map();
+  const all = new Map();
+  for (const r of S.rows) {
+    if (r.fm !== S.fam.pick) continue;
+    const k = r.fa + "|" + r.fb;
+    const cur = all.get(k);
+    if (!cur || r.u < cur.u) all.set(k, r);
+  }
   for (const r of S.view) {
     if (r.fm !== S.fam.pick) continue;
     const k = r.fa + "|" + r.fb;
@@ -845,19 +867,18 @@ function famRows() {
     const cur = best.get(k);
     if (!cur || r.u < cur.u) best.set(k, r);
   }
-  return { best, count };
+  return { best, count, all };
 }
 function renderFamilies() {
-  const { best, count } = famRows();
+  const { best, count, all } = famRows();
   const host = document.getElementById("famgrid");
   const meta = S.meta.families[S.fam.pick];
   const thin = best.size < meta.pairs;
   document.getElementById("fam-count").innerHTML =
     t("fam_count", best.size, meta.pairs) +
     (thin ? ` <button class="preset" id="fam-widen" style="margin-left:8px">${t("widen")}</button>` : "");
-  if (!best.size) {
-    host.innerHTML = `<div class="empty">${t("fam_empty")}
-      <br><br><button class="preset" id="fam-widen">${t("widen")}</button></div>`;
+  if (!all.size) {
+    host.innerHTML = `<div class="empty">${t("fam_empty")}</div>`;
     renderDetail("fam-detail", null);
     return;
   }
@@ -865,9 +886,12 @@ function renderFamilies() {
     const p = S.meta.ptable[e];
     return p ? p[0] * 100 + p[1] : 9999;        // порядок таблицы Менделеева
   };
-  const As = [...new Set([...best.values()].map(r => r.fa))].sort((x, y) => order(x) - order(y));
-  const Bs = [...new Set([...best.values()].map(r => r.fb))].sort((x, y) => order(x) - order(y));
-  const gaps = [...best.values()].map(r => r.g);
+  // axes from every pair the prototype has, not from the survivors of the filter
+  const As = [...new Set([...all.values()].map(r => r.fa))].sort((x, y) => order(x) - order(y));
+  const Bs = [...new Set([...all.values()].map(r => r.fb))].sort((x, y) => order(x) - order(y));
+  // the colour ramp spans the whole family too, so it does not collapse when the
+  // filter leaves one cell
+  const gaps = [...all.values()].map(r => r.g);
   const lo = Math.min(...gaps), hi = Math.max(...gaps);
   const cs = getComputedStyle(document.body);
   const c0 = cs.getPropertyValue("--ramp-lo").trim(), c1 = cs.getPropertyValue("--ramp-hi").trim();
@@ -879,18 +903,22 @@ function renderFamilies() {
   for (const a of As) {
     html += `<tr><th class="rowh">${a}</th>`;
     for (const b of Bs) {
-      const r = best.get(a + "|" + b);
+      const key = a + "|" + b;
+      const r = best.get(key) || all.get(key);
       if (!r) { html += `<td><div class="famcell none"></div></td>`; continue; }
+      const passes = best.has(key);
       const u = hi > lo ? (r.g - lo) / (hi - lo) : .5;
-      const bg = mix(c0, c1, u);
-      const fg = (dark ? u < .45 : u > .5) ? "#ffffff" : "#0b0b0b";
-      const n = count.get(a + "|" + b);
-      const cls = "famcell" + (r.w !== 0 ? " unsure" : "") +
+      const bg = passes ? mix(c0, c1, u) : "";
+      const fg = passes ? ((dark ? u < .45 : u > .5) ? "#ffffff" : "#0b0b0b") : "";
+      const n = count.get(key);
+      const cls = "famcell" + (passes ? "" : " muted") + (r.w !== 0 ? " unsure" : "") +
                   (r.r === 1 ? " trained" : "") + (S.fam.sel === r ? " sel" : "");
       const tip = `${r.f} — ${fmt(r.g, 2)} eV, ${t("tier")[r.w]}` +
                   (r.r === 1 ? " · " + t("badge_train") : "") +
-                  (n > 1 ? " · " + t("fam_multi", n) : "");
-      html += `<td><div class="${cls}" style="background:${bg};color:${fg}"
+                  (n > 1 ? " · " + t("fam_multi", n) : "") +
+                  (passes ? "" : " · " + t("fam_filtered"));
+      const style = passes ? `background:${bg};color:${fg}` : "";
+      html += `<td><div class="${cls}" style="${style}"
         data-fa="${a}" data-fb="${b}" title="${tip}">
         <b>${fmt(r.g, 2)}</b><small>${r.f}</small></div></td>`;
     }
@@ -1014,6 +1042,7 @@ function buildUI() {
   document.getElementById("t-fam-pick").textContent = t("fam_pick");
   document.getElementById("t-fam-unsure").textContent = t("fam_unsure");
   document.getElementById("t-fam-trained").textContent = t("fam_trained");
+  document.getElementById("t-fam-greyed").textContent = t("fam_greyed");
   document.getElementById("fam-prose").innerHTML = t("fam_prose");
   document.getElementById("fam-axisnote").textContent = t("fam_axis_note");
   document.getElementById("fam-pick").innerHTML = S.meta.families.map((f, i) =>
@@ -1068,8 +1097,11 @@ document.addEventListener("click", e => {
   }
   const cell = e.target.closest(".famcell[data-fa]");
   if (cell) {
-    const { best } = famRows();
-    S.fam.sel = best.get(cell.dataset.fa + "|" + cell.dataset.fb) || null;
+    const { best, all } = famRows();
+    const k = cell.dataset.fa + "|" + cell.dataset.fb;
+    // a greyed cell is real data the filter excluded, and its card states every
+    // caveat, so it opens like any other
+    S.fam.sel = best.get(k) || all.get(k) || null;
     renderFamilies(); return;
   }
   const row = e.target.closest(".row[data-k]");
