@@ -42,7 +42,10 @@ def test_mos2_reference_prediction(P):
     assert abs(r.unc - 0.021) < 0.01
     assert r.verdict == "reliable"
     assert r.gap_type == "direct"
-    assert 1.7 < r.exp_gap_est < 2.1          # experiment: 1.88 eV
+    # experiment says 1.88 eV. The correction was refitted from five measured
+    # monolayers onto 184 C2DB materials with G0W0 + BSE, which moved this from 1.90
+    # to 2.11: the old value was memorised, since MoS2 was one of the five.
+    assert 1.8 < r.exp_gap_est < 2.3
     assert r.interval90 is not None and 0.05 < r.interval90 < 0.25
     assert r.latent_distance is not None and r.latent_distance < P.cal["latent_q75"]
 
@@ -213,3 +216,34 @@ def test_work_function_thresholds_are_its_own(P):
     assert P.wf.ref_emb is not None, "latent distance needs the reference embeddings"
     assert P.wf.ref_emb.shape[0] != (0 if P.ref_emb is None else P.ref_emb.shape[0]), \
         "the two models were trained on different sets; the embedding counts differ"
+
+
+def test_optical_correction_never_goes_backwards(P):
+    """The corrected optical gap must stay above the raw PBE gap it comes from.
+
+    PBE underestimates every measurement, so an optical estimate BELOW the raw PBE
+    number is wrong by construction. The five-point fit this replaces had a negative
+    intercept and broke that for a third of the screening table, and returned zero or
+    less below 0.32 eV. Guarding the property, not the coefficients, so a future
+    refit cannot quietly reintroduce it.
+    """
+    from nanomat.predict import correct
+    for gap in (0.1, 0.2, 0.5, 1.0, 2.0, 4.0, 7.0, 10.0):
+        optical = correct(gap, "optical", P.corr)
+        assert optical > gap, f"optical {optical:.3f} below the raw gap {gap}"
+        quasi = correct(gap, "quasiparticle", P.corr)
+        assert quasi > gap, f"quasiparticle {quasi:.3f} below the raw gap {gap}"
+
+
+def test_corrections_carry_their_own_provenance(P):
+    """Each correction must say what it was fitted against and how well it held up.
+
+    Two corrections fitted against different references cannot be compared, and the
+    project has already been burnt once by treating their difference as the exciton
+    binding energy. The fields are what stops that being invisible.
+    """
+    qp, opt = P.corr["quasiparticle"], P.corr["optical"]
+    assert qp["reference"] != opt["reference"], "different targets, or the pair is pointless"
+    assert qp["n"] >= 32 and opt["n"] >= 100
+    assert 0 < opt["mae_cv"] < 0.5, "a cross-validated error, not an in-sample one"
+    assert len(opt["coeffs"]) >= 2

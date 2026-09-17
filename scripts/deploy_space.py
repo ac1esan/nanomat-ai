@@ -75,8 +75,9 @@ chemistry none of them saw produces confident agreement — phosphorene came out
 
 Two corrected values are reported alongside the raw PBE number, because they are
 different physical quantities: the **quasiparticle gap** that photoemission and
-transport see, and the **optical gap** that absorption sees. They differ by the
-exciton binding energy, about 0.55 eV on the TMDs.
+transport see, and the **optical gap** that absorption sees. The optical one is
+fitted against G₀W₀ minus the BSE exciton binding energy over 184 materials from
+C2DB, and checked against five measured monolayers it never saw.
 
 - **[Source, method and model card]({repo})**
 - **[The same page on GitHub Pages]({browser})**

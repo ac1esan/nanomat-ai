@@ -117,8 +117,9 @@ def format_markdown(r, cal: dict | None = None) -> str:
                      f"<br><sub>fitted against HSE06 on {qn} structures, leave-one-out error 0.19 eV</sub> |")
     if not ood and r.exp_gap_est is not None:
         lines.append(f"| **Optical gap** (absorption onset) | **≈ {r.exp_gap_est:.2f} eV** "
-                     "<br><sub>only five reference monolayers behind this fit: leave-one-out "
-                     "error 0.71 eV, so treat it as an indication</sub> |")
+                     "<br><sub>fitted against G0W0 minus the BSE exciton binding energy on 184 "
+                     "materials from C2DB: ten-fold error 0.38 eV, and 0.30 eV against five "
+                     "measured monolayers it never saw</sub> |")
     if r.work_function is not None:
         wfn = (cal.get("wf", {}) or {}).get("test_mae")
         wfv = r.work_function_verdict or ""
@@ -162,10 +163,13 @@ def format_markdown(r, cal: dict | None = None) -> str:
     if r.warnings:
         lines += ["", "⚠️ " + "  \n⚠️ ".join(r.warnings)]
     if not ood and r.gap_quasiparticle is not None and r.exp_gap_est is not None:
-        lines += ["", f"<sub>The two differ by {r.gap_quasiparticle - r.exp_gap_est:.2f} eV, which is "
-                  "the exciton binding energy: the optical onset sits below the quasiparticle gap by "
-                  "exactly that much. Which one you want depends on the measurement — photoemission "
-                  "and transport see the first, absorption sees the second.</sub>"]
+        lines += ["", f"<sub>The two differ by {r.gap_quasiparticle - r.exp_gap_est:.2f} eV. That gap "
+                  "is <b>not</b> the exciton binding energy — the two are fitted against different "
+                  "references, HSE06 on one side and G0W0 minus an exciton on the other, and those "
+                  "differ by about 0.4 eV themselves. Which number you want depends on the "
+                  "measurement: photoemission and transport see the first, absorption the second. "
+                  "For the binding energy itself, BSE gives a median of 0.29 of the gap across 184 "
+                  "two-dimensional materials.</sub>"]
     mae = cal.get("test_mae")
     lines += [
         "",

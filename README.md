@@ -233,21 +233,55 @@ carry a reference and were never trained on, that verdict separates MAE 0.130 /
 output into something measurable. There are **two** targets, and conflating them is
 the trap:
 
-| | Fitted against | n | Leave-one-out error |
+| | Fitted against | n | Validated error |
 |---|---|---|---|
-| **Quasiparticle gap** — photoemission, transport | HSE06 from JARVIS dft_2d | 32 | **0.19 eV** |
-| **Optical gap** — absorption onset | measured monolayer gaps | 5 | 0.71 eV |
+| **Quasiparticle gap** — photoemission, transport | HSE06 from JARVIS dft_2d | 32 | **0.19 eV** leave-one-out |
+| **Optical gap** — absorption onset | G₀W₀ − BSE exciton, from C2DB | 184 | **0.38 eV** ten-fold |
 
 The quasiparticle fit is solid: the raw prediction correlates with HSE at r = 0.988,
-and leave-one-out barely differs from in-sample (0.19 vs 0.18 eV). The optical fit is
-not: its in-sample 0.17 eV collapses to 0.71 eV under leave-one-out, because five
-points with h-BN at 6 eV is not a fit, it is an interpolation between two clusters.
-Both are reported, labelled, and the optical one is marked as an indication.
+and leave-one-out barely differs from in-sample (0.19 vs 0.18 eV).
 
-The difference between them averages **0.55 eV on the four TMDs**, and that is the
-physics working: it is the exciton binding energy, which is why absorption and
-photoemission disagree on the same monolayer. Reporting only one number would have
-hidden that.
+**The optical fit was the weak one, and was rebuilt.** It used to rest on the five
+measured monolayers in `examples/`; five points with h-BN alone at 6 eV is not a fit
+but an interpolation between two clusters, and its leave-one-out error was 0.71 eV
+against an in-sample 0.17. Worse, the line it produced had a negative intercept,
+which put **a third of the screening table's optical gaps below their own raw PBE
+gap** and 1 870 of them at or below zero — backwards, since PBE underestimates every
+measurement.
+
+C2DB computes both halves of an optical gap from first principles for part of its
+catalogue: G₀W₀ for the quasiparticle gap, the Bethe–Salpeter equation for the
+exciton. That is 184 usable non-magnetic materials instead of 5.
+[`scripts/fetch_c2db_optical.py`](scripts/fetch_c2db_optical.py) pulls them and
+caches the result in the repository. The new fit is a quadratic — chosen because it
+beat a straight line on 12 of 12 cross-validation seeds, a line being biased high
+through the middle of the range — and it is monotone and above the raw gap
+everywhere, so the old defect cannot recur.
+
+The honest test is the five measured monolayers, which the new fit never sees:
+
+| | pred | new fit | old 5-point fit | measured |
+|---|---|---|---|---|
+| MoS₂ | 1.69 | 2.11 | 1.90 | 1.88 |
+| MoSe₂ | 1.53 | 1.96 | 1.69 | 1.55 |
+| WS₂ | 1.94 | 2.36 | 2.25 | 2.00 |
+| WSe₂ | 1.26 | 1.70 | 1.30 | 1.65 |
+| h-BN | 4.59 | 5.56 | 5.93 | 6.00 |
+| | | **0.30 eV** | 0.17 eV in-sample, **0.71 eV** leave-one-out | |
+
+The old fit looks better in that table only because those five rows are its training
+data. Against a monolayer it has not seen it errs by 0.71 eV; the new one by 0.30.
+
+**A retraction.** This repository used to claim that the difference between the two
+corrections was the exciton binding energy, 0.55 eV on the TMDs, matching the
+published value. That agreement was circular — both fits had been trained on those
+same four materials. With the optical fit moved onto 184 materials the difference
+collapses to about 0.3 eV at a TMD while BSE says 0.5, which is how the inference was
+caught. The two corrections are referenced to *different* quantities, HSE06 against
+G₀W₀ − exciton, and HSE06 itself sits about 0.4 eV below G₀W₀ at a 1.7 eV gap, so
+their difference mixes the exciton with that discrepancy. The binding energy is now
+reported from BSE directly: a median of **0.29 of the gap** with a spread of 0.08
+across the 184, which is where the published E_g/4 scaling for 2D materials sits.
 
 Both corrections are fitted only on points the tool itself calls usable — a
 prediction flagged as out-of-domain must not steer the calibration every other
@@ -402,9 +436,14 @@ figures/                  README figures and the scripts that regenerate them
    effective masses in JARVIS dft_2d are unusable (WS2 comes out at 3 000 000).
 3. Bagging the ensemble over data subsets, so the spread itself reflects sparse
    chemistry instead of relying on the latent-distance check.
-4. Replace the five-point PBE correction with a PBE → HSE/GW model fitted on C2DB.
+4. Predict the exciton binding energy rather than absorbing it into a correction.
+   BSE puts it at 0.29 of the gap with a spread of 0.08, and that spread is the
+   floor on the optical gap: no function of the gap alone can do better.
 
 ## License
 
 MIT. Training data: Alexandria (CC-BY 4.0), C2DB and JARVIS-DFT, accessed through
-[JARVIS-Tools](https://github.com/usnistgov/jarvis).
+[JARVIS-Tools](https://github.com/usnistgov/jarvis). The optical correction is
+fitted against G₀W₀ and BSE results from [C2DB](https://c2db.fysik.dtu.dk/),
+CC-BY-SA 4.0 — cite Haastrup et al., *2D Materials* **5**, 042002 (2018) and
+Gjerding et al., *2D Materials* **8**, 044002 (2021).

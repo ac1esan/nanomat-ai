@@ -28,14 +28,19 @@ from .model import CGCNN, CGCNNcls
 # target DIFFERENT quantities - see scripts/fit_gap_corrections.py:
 #   quasiparticle: what photoemission or a transport calculation wants. Fitted against
 #     HSE06 on 32 structures; leave-one-out MAE 0.19 eV, so it is properly validated.
-#   optical: the absorption onset, which is the quasiparticle gap minus the exciton
-#     binding energy. Fitted on only five reference monolayers; in-sample MAE is 0.17 eV
-#     but leave-one-out is 0.71 eV, so this one is a rough indication, not a measurement.
-# The difference between them is the exciton binding energy, ~0.55 eV on the TMDs,
-# which is the published order for a monolayer.
+#     HSE06 is itself below G0W0 by roughly 0.4 eV at a 1.7 eV gap, so read this as an
+#     HSE-level estimate rather than as the last word on a quasiparticle gap.
+#   optical: the absorption onset. Fitted against C2DB's G0W0 gap minus its BSE exciton
+#     binding energy on 184 non-magnetic 2D materials; 10-fold MAE 0.38 eV.
+# Their DIFFERENCE IS NOT THE EXCITON BINDING ENERGY. They are fitted against different
+# references - HSE06 on one side, G0W0 minus an exciton on the other - so the gap
+# between them mixes the exciton with the HSE-to-GW discrepancy. An earlier version of
+# this file claimed otherwise; that claim came from fitting both on the same four TMDs.
 DEFAULT_CORRECTIONS = {
-    "quasiparticle": {"a": 1.179, "b": 0.450, "n": 32, "mae_loo": 0.193},
-    "optical": {"a": 1.390, "b": -0.442, "n": 5, "mae_loo": 0.705},
+    "quasiparticle": {"coeffs": [1.179, 0.450], "a": 1.179, "b": 0.450,
+                      "n": 32, "mae_loo": 0.193, "reference": "HSE06"},
+    "optical": {"coeffs": [0.0745, 0.7234, 0.6757],
+                "n": 184, "mae_cv": 0.383, "reference": "G0W0 - BSE exciton"},
 }
 A_CORR, B_CORR = 1.39, -0.44  # kept for backwards compatibility: the optical fit
 METAL_GAP = 0.1  # eV, below this we call it metal / semimetal
@@ -71,8 +76,7 @@ def default_weights_dir() -> str:
 
 def corrected_gap(gap: float, corrections: dict | None = None) -> float:
     """PBE -> optical gap. Kept for backwards compatibility; prefer `correct()`."""
-    c = (corrections or DEFAULT_CORRECTIONS)["optical"]
-    return c["a"] * gap + c["b"]
+    return correct(gap, "optical", corrections)
 
 
 def band_edges(work_function: float, gap: float) -> tuple[float, float]:
@@ -93,9 +97,19 @@ def band_edges(work_function: float, gap: float) -> tuple[float, float]:
 
 
 def correct(gap: float, kind: str, corrections: dict | None = None) -> float:
-    """Apply one of the two corrections. `kind` is "quasiparticle" or "optical"."""
+    """Apply one of the two corrections. `kind` is "quasiparticle" or "optical".
+
+    Stored as polynomial coefficients, highest power first, because the optical fit
+    needed a quadratic: over 184 materials a straight line is biased high in the
+    middle of the range and low at the top, and the curve beats it on every
+    cross-validation seed. `a`/`b` are still read for older checkpoints.
+    """
     c = (corrections or DEFAULT_CORRECTIONS)[kind]
-    return c["a"] * gap + c["b"]
+    coeffs = c.get("coeffs") or [c["a"], c["b"]]
+    out = 0.0
+    for k in coeffs:
+        out = out * gap + k
+    return out
 
 
 def verdict(unc: float, cal: dict | None = None, latent: float | None = None,

@@ -2,8 +2,13 @@
 
 Why: the model is trained on PBE gaps (Alexandria). PBE systematically
 UNDERESTIMATES the true electronic gap. We run reference monolayers with measured
-gaps through the tool and quantify the PBE -> experiment shift, then fit a rough
-linear correction that screen_bandgap.py applies.
+gaps through the tool and quantify the PBE -> experiment shift.
+
+The line fitted at the bottom of this script is DESCRIPTIVE - it is fitted on these
+same seven points, so its error is in-sample and means little. The correction the
+tool actually applies no longer comes from here: it is fitted on 184 C2DB materials
+with G0W0 and BSE results (scripts/fit_gap_corrections.py), and these monolayers are
+its held-out check instead.
 
 Physics caveat (stated honestly): measured monolayer gaps are usually OPTICAL
 (exciton binding of ~0.3-0.7 eV in 2D), while PBE gives the Kohn-Sham gap. PBE

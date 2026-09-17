@@ -17,7 +17,7 @@ feature = distance, atomic number embedded at the nodes.
 | **Test performance** | **MAE 0.261 eV** (95% bootstrap CI 0.242–0.283), RMSE 0.454, R² 0.889. Members: 0.281 / 0.305 / 0.274 / 0.277 / 0.319 |
 | **Control** | Identical code and data on a random split: MAE 0.252. The honest split costs ≈ 0.01 eV |
 | **Composition baseline** | **0.430 eV** on the identical test set (`scripts/composition_baseline.py`), so structure wins by 39%. The 0.360 eV quoted previously came from five-fold cross-validation, a different protocol that leaks near-duplicate compositions; comparing it against a composition-disjoint number understated this model's advantage |
-| **Checksum** | SHA-256 `b2a4644a81a65d273346c555fb0cb1c425687381ae11ddb871986ff0ca67c075` |
+| **Checksum** | SHA-256 `9241e67ff12c3b8a492f5fd2fedf5fc97f73ba7b9d1596caac268e67e9dc99b1` |
 
 The checkpoint also carries its own `calibration` block, both gap corrections and
 10 733 reference embeddings, so it can judge and correct its own output without
@@ -152,18 +152,30 @@ under `out-of-domain`.
 
 - **PBE target, and two corrections rather than one.** The model predicts the PBE
   gap, which nothing measures. `scripts/fit_gap_corrections.py` fits two separate
-  linear corrections against the model's own output, and both ship in the checkpoint:
+  corrections against the model's own output, and both ship in the checkpoint:
 
-  | Target | Fitted against | n | In-sample MAE | Leave-one-out MAE |
+  | Target | Fitted against | n | In-sample MAE | Validated MAE |
   |---|---|---|---|---|
-  | Quasiparticle (`≈ 1.18·gap + 0.45`) | HSE06, JARVIS dft_2d | 32 | 0.18 eV | **0.19 eV** |
-  | Optical (`≈ 1.39·gap − 0.44`) | measured monolayer gaps | 5 | 0.17 eV | 0.71 eV |
+  | Quasiparticle (`≈ 1.18·gap + 0.45`) | HSE06, JARVIS dft_2d | 32 | 0.18 eV | **0.19 eV** leave-one-out |
+  | Optical (`≈ 0.074·gap² + 0.723·gap + 0.676`) | G₀W₀ − BSE exciton, C2DB | 184 | 0.38 eV | **0.38 eV** ten-fold |
 
-  The quasiparticle fit generalises (raw prediction correlates with HSE at r = 0.988);
-  the optical one does not, and its widely quoted in-sample 0.17 eV is not a
-  performance figure. Their difference is 0.55 eV on the TMDs, which is the exciton
-  binding energy — the two describe different measurements, not competing estimates
-  of one.
+  The quasiparticle fit generalises (raw prediction correlates with HSE at r = 0.988).
+  The optical one used to be fitted on five measured monolayers, where an in-sample
+  0.17 eV hid a leave-one-out 0.71 eV and the resulting negative intercept pushed a
+  third of the screening table's optical gaps below their own raw PBE gap. It is now
+  fitted on C2DB's many-body data — G₀W₀ for the quasiparticle gap, BSE for the
+  exciton — over 184 non-magnetic materials. Against the five measured monolayers,
+  which it never sees, it errs by **0.30 eV** where the old fit errs by 0.71 eV
+  out-of-sample. The quadratic was chosen on cross-validation, where it beat a line
+  on 12 of 12 seeds; it is monotone and above the raw gap for every positive gap.
+
+  **Retracted:** earlier versions said the difference between the two corrections was
+  the exciton binding energy, 0.55 eV on the TMDs. Both fits had been trained on
+  those same four materials, so the agreement was circular. The two are referenced to
+  different quantities — HSE06 against G₀W₀ − exciton, and HSE06 runs ~0.4 eV below
+  G₀W₀ at a 1.7 eV gap — so their difference is not a physical energy. The binding
+  energy is reported from BSE instead: median **0.29 of the gap**, spread 0.08, over
+  the same 184 materials, which is where the published E_g/4 scaling for 2D sits.
 - **Data-density bias.** Error is lowest on transition-metal and heavy-element
   chemistries where Alexandria is dense, highest on light main-group compounds. It
   does not grow with the size of the gap.
