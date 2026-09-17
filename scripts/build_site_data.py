@@ -97,6 +97,12 @@ def main():
         "kw": df["wf_verdict"].map(tier_code, na_action="ignore"),
         "kr": df["in_wf_training_set"].map({v: k for k, v in enumerate(ROLES)}).fillna(0).astype(int),
         "kd": df["dft_wf_eV"].round(3),
+        # quasiparticle gap, exciton binding energy and the absorption onset. Not
+        # derivable in the browser any more: they come from linear heads on the
+        # ensemble's latent space, and the page has no embeddings.
+        "q": df["gap_quasiparticle_eV"].round(3),
+        "x": df["exciton_binding_eV"].round(3),
+        "o": df["exp_gap_est_eV"].round(3),
     })
     csv_path = os.path.join(OUT_DIR, "screening.csv")
     out.to_csv(csv_path, index=False)
@@ -138,6 +144,14 @@ def main():
                   "sparse": 1 if len(v) < SPARSE else 0}
              for el, v in sorted(per_el.items()) if len(v) >= MIN_N}
     print(f"trust map: {len(trust)} elements over {len(unseen)} unseen Alexandria rows")
+
+    # provenance of the latent heads, so the page can quote their measured error
+    heads = ck.get("optical_heads")
+    head_meta = None
+    if isinstance(heads, dict):
+        head_meta = {k: heads[k] for k in ("n", "n_compositions", "features", "members",
+                                           "folds", "shuffles", "mae_cv", "stress_test",
+                                           "source") if k in heads}
 
     # gap corrections travel in the checkpoint too (scripts/fit_gap_corrections.py)
     corrections = {k: dict(v) for k, v in DEFAULT_CORRECTIONS.items()}
@@ -187,6 +201,7 @@ def main():
         },
         "calibration": cal,
         "wf_calibration": wf_cal,
+        "optical_heads": head_meta,
         "corrections": corrections,
         "metal_gap_eV": METAL_GAP,
         "trust_map": trust,

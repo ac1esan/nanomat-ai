@@ -73,11 +73,11 @@ last one exists because every ensemble member shares one training set, so a
 chemistry none of them saw produces confident agreement — phosphorene came out at
 0.82 eV against an experimental 2.0 with a spread of 0.035 eV.
 
-Two corrected values are reported alongside the raw PBE number, because they are
-different physical quantities: the **quasiparticle gap** that photoemission and
-transport see, and the **optical gap** that absorption sees. The optical one is
-fitted against G₀W₀ minus the BSE exciton binding energy over 184 materials from
-C2DB, and checked against five measured monolayers it never saw.
+Three many-body numbers are reported alongside the raw PBE gap: the **quasiparticle
+gap** that photoemission and transport see, the **exciton binding energy**, and the
+**optical gap** that absorption sees, which is the first minus the second. They come
+from linear heads on the ensemble's own latent space, fitted against G₀W₀ and
+Bethe–Salpeter results from C2DB and validated on composition-disjoint folds.
 
 - **[Source, method and model card]({repo})**
 - **[The same page on GitHub Pages]({browser})**

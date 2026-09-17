@@ -235,13 +235,46 @@ the trap:
 
 | | Fitted against | n | Validated error |
 |---|---|---|---|
-| **Quasiparticle gap** — photoemission, transport | HSE06 from JARVIS dft_2d | 32 | **0.19 eV** leave-one-out |
-| **Optical gap** — absorption onset | G₀W₀ − BSE exciton, from C2DB | 184 | **0.38 eV** ten-fold |
+| **Quasiparticle gap** — photoemission, transport | G₀W₀ from C2DB | 184 | **0.25 eV** |
+| **Exciton binding energy** | Bethe–Salpeter from C2DB | 184 | **0.14 eV** |
+| **Optical gap** = direct G₀W₀ − exciton | the two above | 184 | **0.22 eV** |
 
-The quasiparticle fit is solid: the raw prediction correlates with HSE at r = 0.988,
-and leave-one-out barely differs from in-sample (0.19 vs 0.18 eV).
+All three are cross-validated on **composition-disjoint** folds, the same protocol
+as the gap model, because C2DB holds several entries per composition.
 
-**The optical fit was the weak one, and was rebuilt.** It used to rest on the five
+**These are not corrections applied to the band gap.** They are linear heads on the
+ensemble's own latent space — the 128-dimensional embedding each member already
+computes on the way to a gap, five of them concatenated. Training a graph network on
+184 materials would fail; this project measured that at 696. Fitting a ridge head on
+an encoder that saw 13 349 structures does not.
+
+That change came from measuring where the error actually was. As a function of the
+band gap alone, the optical correction sat at 0.38 eV — and feeding it C2DB's *own*
+PBE gap instead of the model's prediction only moved it to 0.31. So most of what was
+left was not the network being wrong: **the exciton binding energy is not a function
+of the band gap.** It depends on how the layer screens, which is a fact about the
+structure, and the structure is what the encoder already saw.
+
+| | gap alone | latent head |
+|---|---|---|
+| Quasiparticle gap (G₀W₀) | 0.42 | **0.25** |
+| Exciton binding (BSE) | 0.23 | **0.14** |
+| Optical gap | 0.38 | **0.22** |
+
+The head wins in every band of predicted gap, from 0–1 eV to above 5. It also makes
+the three numbers **consistent by construction** — optical is the direct
+quasiparticle gap minus the binding energy — which is what retires the retraction
+below.
+
+**Where it loses.** Hold out an entire family at the sparse top of the range and
+ridge cannot extrapolate where a polynomial can: with every B–N entry removed, h-BN
+comes out at 4.82 eV against a 5.74 target, where the polynomial gives 5.56. There
+are four materials above 5 eV in the fit. Out of 1 104 held-out predictions that is
+the one place the head is worse, and it is reported rather than hidden.
+
+### How the optical target was built
+
+**The optical fit used to be the weak one.** It used to rest on the five
 measured monolayers in `examples/`; five points with h-BN alone at 6 eV is not a fit
 but an interpolation between two clusters, and its leave-one-out error was 0.71 eV
 against an in-sample 0.17. Worse, the line it produced had a negative intercept,
@@ -253,14 +286,17 @@ C2DB computes both halves of an optical gap from first principles for part of it
 catalogue: G₀W₀ for the quasiparticle gap, the Bethe–Salpeter equation for the
 exciton. That is 184 usable non-magnetic materials instead of 5.
 [`scripts/fetch_c2db_optical.py`](scripts/fetch_c2db_optical.py) pulls them and
-caches the result in the repository. The new fit is a quadratic — chosen because it
-beat a straight line on 12 of 12 cross-validation seeds, a line being biased high
-through the middle of the range — and it is monotone and above the raw gap
+caches the result in the repository. That target is what the heads above are fitted
+to; a quadratic in the gap alone is kept in the checkpoint as the fallback for a
+prediction made without the heads, and it is monotone and above the raw gap
 everywhere, so the old defect cannot recur.
 
-The honest test is the five measured monolayers, which the new fit never sees:
+Those first-principles numbers earn the job by reproducing the five *measured*
+monolayers: G₀W₀ − BSE gives 2.02 eV for WS₂ against a measured 2.00, and 1.65 for
+WSe₂ against 1.65. The measured five then serve as a held-out check rather than as
+the fit:
 
-| | pred | new fit | old 5-point fit | measured |
+| | pred | quadratic | old 5-point fit | measured |
 |---|---|---|---|---|
 | MoS₂ | 1.69 | 2.11 | 1.90 | 1.88 |
 | MoSe₂ | 1.53 | 1.96 | 1.69 | 1.55 |
@@ -270,18 +306,23 @@ The honest test is the five measured monolayers, which the new fit never sees:
 | | | **0.30 eV** | 0.17 eV in-sample, **0.71 eV** leave-one-out | |
 
 The old fit looks better in that table only because those five rows are its training
-data. Against a monolayer it has not seen it errs by 0.71 eV; the new one by 0.30.
+data. Against a monolayer it has not seen it errs by 0.71 eV.
 
-**A retraction.** This repository used to claim that the difference between the two
+**A retraction, and how the heads settle it.** This repository used to claim that the difference between the two
 corrections was the exciton binding energy, 0.55 eV on the TMDs, matching the
 published value. That agreement was circular — both fits had been trained on those
 same four materials. With the optical fit moved onto 184 materials the difference
 collapses to about 0.3 eV at a TMD while BSE says 0.5, which is how the inference was
-caught. The two corrections are referenced to *different* quantities, HSE06 against
-G₀W₀ − exciton, and HSE06 itself sits about 0.4 eV below G₀W₀ at a 1.7 eV gap, so
-their difference mixes the exciton with that discrepancy. The binding energy is now
-reported from BSE directly: a median of **0.29 of the gap** with a spread of 0.08
-across the 184, which is where the published E_g/4 scaling for 2D materials sits.
+caught. Two corrections referenced to *different* quantities cannot have a physical
+difference, and HSE06 itself sits about 0.4 eV below G₀W₀ at a 1.7 eV gap.
+
+The latent heads settle it properly, because the binding energy is now predicted
+rather than inferred. On the four TMDs the head returns **0.56 / 0.53 / 0.54 / 0.52
+eV** against BSE's 0.55 / 0.50 / 0.52 / 0.48 — the published few-tenths-of-an-eV
+figure for a monolayer, arrived at from the structure rather than from a coincidence
+of two fits. Across the 184 the binding energy is a median of 0.29 of the gap with a
+spread of 0.08, which is where the published E_g/4 scaling for 2D materials sits —
+and that spread is exactly why no function of the gap alone could have found it.
 
 Both corrections are fitted only on points the tool itself calls usable — a
 prediction flagged as out-of-domain must not steer the calibration every other

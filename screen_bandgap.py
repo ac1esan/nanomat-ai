@@ -111,15 +111,26 @@ def format_markdown(r, cal: dict | None = None) -> str:
         "|---|---|",
         f"| **Band gap (PBE)** | {headline} &nbsp; ({kind}) |",
     ]
+    H = cal.get("heads") or {}
+    mae = H.get("mae_cv", {})
     if not ood and r.gap_quasiparticle is not None:
-        qn = (cal.get("corr", {}).get("quasiparticle", {}) or {}).get("n", 32)
-        lines.append(f"| **Quasiparticle gap** (photoemission, transport) | **≈ {r.gap_quasiparticle:.2f} eV** "
-                     f"<br><sub>fitted against HSE06 on {qn} structures, leave-one-out error 0.19 eV</sub> |")
+        src = (f"a linear head on the ensemble's own latent space, fitted against G0W0 on "
+               f"{H['n']} C2DB materials, composition-disjoint error {mae['gap_gw']:.2f} eV"
+               if H else "fitted against HSE06 on 32 structures, leave-one-out error 0.19 eV")
+        lines.append(f"| **Quasiparticle gap** (photoemission, transport) | "
+                     f"**≈ {r.gap_quasiparticle:.2f} eV** <br><sub>{src}</sub> |")
+    if not ood and r.exciton_binding is not None:
+        lines.append(f"| **Exciton binding energy** | **≈ {r.exciton_binding:.2f} eV** "
+                     "<br><sub>what holds the electron and hole together in a monolayer, and the "
+                     "reason absorption and photoemission disagree. Fitted against Bethe-Salpeter "
+                     f"results, composition-disjoint error {mae.get('exciton_binding', float('nan')):.2f} eV</sub> |")
     if not ood and r.exp_gap_est is not None:
+        src = (f"the direct G0W0 gap minus the binding energy above, composition-disjoint error "
+               f"{mae['optical']:.2f} eV over {H['n']} materials"
+               if H else "fitted against G0W0 minus the BSE exciton on 184 C2DB materials, "
+                         "ten-fold error 0.38 eV")
         lines.append(f"| **Optical gap** (absorption onset) | **≈ {r.exp_gap_est:.2f} eV** "
-                     "<br><sub>fitted against G0W0 minus the BSE exciton binding energy on 184 "
-                     "materials from C2DB: ten-fold error 0.38 eV, and 0.30 eV against five "
-                     "measured monolayers it never saw</sub> |")
+                     f"<br><sub>{src}</sub> |")
     if r.work_function is not None:
         wfn = (cal.get("wf", {}) or {}).get("test_mae")
         wfv = r.work_function_verdict or ""
@@ -162,14 +173,13 @@ def format_markdown(r, cal: dict | None = None) -> str:
                   "the documented example — spread 0.03 eV, actual error 1.2 eV."]
     if r.warnings:
         lines += ["", "⚠️ " + "  \n⚠️ ".join(r.warnings)]
-    if not ood and r.gap_quasiparticle is not None and r.exp_gap_est is not None:
-        lines += ["", f"<sub>The two differ by {r.gap_quasiparticle - r.exp_gap_est:.2f} eV. That gap "
-                  "is <b>not</b> the exciton binding energy — the two are fitted against different "
-                  "references, HSE06 on one side and G0W0 minus an exciton on the other, and those "
-                  "differ by about 0.4 eV themselves. Which number you want depends on the "
-                  "measurement: photoemission and transport see the first, absorption the second. "
-                  "For the binding energy itself, BSE gives a median of 0.29 of the gap across 184 "
-                  "two-dimensional materials.</sub>"]
+    if not ood and r.exciton_binding is not None:
+        lines += ["", "<sub>The optical gap is the direct quasiparticle gap minus the binding "
+                  "energy, so the three agree by construction rather than by coincidence. Which "
+                  "one you want depends on the measurement: photoemission and transport see the "
+                  "quasiparticle gap, absorption sees the optical one. The binding energy is not a "
+                  "function of the band gap — it depends on how the layer screens — which is why "
+                  "it is read out of the structure.</sub>"]
     mae = cal.get("test_mae")
     lines += [
         "",
@@ -253,7 +263,8 @@ def build_demo(weights_dir: str | None = None):
             except Exception:
                 fig = None
         return format_markdown(r, {**P.cal, "corr": P.corr,
-                                   "wf": (P.wf.cal if P.wf else {})}), fig
+                                   "wf": (P.wf.cal if P.wf else {}),
+                                   "heads": P.heads}), fig
 
     here = os.path.dirname(os.path.abspath(__file__))
     ex_dir = os.path.join(here, "examples")

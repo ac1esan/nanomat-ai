@@ -17,7 +17,7 @@ feature = distance, atomic number embedded at the nodes.
 | **Test performance** | **MAE 0.261 eV** (95% bootstrap CI 0.242–0.283), RMSE 0.454, R² 0.889. Members: 0.281 / 0.305 / 0.274 / 0.277 / 0.319 |
 | **Control** | Identical code and data on a random split: MAE 0.252. The honest split costs ≈ 0.01 eV |
 | **Composition baseline** | **0.430 eV** on the identical test set (`scripts/composition_baseline.py`), so structure wins by 39%. The 0.360 eV quoted previously came from five-fold cross-validation, a different protocol that leaks near-duplicate compositions; comparing it against a composition-disjoint number understated this model's advantage |
-| **Checksum** | SHA-256 `9241e67ff12c3b8a492f5fd2fedf5fc97f73ba7b9d1596caac268e67e9dc99b1` |
+| **Checksum** | SHA-256 `0921bf439b00ec440e41c1d3fdc20b2522982957180897fb77429250e0b34e72` |
 
 The checkpoint also carries its own `calibration` block, both gap corrections and
 10 733 reference embeddings, so it can judge and correct its own output without
@@ -150,32 +150,42 @@ Fast screening of candidate 2D semiconductors before committing DFT time. Trust 
 `reliable` verdict; treat `check` as a shortlist worth verifying; ignore the number
 under `out-of-domain`.
 
-- **PBE target, and two corrections rather than one.** The model predicts the PBE
-  gap, which nothing measures. `scripts/fit_gap_corrections.py` fits two separate
-  corrections against the model's own output, and both ship in the checkpoint:
+- **PBE target, and three many-body numbers on top of it.** The model predicts the
+  PBE gap, which nothing measures. `scripts/fit_exciton.py` fits three linear heads
+  on the ensemble's own latent space — the 128-dimensional embedding each of the five
+  members computes on the way to a gap, concatenated — and all three ship in the
+  checkpoint (641 weights each):
 
-  | Target | Fitted against | n | In-sample MAE | Validated MAE |
+  | Head | Fitted against | n | MAE, composition-disjoint | same target from the gap alone |
   |---|---|---|---|---|
-  | Quasiparticle (`≈ 1.18·gap + 0.45`) | HSE06, JARVIS dft_2d | 32 | 0.18 eV | **0.19 eV** leave-one-out |
-  | Optical (`≈ 0.074·gap² + 0.723·gap + 0.676`) | G₀W₀ − BSE exciton, C2DB | 184 | 0.38 eV | **0.38 eV** ten-fold |
+  | Quasiparticle gap (G₀W₀) | C2DB G₀W₀ | 184 | **0.251 eV** | 0.417 eV |
+  | Direct quasiparticle gap | C2DB G₀W₀ | 184 | **0.258 eV** | 0.514 eV |
+  | Exciton binding energy | C2DB BSE | 184 | **0.139 eV** | 0.232 eV |
+  | Optical gap = direct − exciton | — | 184 | **0.221 eV** | 0.383 eV |
 
-  The quasiparticle fit generalises (raw prediction correlates with HSE at r = 0.988).
-  The optical one used to be fitted on five measured monolayers, where an in-sample
-  0.17 eV hid a leave-one-out 0.71 eV and the resulting negative intercept pushed a
-  third of the screening table's optical gaps below their own raw PBE gap. It is now
-  fitted on C2DB's many-body data — G₀W₀ for the quasiparticle gap, BSE for the
-  exciton — over 184 non-magnetic materials. Against the five measured monolayers,
-  which it never sees, it errs by **0.30 eV** where the old fit errs by 0.71 eV
-  out-of-sample. The quadratic was chosen on cross-validation, where it beat a line
-  on 12 of 12 seeds; it is monotone and above the raw gap for every positive gap.
+  Validated on 8 folds × 6 shuffles, split by composition because C2DB holds several
+  entries per composition. The head wins in every band of predicted gap.
 
-  **Retracted:** earlier versions said the difference between the two corrections was
-  the exciton binding energy, 0.55 eV on the TMDs. Both fits had been trained on
-  those same four materials, so the agreement was circular. The two are referenced to
-  different quantities — HSE06 against G₀W₀ − exciton, and HSE06 runs ~0.4 eV below
-  G₀W₀ at a 1.7 eV gap — so their difference is not a physical energy. The binding
-  energy is reported from BSE instead: median **0.29 of the gap**, spread 0.08, over
-  the same 184 materials, which is where the published E_g/4 scaling for 2D sits.
+  **Why a head and not a correction.** As a function of the band gap alone the
+  optical error sat at 0.38 eV, and feeding it C2DB's own PBE gap instead of the
+  model's prediction only moved it to 0.31 — so the residual was not the network. The
+  exciton binding energy is not a function of the band gap; it depends on screening,
+  which is a property of the structure, and the structure is what the encoder saw.
+  Training a graph network on 184 materials would fail — measured in this project at
+  696 — but a ridge head on an encoder trained on 13 349 does not.
+
+  **Known weakness.** Ridge does not extrapolate. Remove every B–N entry and h-BN
+  comes out at 4.82 eV against a 5.74 target, where a polynomial in the gap gives
+  5.56; there are four materials above 5 eV in the fit. That is the one place among
+  1 104 held-out predictions where the head loses. The polynomial corrections stay in
+  the checkpoint as the fallback when the heads are absent.
+
+  **Retracted:** earlier versions said the difference between two separately fitted
+  corrections was the exciton binding energy, 0.55 eV on the TMDs. Both had been
+  trained on those same four materials, so the agreement was circular. The heads
+  settle it by predicting the binding energy instead of inferring it: 0.56 / 0.53 /
+  0.54 / 0.52 eV on the four TMDs against BSE's 0.55 / 0.50 / 0.52 / 0.48, and the
+  optical gap is the direct gap minus that number by construction.
 - **Data-density bias.** Error is lowest on transition-metal and heavy-element
   chemistries where Alexandria is dense, highest on light main-group compounds. It
   does not grow with the size of the gap.

@@ -218,6 +218,41 @@ def test_work_function_thresholds_are_its_own(P):
         "the two models were trained on different sets; the embedding counts differ"
 
 
+def test_checkpoint_opens_under_the_default_torch_load(P):
+    """torch.load defaults to weights_only=True since 2.6.
+
+    A numpy array anywhere in the checkpoint makes it refuse to open the file at
+    all, which breaks the shipped weights for everyone rather than just for the
+    script that put it there. This caught exactly that while adding the latent
+    heads, so it guards every .pt we ship.
+    """
+    import glob
+    for path in sorted(glob.glob(os.path.join(ROOT, "weights", "*.pt"))):
+        torch.load(path, map_location="cpu")   # weights_only defaults to True
+
+
+def test_latent_heads_are_self_consistent(P):
+    """optical = direct quasiparticle gap - exciton binding energy, by construction.
+
+    Three independently fitted numbers used to imply a binding energy that was not
+    the real one; the identity is what retires that, so it is worth pinning. The
+    binding energy of a TMD monolayer is a few tenths of an eV in the literature and
+    C2DB's BSE puts MoS2 at 0.55.
+    """
+    if P.heads is None:
+        pytest.skip("latent heads not in the checkpoint")
+    r = P.run(read_structure(os.path.join(EX, "MoS2.vasp")))
+    assert abs(r.gap_quasiparticle_direct - r.exciton_binding - r.exp_gap_est) < 1e-6
+    assert 0.3 < r.exciton_binding < 0.9, r.exciton_binding
+    assert r.exp_gap_est > r.gap, "the absorption onset sits above the PBE gap"
+
+    # a disowned prediction must not come back as three new numbers
+    bad = P.run(read_structure(os.path.join(EX, "graphene.vasp")))
+    assert bad.verdict.startswith("out-of-domain")
+    assert bad.exciton_binding is None and bad.exp_gap_est is None
+    assert bad.gap_quasiparticle is None
+
+
 def test_optical_correction_never_goes_backwards(P):
     """The corrected optical gap must stay above the raw PBE gap it comes from.
 

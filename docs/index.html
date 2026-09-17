@@ -391,9 +391,11 @@ const I18N = {
     d_empty: "Select a structure in the chart or the table.",
     d_gap: "Band gap (PBE)", d_interval: "90% interval",
     d_qp: "Quasiparticle gap", d_opt: "Optical gap",
-    d_qp_note: n => `photoemission and transport · fitted against HSE06 on ${n} structures, leave-one-out error 0.19 eV`,
-    d_opt_note: (n, e) => `absorption onset · fitted against G₀W₀ minus the BSE exciton binding energy on ${n} materials from C2DB, ten-fold error ${e} eV. Checked against five measured monolayers it never saw: 0.30 eV.`,
-    d_exciton: d => `The two numbers differ by ${d} eV here, and that gap is <b>not</b> the exciton binding energy — the two are fitted against different references, HSE06 on one side and G₀W₀ minus an exciton on the other, and those differ by about 0.4 eV themselves. For the binding energy itself, BSE gives a median of 0.29 of the gap across 184 two-dimensional materials.`,
+    d_eb: "Exciton binding energy",
+    d_qp_note: (n, e) => `photoemission and transport · a linear head on the ensemble's own latent space, fitted against G₀W₀ on ${n} materials from C2DB, composition-disjoint error ${e} eV`,
+    d_opt_note: (n, e) => `absorption onset · the direct G₀W₀ gap minus the exciton binding energy, both from heads on the same latent space, composition-disjoint error ${e} eV over ${n} materials`,
+    d_eb_note: e => `what binds the electron and hole together in a monolayer, and the reason absorption and photoemission disagree · fitted against Bethe–Salpeter results, composition-disjoint error ${e} eV`,
+    d_exciton: d => `The optical gap is the direct quasiparticle gap minus the binding energy, so the three numbers agree by construction rather than by coincidence. Here that binding energy is ${d} eV. The gap alone cannot predict it — it depends on how the layer screens — which is why it is read out of the structure instead of fitted to the band gap.`,
     d_wf: "Work function", d_wf_spread: "Work function spread",
     d_wf_verdict: "Work function verdict", d_wf_iv: "90% interval, work function",
     d_ea: "Electron affinity, χ", d_ip: "Ionisation potential",
@@ -509,6 +511,8 @@ async function load() {
       // training role, and the DFT reference where one exists
       k: num(c[ix.k]), ku: num(c[ix.ku]), kl: num(c[ix.kl]),
       kw: num(c[ix.kw]), kr: num(c[ix.kr]) ?? 0, kd: num(c[ix.kd]),
+      // quasiparticle gap, exciton binding energy, absorption onset
+      q: num(c[ix.q]), x: num(c[ix.x]), o: num(c[ix.o]),
     };
   }
   for (const r of S.rows) setEdges(r);
@@ -819,13 +823,19 @@ function renderDetail(hostId = "detail", row = undefined) {
   const wfcal = S.meta.wf_calibration || {};
   const ood = r.w === 2;
   const iv = cal.scale90 * r.u;
-  const exp = applyCorrection(C.optical, r.g);
-  const qp = applyCorrection(C.quasiparticle, r.g);
+  // shipped per row: these come from linear heads on the ensemble's latent space,
+  // which a static page cannot evaluate. The polynomial is the fallback for a data
+  // file built before the heads existed.
+  const H = S.meta.optical_heads;
+  const qp = r.q !== null && r.q !== undefined ? r.q : applyCorrection(C.quasiparticle, r.g);
+  const exp = r.o !== null && r.o !== undefined ? r.o : applyCorrection(C.optical, r.g);
+  const eb = r.x === undefined ? null : r.x;
   const tierErr = cal.tier_mae ? Object.values(cal.tier_mae)[r.w] : null;
   const rows = [];
   if (!ood) rows.push([t("d_interval"), "± " + fmt(iv, 2) + " eV"]);
   if (!ood && r.g >= S.meta.metal_gap_eV) {
     rows.push([t("d_qp"), "≈ " + fmt(qp, 2) + " eV"]);
+    if (eb !== null) rows.push([t("d_eb"), "≈ " + fmt(eb, 2) + " eV"]);
     rows.push([t("d_opt"), "≈ " + fmt(exp, 2) + " eV"]);
   }
   if (r.ea !== null) {
@@ -871,9 +881,12 @@ function renderDetail(hostId = "detail", row = undefined) {
     <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
     ${ood ? `<div class="note stop">${t("d_stop")}</div>` : ""}
     ${(!ood && r.g >= S.meta.metal_gap_eV) ? `<div class="note">
-        <b>${t("d_qp")}</b> — ${t("d_qp_note", C.quasiparticle.n)}<br>
-        <b>${t("d_opt")}</b> — ${t("d_opt_note", C.optical.n, fmt(C.optical.mae_cv, 2))}<br><br>
-        ${t("d_exciton", fmt(qp - exp, 2))}</div>` : ""}
+        <b>${t("d_qp")}</b> — ${H ? t("d_qp_note", H.n, fmt(H.mae_cv.gap_gw, 2))
+                                     : t("d_qp_note", C.quasiparticle.n, "0.19")}<br>
+        ${eb !== null && H ? `<b>${t("d_eb")}</b> — ${t("d_eb_note", fmt(H.mae_cv.exciton_binding, 2))}<br>` : ""}
+        <b>${t("d_opt")}</b> — ${H ? t("d_opt_note", H.n, fmt(H.mae_cv.optical, 2))
+                                   : t("d_opt_note", C.optical.n, fmt(C.optical.mae_cv, 2))}<br><br>
+        ${eb !== null ? t("d_exciton", fmt(eb, 2)) : ""}</div>` : ""}
     ${(!ood && r.g < S.meta.metal_gap_eV) ? `<div class="note">${t("d_metallike", fmt(S.meta.metal_gap_eV, 1))}</div>` : ""}
     ${r.ea !== null ? `<div class="note">${t("d_edges_note", fmt(wfcal.test_mae, 2))}<br><br>
         ${t("d_edges_caveat")}</div>` : ""}

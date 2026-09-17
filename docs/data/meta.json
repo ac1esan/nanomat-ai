@@ -146,6 +146,28 @@
    "far": 0.36467719926982556
   }
  },
+ "optical_heads": {
+  "n": 184,
+  "n_compositions": 135,
+  "features": 641,
+  "members": 5,
+  "folds": 8,
+  "shuffles": 6,
+  "mae_cv": {
+   "gap_gw": 0.25092433808461284,
+   "gap_dir_gw": 0.2580043183680871,
+   "exciton_binding": 0.13882731042922247,
+   "optical": 0.22111922183599939
+  },
+  "stress_test": {
+   "mae_head": 0.462113439076249,
+   "mae_polynomial": 0.30339599139059026,
+   "mae_head_tmd": 0.283376978239313,
+   "n": 5,
+   "note": "compositions of the measured monolayers removed before fitting"
+  },
+  "source": "C2DB G0W0 + BSE (Haastrup 2018, Gjerding 2021), CC-BY-SA 4.0"
+ },
  "corrections": {
   "quasiparticle": {
    "coeffs": [

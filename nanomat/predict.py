@@ -220,6 +220,33 @@ class PropertyEnsemble:
         return None if s is None else float(s) * unc
 
 
+def _apply_heads(heads: dict | None, emb, gap: float, corr: dict,
+                 metal_like: bool, gap_verdict: str) -> dict:
+    """The three many-body numbers, from the latent heads when they are present.
+
+    optical = direct G0W0 gap - exciton binding energy, by construction, so the
+    three numbers a user reads cannot contradict each other. The polynomial
+    corrections remain the fallback: they are a function of the gap alone, which is
+    why they cannot see the exciton and why these heads exist.
+
+    Nothing is returned for a structure the tool has disowned. The heads were fitted
+    only on in-domain materials and they extrapolate badly off it - graphene comes
+    out with a 3.4 eV binding energy and a negative optical gap - so a disowned
+    prediction must not reappear here in three new forms.
+    """
+    if metal_like or gap_verdict.startswith("out-of-domain"):
+        return {}
+    if heads is None or emb is None:
+        return {"gap_quasiparticle": correct(gap, "quasiparticle", corr),
+                "exp_gap_est": correct(gap, "optical", corr)}
+    x = np.append(np.asarray(emb, dtype=np.float64), gap)
+    val = lambda k: float(np.dot(heads[k]["w"].numpy().astype(np.float64), x) + heads[k]["b"])
+    eb = val("exciton_binding")
+    direct = val("gap_dir_gw")
+    return {"gap_quasiparticle": val("gap_gw"), "gap_quasiparticle_direct": direct,
+            "exciton_binding": eb, "exp_gap_est": direct - eb}
+
+
 def _wf_fields(wf: "PropertyEnsemble | None", value, spread, latent,
                gap: float, gap_verdict: str, metal_like: bool) -> dict:
     """Prediction fields for the second property, plus the band edges it unlocks.
@@ -252,8 +279,10 @@ class Prediction:
     gap: float                 # eV, PBE level
     unc: float                 # eV, ensemble std (or MC-dropout std)
     verdict: str
-    exp_gap_est: float | None  # eV, after PBE->exp correction (None for metals)
-    is_metal_like: bool        # gap < METAL_GAP
+    # None whenever the tool will not stand behind a corrected value: a metal-like
+    # gap, or a verdict of out-of-domain
+    exp_gap_est: float | None = None   # eV, the absorption onset
+    is_metal_like: bool = False        # gap < METAL_GAP
     work_function: float | None = None      # eV, only when the second model is present
     work_function_unc: float | None = None
     # the second model's own trust signals, against its own training set
@@ -265,7 +294,9 @@ class Prediction:
     # they are withheld unless BOTH models stand behind their half.
     electron_affinity: float | None = None   # vacuum -> conduction band minimum
     ionisation_potential: float | None = None  # vacuum -> valence band maximum
-    gap_quasiparticle: float | None = None  # eV, HSE-level estimate (photoemission / transport)
+    gap_quasiparticle: float | None = None  # eV, fundamental quasiparticle gap (G0W0)
+    gap_quasiparticle_direct: float | None = None  # eV, the vertical one absorption sees
+    exciton_binding: float | None = None    # eV, BSE-level; optical = direct - this
     latent_distance: float | None = None  # 1 - mean cosine sim to 10 nearest training structures
     interval90: float | None = None  # eV, half-width of the calibrated 90% interval
     typical_error: float | None = None  # eV, measured MAE of this trust tier
@@ -286,6 +317,8 @@ class Prediction:
             "work_function_unc_eV": None if self.work_function_unc is None else round(self.work_function_unc, 3),
             "work_function_verdict": self.work_function_verdict,
             "gap_quasiparticle_eV": None if self.gap_quasiparticle is None else round(self.gap_quasiparticle, 3),
+            "gap_quasiparticle_direct_eV": None if self.gap_quasiparticle_direct is None else round(self.gap_quasiparticle_direct, 3),
+            "exciton_binding_eV": None if self.exciton_binding is None else round(self.exciton_binding, 3),
             "exp_gap_est_eV": None if self.exp_gap_est is None else round(self.exp_gap_est, 3),
             "uncertainty_eV": round(self.unc, 3),
             "interval90_eV": None if self.interval90 is None else round(self.interval90, 3),
@@ -312,6 +345,10 @@ class Predictor:
         self.cal = dict(DEFAULT_CAL)
         self.corr = {k: dict(v) for k, v in DEFAULT_CORRECTIONS.items()}
         self.ref_emb: torch.Tensor | None = None  # normalised training embeddings
+        # linear heads on the concatenated member embeddings: G0W0 gaps and the
+        # exciton binding energy (scripts/fit_exciton.py). Absent = fall back to the
+        # polynomial corrections above.
+        self.heads: dict | None = None
         self.models: list[nn.Module] = []
         self.mean = self.std = 0.0
         self.type_model: CGCNNcls | None = None
@@ -344,6 +381,9 @@ class Predictor:
             self.mean, self.std = float(ck["mean"]), float(ck["std"])
             if ck.get("reference_embeddings") is not None:
                 self.ref_emb = ck["reference_embeddings"].float()
+            oh = ck.get("optical_heads")
+            if isinstance(oh, dict) and "exciton_binding" in oh:
+                self.heads = oh
             gc = ck.get("gap_corrections")
             if isinstance(gc, dict):
                 for kind in ("quasiparticle", "optical"):
@@ -467,6 +507,11 @@ class Predictor:
         if gap is None:
             return None
         g = to_graph(st, self.cutoff)
+        emb = None
+        if self.heads is not None and len(self.models) > 1:
+            with torch.no_grad():
+                b_ = Batch.from_data_list([g])
+                emb = torch.cat([m.encode(b_) for m in self.models], dim=1).cpu().numpy()[0]
         ld = self.latent_distance([g])
         ld = None if ld is None else float(ld[0])
         wf_v, wf_u = (self.wf.predict([g]) if self.wf else (None, None))
@@ -483,8 +528,7 @@ class Predictor:
         return Prediction(
             formula=st.composition.reduced_formula, natoms=len(st),
             gap=gap, unc=unc, verdict=v,
-            exp_gap_est=None if metal_like else correct(gap, "optical", self.corr),
-            gap_quasiparticle=None if metal_like else correct(gap, "quasiparticle", self.corr),
+            **_apply_heads(self.heads, emb, gap, self.corr, metal_like, v),
             is_metal_like=metal_like, latent_distance=ld,
             **_wf_fields(self.wf, None if wf_v is None else wf_v[0],
                          None if wf_u is None else wf_u[0],
@@ -499,14 +543,23 @@ class Predictor:
     # --- batched inference (large screens) --------------------------------------
     @torch.no_grad()
     def _forward_many(self, graphs: list, batch_size: int, device: str, mc: int):
-        """Run every head over a list of graphs. Returns (gap, unc, p_type, p_metal)
-        as numpy arrays aligned with `graphs`."""
-        gaps, uncs, p_type, p_metal = [], [], [], []
+        """Run every head over a list of graphs. Returns (gap, unc, p_type, p_metal,
+        embedding) as numpy arrays aligned with `graphs`.
+
+        The embedding is the members' encoder outputs concatenated. It falls out of
+        the same pass that produces the gap - in eval mode dropout is the identity,
+        so head(encode(x)) is the forward - which is why the optical heads cost
+        nothing on top of a prediction that was happening anyway.
+        """
+        gaps, uncs, p_type, p_metal, embs = [], [], [], [], []
         for i in range(0, len(graphs), batch_size):
             chunk = graphs[i:i + batch_size]
             batch = Batch.from_data_list(chunk).to(device)
             if len(self.models) > 1:
-                preds = torch.stack([m(batch) * self.std + self.mean for m in self.models])
+                hs = [m.encode(batch) for m in self.models]
+                preds = torch.stack([m.head(h).squeeze(-1) * self.std + self.mean
+                                     for m, h in zip(self.models, hs)])
+                embs.append(torch.cat(hs, dim=1).cpu().numpy())
                 gaps.append(preds.mean(0).cpu().numpy())
                 # unbiased=False to match np.std used by the single-structure path and
                 # by the calibration in train_cgcnn.py; with 5 members the n-1
@@ -528,7 +581,7 @@ class Predictor:
                 else:
                     sink.append(torch.sigmoid(model(batch)[1]).cpu().numpy())
         cat = lambda xs: np.concatenate(xs) if xs else np.array([])
-        return cat(gaps), cat(uncs), cat(p_type), cat(p_metal)
+        return cat(gaps), cat(uncs), cat(p_type), cat(p_metal), (cat(embs) if embs else None)
 
     def run_many(self, items, batch_size: int = 256, pad_vacuum: bool = True,
                  device: str = "cpu", mc: int = 30, progress_every: int = 0):
@@ -568,7 +621,7 @@ class Predictor:
         for m in (self.type_model, self.metal_model):
             if m is not None:
                 m.to(device)
-        gaps, uncs, p_type, p_metal = self._forward_many(graphs, batch_size, device, mc)
+        gaps, uncs, p_type, p_metal, embs = self._forward_many(graphs, batch_size, device, mc)
         wfv = wfu = wfl = None
         if self.wf is not None and graphs:
             parts = [self.wf.predict(graphs[i:i + batch_size])
@@ -601,8 +654,8 @@ class Predictor:
             out[order[j]] = (key, Prediction(
                 formula=st2.composition.reduced_formula, natoms=len(st2),
                 gap=gap, unc=unc, verdict=v,
-                exp_gap_est=None if metal_like else correct(gap, "optical", self.corr),
-                gap_quasiparticle=None if metal_like else correct(gap, "quasiparticle", self.corr),
+                **_apply_heads(self.heads, None if embs is None else embs[j],
+                               gap, self.corr, metal_like, v),
                 is_metal_like=metal_like, latent_distance=ld,
                 **_wf_fields(self.wf, None if wfv is None else wfv[j],
                              None if wfu is None else wfu[j],

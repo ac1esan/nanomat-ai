@@ -127,6 +127,11 @@ def main():
                     "p_metal": None if r.p_metal is None else round(r.p_metal, 2),
                     "gap_type": r.gap_type,
                     "p_indirect": None if r.p_indirect is None else round(r.p_indirect, 2),
+                    # the corrected gaps now come from linear heads on the model's
+                    # own latent space, which the static browser cannot evaluate, so
+                    # they travel in the data rather than being derived in the page
+                    "gap_quasiparticle_eV": None if r.gap_quasiparticle is None else round(r.gap_quasiparticle, 3),
+                    "exciton_binding_eV": None if r.exciton_binding is None else round(r.exciton_binding, 3),
                     "exp_gap_est_eV": None if r.exp_gap_est is None else round(r.exp_gap_est, 3),
                     "verdict": r.verdict,
                     "in_training_set": role.get(key, "unseen"),
