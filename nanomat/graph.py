@@ -25,6 +25,13 @@ DEFAULT_CUTOFF = 8.0   # angstrom, neighbour cutoff used for the shipped weights
 DEFAULT_N_RBF = 40     # radial basis functions on [0, cutoff]
 MIN_LAYER_VACUUM = 5.0  # below this the cell does not look like an isolated layer
 
+# Angular features live on a much shorter cutoff than the edges do. At 8 A an atom in
+# a 2D slab has ~60 neighbours and so ~1 700 triplets, which is both expensive and
+# meaningless: a bond angle is a statement about the coordination shell, not about
+# atoms 8 A away. 4 A covers the first shell and, in a TMD, the metal-metal ring too.
+DEFAULT_ANG_CUTOFF = 4.0
+DEFAULT_N_ANG = 9      # soft bins over cos(theta) in [-1, 1]
+
 
 def _axis_gap(st: Structure, axis: int) -> tuple[float, float, float]:
     """Largest empty gap along a lattice axis (with wrap-around).
@@ -114,12 +121,66 @@ def _public(info: dict) -> dict:
     return {k: v for k, v in info.items() if not k.startswith("_")}
 
 
-def to_graph(st: Structure, cutoff: float = DEFAULT_CUTOFF) -> Data | None:
-    """Periodic neighbour graph with distances as edge weights. None if no edges."""
+def angle_features(st: Structure, cutoff: float = DEFAULT_ANG_CUTOFF,
+                   n_bins: int = DEFAULT_N_ANG) -> np.ndarray:
+    """Per-atom distribution of bond angles, as a soft histogram over cos(theta).
+
+    Why this exists. The edge feature is a distance and nothing else, so two
+    polymorphs with the same composition and the same bond lengths look nearly
+    alike to the model. 1H-MX2 and 1T-MX2 are exactly that case - a trigonal prism
+    against an octahedron, median X-M-X angle 85.0 against 91.7 degrees - and the
+    shipped ensemble compresses their measured gap difference by a factor of four
+    (0.44 eV in Alexandria becomes 0.12 eV predicted). An angle is the missing
+    coordinate.
+
+    Each triplet (j, i, k) at atom i contributes a Gaussian bump at cos(theta_jik),
+    weighted by a smooth cutoff on both bond lengths so the descriptor has no
+    discontinuity when a neighbour crosses the radius. The histogram is normalised
+    to sum to one: it describes the SHAPE of the coordination, and how many
+    neighbours there are is something the atom graph already carries.
+    """
+    out = np.zeros((len(st), n_bins), dtype=np.float64)
+    c, n, img, d = st.get_neighbor_list(r=cutoff)
+    if len(c) == 0:
+        return out.astype(np.float32)
+    vec = st.cart_coords[n] + img @ st.lattice.matrix - st.cart_coords[c]
+    envelope = 0.5 * (np.cos(np.pi * np.clip(d / cutoff, 0.0, 1.0)) + 1.0)
+    centres = np.linspace(-1.0, 1.0, n_bins)
+    width = float(centres[1] - centres[0]) if n_bins > 1 else 1.0
+
+    order = np.argsort(c, kind="stable")
+    c_s, vec_s, env_s, d_s = c[order], vec[order], envelope[order], d[order]
+    lo = np.searchsorted(c_s, np.arange(len(st)), side="left")
+    hi = np.searchsorted(c_s, np.arange(len(st)), side="right")
+    for atom in range(len(st)):
+        a, b = lo[atom], hi[atom]
+        if b - a < 2:
+            continue                      # no angle exists with fewer than two bonds
+        unit = vec_s[a:b] / np.maximum(d_s[a:b], 1e-9)[:, None]
+        w = env_s[a:b]
+        iu = np.triu_indices(b - a, k=1)
+        cos = np.clip((unit @ unit.T)[iu], -1.0, 1.0)
+        pair = np.outer(w, w)[iu]
+        bump = np.exp(-0.5 * ((cos[:, None] - centres[None, :]) / width) ** 2)
+        out[atom] = (bump * pair[:, None]).sum(0)
+    total = out.sum(1, keepdims=True)
+    return np.divide(out, total, out=np.zeros_like(out), where=total > 1e-9).astype(np.float32)
+
+
+def to_graph(st: Structure, cutoff: float = DEFAULT_CUTOFF, n_ang: int = 0,
+             ang_cutoff: float = DEFAULT_ANG_CUTOFF) -> Data | None:
+    """Periodic neighbour graph with distances as edge weights. None if no edges.
+
+    `n_ang > 0` additionally attaches per-atom angular features. Left at 0 the graph
+    is byte-identical to the one the shipped weights were trained on.
+    """
     c, n, _img, d = st.get_neighbor_list(r=cutoff)
     if len(c) == 0:
         return None
     z = torch.tensor([s.specie.Z for s in st], dtype=torch.long)
     ei = torch.tensor(np.vstack([c, n]), dtype=torch.long)
     ew = torch.tensor(d, dtype=torch.float)
-    return Data(z=z, edge_index=ei, edge_weight=ew, num_nodes=len(z))
+    data = Data(z=z, edge_index=ei, edge_weight=ew, num_nodes=len(z))
+    if n_ang:
+        data.ang = torch.tensor(angle_features(st, ang_cutoff, n_ang), dtype=torch.float)
+    return data

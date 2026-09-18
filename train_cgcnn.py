@@ -63,8 +63,12 @@ def read_id_prop(data_dir: str) -> pd.DataFrame:
     return df.dropna(subset=["target"]).reset_index(drop=True)
 
 
-def build_graphs(data_dir: str, files: list[str], cutoff: float, cache: bool):
-    cache_path = os.path.join(data_dir, f"graphs_cache_c{cutoff:g}.pt")
+def build_graphs(data_dir: str, files: list[str], cutoff: float, cache: bool,
+                 n_ang: int = 0):
+    # the angular width is part of the cache key: a cache built without angles would
+    # silently train a model whose angular layer never sees anything
+    suffix = f"_a{n_ang}" if n_ang else ""
+    cache_path = os.path.join(data_dir, f"graphs_cache_c{cutoff:g}{suffix}.pt")
     if cache and os.path.exists(cache_path):
         ck = torch.load(cache_path, weights_only=False)
         if ck["files"] == files:
@@ -73,7 +77,7 @@ def build_graphs(data_dir: str, files: list[str], cutoff: float, cache: bool):
     graphs, formulas, t0 = [], [], time.time()
     for i, f in enumerate(files):
         st = Structure.from_file(os.path.join(data_dir, f))
-        g = to_graph(st, cutoff)
+        g = to_graph(st, cutoff, n_ang=n_ang)
         graphs.append(g)
         formulas.append(st.composition.reduced_formula)
         if (i + 1) % 500 == 0 or i + 1 == len(files):
@@ -218,9 +222,11 @@ def ensemble_calibration(y, preds: np.ndarray) -> dict:
 def train_one(args, graphs, tr, va, te, mean, std, pos_weight, device, seed: int):
     set_seed(seed)
     if args.task == "gap":
-        model = CGCNN(args.h, args.n_conv, args.dropout, args.cutoff, args.n_rbf)
+        model = CGCNN(args.h, args.n_conv, args.dropout, args.cutoff, args.n_rbf,
+                      ang_dim=args.angles)
     else:
-        model = CGCNNcls(args.h, args.n_conv, args.cutoff, args.n_rbf)
+        model = CGCNNcls(args.h, args.n_conv, args.cutoff, args.n_rbf,
+                         ang_dim=args.angles)
     if args.pretrained:
         ck = torch.load(args.pretrained, map_location="cpu")
         sd = ck["state_dicts"][0] if "state_dicts" in ck else ck["state_dict"]
@@ -292,6 +298,11 @@ def main():
     ap.add_argument("--dropout", type=float, default=0.2)
     ap.add_argument("--cutoff", type=float, default=8.0)
     ap.add_argument("--n-rbf", type=int, default=40)
+    ap.add_argument("--angles", type=int, default=0, metavar="N",
+                    help="add a per-atom angular descriptor of N bins (try 9). Off by "
+                         "default: the shipped weights were trained without it. An edge "
+                         "carries only a distance, so without this the model barely "
+                         "separates polymorphs - 1H against 1T-MX2 is the measured case")
     ap.add_argument("--seed", type=int, default=0, help="split seed and first model seed")
     ap.add_argument("--ensemble", type=int, default=1, help="train N members with seeds seed..seed+N-1")
     ap.add_argument("--bootstrap", action="store_true",
@@ -327,7 +338,7 @@ def main():
     if args.limit:
         df = df.iloc[: args.limit].reset_index(drop=True)
     files = df["file"].tolist()
-    graphs, formulas = build_graphs(args.data, files, args.cutoff, args.cache)
+    graphs, formulas = build_graphs(args.data, files, args.cutoff, args.cache, args.angles)
 
     keep = [i for i, g in enumerate(graphs) if g is not None]
     if len(keep) < len(graphs):
@@ -403,7 +414,7 @@ def main():
             "torch": str(torch.__version__), "args": vars(args),
             "bagged": bool(args.bootstrap)}
     ck = {"mean": mean, "std": std, "cutoff": args.cutoff, "n_rbf": args.n_rbf,
-          "h": args.h, "n_conv": args.n_conv, "meta": meta}
+          "h": args.h, "n_conv": args.n_conv, "n_ang": args.angles, "meta": meta}
     if args.task == "gap" and args.ensemble > 1:
         ck["state_dicts"] = states
         ck["seeds"] = list(range(args.seed, args.seed + args.ensemble))

@@ -173,10 +173,14 @@ class PropertyEnsemble:
         self.ref_emb: torch.Tensor | None = None
         if ck.get("reference_embeddings") is not None:
             self.ref_emb = ck["reference_embeddings"].float()
+        # angular width comes from this checkpoint, but the graphs are built by the
+        # Predictor for the gap model. Training this one with angles therefore
+        # requires the gap model to carry them too, or its graphs arrive without.
+        self.n_ang = int(ck.get("n_ang", 0))
         states = ck.get("state_dicts") or [ck["state_dict"]]
         self.models = []
         for sd in states:
-            m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf)
+            m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf, ang_dim=self.n_ang)
             m.load_state_dict(sd)
             m.eval()
             self.models.append(m)
@@ -342,6 +346,7 @@ class Predictor:
     def __init__(self, weights_dir: str | None = None, verbose: bool = True):
         self.weights_dir = weights_dir or default_weights_dir()
         self.cutoff, self.n_rbf = DEFAULT_CUTOFF, DEFAULT_N_RBF
+        self.n_ang = 0          # angular descriptor width, read from the checkpoint
         self.cal = dict(DEFAULT_CAL)
         self.corr = {k: dict(v) for k, v in DEFAULT_CORRECTIONS.items()}
         self.ref_emb: torch.Tensor | None = None  # normalised training embeddings
@@ -373,8 +378,9 @@ class Predictor:
         if os.path.exists(ens):
             ck = torch.load(ens, map_location="cpu")
             self.cutoff, self.n_rbf = float(ck.get("cutoff", self.cutoff)), int(ck.get("n_rbf", self.n_rbf))
+            self.n_ang = int(ck.get("n_ang", 0))
             for sd in ck["state_dicts"]:
-                m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf)
+                m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf, ang_dim=self.n_ang)
                 m.load_state_dict(sd)
                 m.eval()
                 self.models.append(m)
@@ -401,7 +407,8 @@ class Predictor:
         if os.path.exists(one):
             ck = torch.load(one, map_location="cpu")
             self.cutoff, self.n_rbf = float(ck.get("cutoff", self.cutoff)), int(ck.get("n_rbf", self.n_rbf))
-            m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf)
+            self.n_ang = int(ck.get("n_ang", 0))
+            m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf, ang_dim=self.n_ang)
             m.load_state_dict(ck["state_dict"])
             m.eval()
             self.models = [m]
@@ -419,7 +426,9 @@ class Predictor:
         if not os.path.exists(p):
             return None, 0.5
         ck = torch.load(p, map_location="cpu")
-        m = CGCNNcls(cutoff=float(ck.get("cutoff", self.cutoff)), n_rbf=int(ck.get("n_rbf", self.n_rbf)))
+        m = CGCNNcls(cutoff=float(ck.get("cutoff", self.cutoff)),
+                     n_rbf=int(ck.get("n_rbf", self.n_rbf)),
+                     ang_dim=int(ck.get("n_ang", 0)))
         m.load_state_dict(ck["state_dict"])
         m.eval()
         thr = float(ck.get("threshold", 0.5))
@@ -447,7 +456,7 @@ class Predictor:
     def predict_gap(self, st: Structure, mc: int = 30) -> tuple[float, float] | tuple[None, None]:
         """(gap, uncertainty) in eV. Ensemble: mean/std across members.
         Single model: point estimate + MC-dropout std."""
-        g = to_graph(st, self.cutoff)
+        g = to_graph(st, self.cutoff, n_ang=self.n_ang)
         if g is None:
             return None, None
         batch = Batch.from_data_list([g])
@@ -480,7 +489,7 @@ class Predictor:
     def _cls_prob(self, model: CGCNNcls | None, st: Structure) -> float | None:
         if model is None:
             return None
-        g = to_graph(st, self.cutoff)
+        g = to_graph(st, self.cutoff, n_ang=self.n_ang)
         if g is None:
             return None
         _, logit = model(Batch.from_data_list([g]))
@@ -506,7 +515,7 @@ class Predictor:
         gap, unc = self.predict_gap(st)
         if gap is None:
             return None
-        g = to_graph(st, self.cutoff)
+        g = to_graph(st, self.cutoff, n_ang=self.n_ang)
         emb = None
         if self.heads is not None and len(self.models) > 1:
             with torch.no_grad():
@@ -606,7 +615,7 @@ class Predictor:
                 from .graph import layer_info
                 info = {k: v for k, v in layer_info(st).items() if not k.startswith("_")}
                 st2, warns = st, []
-            g = to_graph(st2, self.cutoff)
+            g = to_graph(st2, self.cutoff, n_ang=self.n_ang)
             if g is None:
                 continue
             keys.append(key)

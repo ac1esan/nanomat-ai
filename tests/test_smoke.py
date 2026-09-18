@@ -282,3 +282,47 @@ def test_corrections_carry_their_own_provenance(P):
     assert qp["n"] >= 32 and opt["n"] >= 100
     assert 0 < opt["mae_cv"] < 0.5, "a cross-validated error, not an in-sample one"
     assert len(opt["coeffs"]) >= 2
+
+
+def test_angle_features_separate_the_polymorphs():
+    """1H and 1T-MX2 differ by an angle, and the edge feature is a distance.
+
+    The shipped ensemble compresses their measured gap difference by a factor of
+    four (0.44 eV in Alexandria arrives as 0.12 eV) because a trigonal prism and an
+    octahedron have nearly the same bond lengths. The descriptor exists to carry
+    what the distance drops, so it has to tell them apart on structures that differ
+    in nothing else.
+    """
+    import numpy as np
+    from pymatgen.core import Lattice, Structure
+
+    from nanomat.graph import DEFAULT_N_ANG, angle_features, to_graph
+
+    a, h, vac = 3.19, 1.57, 25.0
+    lat = Lattice.from_parameters(a, a, vac, 90, 90, 120)
+    # same metal, same bond lengths; the chalcogens are eclipsed in 1H and
+    # staggered in 1T, which is purely an angular statement
+    one_h = Structure(lat, ["Mo", "S", "S"],
+                      [[0, 0, 0.5], [1 / 3, 2 / 3, 0.5 + h / vac], [1 / 3, 2 / 3, 0.5 - h / vac]])
+    one_t = Structure(lat, ["Mo", "S", "S"],
+                      [[0, 0, 0.5], [1 / 3, 2 / 3, 0.5 + h / vac], [2 / 3, 1 / 3, 0.5 - h / vac]])
+
+    fh, ft = angle_features(one_h), angle_features(one_t)
+    assert fh.shape == (3, DEFAULT_N_ANG)
+    assert np.abs(fh[0] - ft[0]).sum() > 0.1, "the metal must see a different geometry"
+    assert np.allclose(fh.sum(1), 1.0) and np.allclose(ft.sum(1), 1.0)
+
+    # and the distances alone really are near-identical, which is the whole point
+    gh, gt = to_graph(one_h), to_graph(one_t)
+    assert abs(float(gh.edge_weight.mean()) - float(gt.edge_weight.mean())) < 0.05
+    assert to_graph(one_h, n_ang=DEFAULT_N_ANG).ang.shape == (3, DEFAULT_N_ANG)
+
+
+def test_angles_are_off_by_default_and_do_not_touch_the_contract():
+    """ang_dim=0 must leave the state_dict byte-identical to the shipped weights."""
+    from nanomat.model import CGCNN
+    plain, with_ang = set(CGCNN().state_dict()), set(CGCNN(ang_dim=9).state_dict())
+    shipped = set(torch.load(os.path.join(ROOT, "weights", "cgcnn_2d_ensemble.pt"),
+                             map_location="cpu")["state_dicts"][0])
+    assert plain == shipped
+    assert with_ang - plain == {"ang.weight", "ang.bias"}
