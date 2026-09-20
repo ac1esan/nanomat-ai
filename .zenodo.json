@@ -1,0 +1,49 @@
+{
+  "upload_type": "software",
+  "title": "NanoMatAI: band gaps of 2D semiconductors from crystal structure, with a calibrated trust verdict",
+  "description": "<p>A CGCNN ensemble that predicts the band gap of a two-dimensional monolayer from its crystal structure on CPU, together with a calibrated uncertainty interval and an explicit verdict on whether the prediction is usable.</p><p>Trained on 13 349 stable 2D semiconductors from Alexandria and evaluated on a split where no composition is shared between training and test: <strong>MAE 0.246 eV</strong>, against 0.430 eV for a composition-only baseline scored on the identical test set. The graph reads bond angles as well as bond lengths, which is what lets it separate polymorphs of one composition &mdash; 1H-MoS<sub>2</sub> is a semiconductor and 1T-MoS<sub>2</sub> is metallic, and a distance-only graph barely tells them apart.</p><p>Three independent out-of-domain checks decide the verdict: a metal/semiconductor gate, the spread between ensemble members, and the distance to the training set in the model's own latent space. Each exists because the previous one was caught failing on a real case. Linear heads on that latent space add a quasiparticle gap, an exciton binding energy and an absorption onset; a second ensemble adds the work function, so the band edges a contact metal is chosen on follow from the pair.</p><p>Predictions for 28 372 public 2D structures are published as a browsable static page, with a periodic-table map of where the model actually works.</p>",
+  "creators": [
+    {
+      "name": "Balandin, Danil"
+    }
+  ],
+  "license": "MIT",
+  "access_right": "open",
+  "keywords": [
+    "2D materials",
+    "band gap",
+    "graph neural network",
+    "uncertainty quantification",
+    "out-of-distribution detection",
+    "materials screening",
+    "nanoelectronics",
+    "CGCNN"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/ac1esan/nanomat-ai",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://ac1esan.github.io/nanomat-ai/",
+      "relation": "isDocumentedBy",
+      "scheme": "url"
+    },
+    {
+      "identifier": "10.1088/2053-1583/aacfc1",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.1088/2053-1583/ac1059",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.1038/s41597-019-0097-3",
+      "relation": "references",
+      "scheme": "doi"
+    }
+  ]
+}

@@ -6,15 +6,18 @@ abstract: >-
   its crystal structure on CPU, together with a calibrated uncertainty interval and
   an explicit verdict on whether the prediction is usable. Trained on 13 349 stable
   2D semiconductors from Alexandria and evaluated on a composition-disjoint split
-  (MAE 0.26 eV). Three independent out-of-domain checks decide the verdict: a
-  metal/semiconductor gate, the spread between ensemble members, and the distance
-  to the training set in the model's own latent space. Predictions for 28 372
-  public 2D structures are published as a browsable table.
+  (MAE 0.246 eV). The graph reads bond angles as well as bond lengths, which is what
+  lets it separate polymorphs of one composition. Three independent out-of-domain
+  checks decide the verdict: a metal/semiconductor gate, the spread between ensemble
+  members, and the distance to the training set in the model's own latent space.
+  Linear heads on that same latent space add a quasiparticle gap, an exciton binding
+  energy and an absorption onset, and a second ensemble adds the work function, so
+  the band edges a contact metal is chosen on follow from the pair. Predictions for
+  28 372 public 2D structures are published as a browsable table.
 type: software
 authors:
-  # Replace with your legal name before this is cited anywhere that matters —
-  # a handle is fine for GitHub, less so for a reference list.
-  - name: ac1esan
+  - given-names: Danil
+    family-names: Balandin
     alias: ac1esan
 repository-code: https://github.com/ac1esan/nanomat-ai
 url: https://ac1esan.github.io/nanomat-ai/

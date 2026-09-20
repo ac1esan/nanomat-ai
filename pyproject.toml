@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nanomat-ai"
-version = "0.2.0"
+version = "1.0.0"
 description = "Band gap of 2D semiconductors from crystal structure: CGCNN ensemble with uncertainty"
 readme = "README.md"
 license = { file = "LICENSE" }
