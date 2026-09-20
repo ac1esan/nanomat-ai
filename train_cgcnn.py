@@ -283,6 +283,8 @@ def main():
     ap.add_argument("--data", required=True, help="folder with id_prop.csv and .vasp files")
     ap.add_argument("--task", choices=["gap", "type", "metal"], default="gap")
     ap.add_argument("--out", required=True, help="checkpoint path (.pt)")
+    ap.add_argument("--split-file", help="reuse the split of an earlier run verbatim "
+                    "(<run>.split.json). The only way two models are comparable")
     ap.add_argument("--split", choices=["random", "group"], default="group",
                     help="group = no composition shared between train/val/test (default)")
     ap.add_argument("--val-frac", type=float, default=0.1)
@@ -359,7 +361,23 @@ def main():
             g.lbl = torch.tensor([v], dtype=torch.float)
         print(f"positive class rate ({'indirect' if args.task == 'type' else 'metal'}): {lbl.mean():.3f}")
 
-    tr, va, te = make_split(len(graphs), formulas, args.split, args.val_frac, args.test_frac, args.seed)
+    if args.split_file:
+        # Reuse an earlier run's split verbatim. Two models are only comparable on
+        # one test set, and this project has already had to withdraw a conclusion
+        # three times because two numbers came from different protocols. Deriving
+        # the split from a seed happens to reproduce, but "happens to" is not a
+        # guarantee: a reordered data folder would silently move the boundary.
+        spec = json.load(open(args.split_file))
+        pos = {f: i for i, f in enumerate(files)}
+        missing = [f for k in ("train", "val", "test") for f in spec[k] if f not in pos]
+        if missing:
+            raise SystemExit(f"--split-file names {len(missing)} files absent from "
+                             f"{args.data}, first: {missing[:3]}")
+        tr, va, te = ([pos[f] for f in spec[k]] for k in ("train", "val", "test"))
+        print(f"split: reused from {args.split_file}")
+    else:
+        tr, va, te = make_split(len(graphs), formulas, args.split, args.val_frac,
+                                args.test_frac, args.seed)
     print(f"split={args.split}: train {len(tr)}  val {len(va)}  test {len(te)}  "
           f"(unique compositions: {len(set(formulas))})")
     mean, std = float(y[tr].mean()), float(y[tr].std() + 1e-8)
