@@ -1,5 +1,7 @@
 # NanoMatAI — band gap 2D-полупроводников по кристаллической структуре
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22863467.svg)](https://doi.org/10.5281/zenodo.22863467)
+
 [English version](README.md)
 
 **[Открыть обозреватель предсказаний →](https://ac1esan.github.io/nanomat-ai/)** —
@@ -492,6 +494,17 @@ figures/                  рисунки README и скрипты, которы�
 4. Предсказывать саму энергию связи экситона, а не растворять её в поправке. BSE даёт
    0.29 от щели с разбросом 0.08, и этот разброс — предел точности оптической щели:
    никакая функция одной только щели лучше не сможет.
+
+## Как цитировать
+
+Архивировано на Zenodo, DOI всегда ведёт на последнюю версию:
+
+> Balandin, D. *NanoMatAI: band gaps of 2D semiconductors from crystal structure,
+> with a calibrated trust verdict.* Zenodo. https://doi.org/10.5281/zenodo.22863467
+
+То же самое в машиночитаемом виде лежит в [`CITATION.cff`](CITATION.cff), поэтому
+кнопка GitHub «Cite this repository» и большинство менеджеров ссылок подхватят
+это сами.
 
 ## Лицензия
 

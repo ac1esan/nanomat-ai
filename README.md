@@ -4,6 +4,7 @@
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![PyG](https://img.shields.io/badge/PyTorch%20Geometric-CGCNN-orange)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22863467.svg)](https://doi.org/10.5281/zenodo.22863467)
 [Русская версия](README.ru.md)
 
 **[Browse the predictions →](https://ac1esan.github.io/nanomat-ai/)** — 28 372
@@ -506,6 +507,16 @@ figures/                  README figures and the scripts that regenerate them
 4. Predict the exciton binding energy rather than absorbing it into a correction.
    BSE puts it at 0.29 of the gap with a spread of 0.08, and that spread is the
    floor on the optical gap: no function of the gap alone can do better.
+
+## Citing this
+
+Archived on Zenodo with a DOI that always resolves to the newest release:
+
+> Balandin, D. *NanoMatAI: band gaps of 2D semiconductors from crystal structure,
+> with a calibrated trust verdict.* Zenodo. https://doi.org/10.5281/zenodo.22863467
+
+[`CITATION.cff`](CITATION.cff) carries the same in machine-readable form, so
+GitHub's *Cite this repository* button and most reference managers pick it up.
 
 ## License
 

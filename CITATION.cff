@@ -19,6 +19,17 @@ authors:
   - given-names: Danil
     family-names: Balandin
     alias: ac1esan
+# The concept DOI, not the version DOI: it always resolves to the newest release,
+# so a citation written today does not go stale when the next one is published.
+doi: 10.5281/zenodo.22863467
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22863467
+    description: Concept DOI, resolves to the latest version
+  - type: doi
+    value: 10.5281/zenodo.22863468
+    description: DOI of release v1.0.0
+version: 1.0.0
 repository-code: https://github.com/ac1esan/nanomat-ai
 url: https://ac1esan.github.io/nanomat-ai/
 license: MIT
