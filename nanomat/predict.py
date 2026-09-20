@@ -436,6 +436,17 @@ class Predictor:
         return m, thr
 
     # --- inference -----------------------------------------------------------
+    def graph(self, st: Structure, pad_vacuum: bool = True):
+        """The graph THESE weights expect, angular width included.
+
+        Anything outside this class that builds a graph by hand will get the width
+        wrong the moment a model is trained with angles, and the failure is a
+        missing-attribute crash at best and a silently dead layer at worst. Scripts
+        should ask the predictor instead of calling to_graph themselves.
+        """
+        st2 = self.prepare(st)[0] if pad_vacuum else st
+        return to_graph(st2, self.cutoff, n_ang=self.n_ang)
+
     def prepare(self, st: Structure) -> tuple[Structure, dict, list[str]]:
         """Vacuum padding + warnings. Returns (structure, layer_info, warnings)."""
         warnings = []

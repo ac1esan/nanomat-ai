@@ -79,7 +79,7 @@ def embed(P: Predictor, structures: list) -> np.ndarray:
     Five members rather than one: each is a different view of the same structure,
     and averaging over seeds is what makes the ensemble's other signals steady too.
     """
-    graphs = [to_graph(P.prepare(st)[0], P.cutoff) for st in structures]
+    graphs = [P.graph(st) for st in structures]
     from torch_geometric.data import Batch
     out = []
     with torch.no_grad():

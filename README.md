@@ -21,7 +21,7 @@ structures, and a trust layer that was tested until it broke and then fixed.
 
 **Main finding.** With 700 structures a graph network is no better than a random
 forest on composition features (MAE 0.58 eV both). The gap opens only with data:
-at 13 349 stable 2D semiconductors the structure model reaches **MAE 0.26 eV on a
+at 13 349 stable 2D semiconductors the structure model reaches **MAE 0.25 eV on a
 composition-disjoint split** versus 0.36 eV for composition. The bottleneck was
 data volume, not model class.
 
@@ -101,7 +101,7 @@ intrinsically harder.
 
 **Calibrated intervals.** Raw ±1σ of the ensemble spread covers only 37% of cases,
 not 68% — deep ensembles rank well but are overconfident. A scale factor fitted on
-the validation split (×5.09) gives 92% coverage on the held-out test split against
+the validation split (×4.60) gives 90% coverage on the held-out test split against
 a 90% target. It beats a fixed conformal interval, which would have to be ±0.62 eV
 for everyone; a confident prediction now carries ±0.11 eV instead.
 
@@ -148,17 +148,43 @@ Composition baseline (Magpie + RandomForest/XGBoost, 5-fold CV) versus CGCNN:
 | C2DB (PBE) | 1 115 | 0.445 | ≈ 0.42 | random |
 | Alexandria 2D, ehull ≤ 0.1 | 13 349 | 0.360 | 0.215 | random |
 | Alexandria 2D, ehull ≤ 0.2 | 26 561 | 0.419 | 0.262 | random |
-| **Alexandria 2D, ehull ≤ 0.1** | **13 349** | **0.430** | **0.261** | **composition-disjoint** |
+| **Alexandria 2D, ehull ≤ 0.1** | **13 349** | **0.430** | **0.246** | **composition-disjoint** |
 
 The composition figures in the first rows are five-fold cross-validation, which is
 not the same protocol as a composition-disjoint split and should not be compared
 against it. Scored properly on the very same test set, composition gives 0.430 eV,
-not 0.360 — so structure wins by 39%, not the 27% this project claimed until the
+not 0.360 — so structure wins by 43%, not the 27% this project claimed until the
 comparison was redone with
 [`scripts/composition_baseline.py`](scripts/composition_baseline.py). The error was
 in our favour to correct.
 
-The shipped ensemble scores **MAE 0.261 eV (95% CI 0.242–0.283), RMSE 0.454,
+### The coordinate an edge distance drops
+
+An edge carries a distance and nothing else, so two polymorphs of one composition
+are nearly the same graph — and for 2D electronics that is exactly the distinction
+that matters, since 1H-MoS₂ is a semiconductor and 1T-MoS₂ is metallic. The model
+was measured doing badly at it, so the graph gained a per-atom histogram of bond
+angles ([`nanomat/graph.py`](nanomat/graph.py), 4 Å cutoff rather than the 8 Å used
+for edges, since an angle to something 8 Å away says nothing about coordination).
+
+Judged against a control trained on the identical split, with the identical seeds,
+in the identical environment — the control exists because the previous weights came
+from a different torch and a different GPU, which is worth 0.01 eV on its own:
+
+| | control | with angles |
+|---|---|---|
+| MAE | 0.271 | **0.246** |
+| RMSE | 0.492 | **0.435** |
+| R² | 0.869 | **0.898** |
+
+Paired over the same 1 326 test structures the difference is **+0.026 eV**, bootstrap
+95% +0.015…+0.037, Wilcoxon p = 4·10⁻⁵. The three measurements of polymorph
+sensitivity ([`scripts/polymorph_sensitivity.py`](scripts/polymorph_sensitivity.py))
+move the way the diagnosis predicted — global spread unchanged, within-composition
+and 1H-against-1T substantially better — and the [model card](MODEL_CARD.md) carries
+the table, including the one number that went the other way.
+
+The shipped ensemble scores **MAE 0.246 eV (95% CI 0.226–0.268), RMSE 0.435,
 R² 0.889** on 1 326 held-out structures whose compositions never appear in
 training. Members score 0.281 / 0.305 / 0.274 / 0.277 / 0.319, so averaging buys
 0.03 eV.
@@ -169,7 +195,7 @@ only the split differs.
 | split | MAE |
 |---|---|
 | random | 0.252 |
-| composition-disjoint | 0.261 |
+| composition-disjoint | 0.246 |
 
 Two more things the numbers say:
 
@@ -184,11 +210,11 @@ Two more things the numbers say:
 
 | | Composition | Structure | n_test |
 |---|---|---|---|
-| Band gap | 0.430 | **0.261** | 1 326 |
+| Band gap | 0.430 | **0.246** | 1 326 |
 | Work function | 0.314 | **0.254** | 337 |
 
 Trained on the 3 505 C2DB structures carrying a work function, same architecture,
-same protocol, its own checkpoint. Structure wins by 19% here against 39% for the
+same protocol, its own checkpoint. Structure wins by 19% here against 43% for the
 gap, which is what you would expect: the work function leans more on chemistry and
 less on geometry.
 
@@ -235,9 +261,9 @@ the trap:
 
 | | Fitted against | n | Validated error |
 |---|---|---|---|
-| **Quasiparticle gap** — photoemission, transport | G₀W₀ from C2DB | 184 | **0.25 eV** |
-| **Exciton binding energy** | Bethe–Salpeter from C2DB | 184 | **0.14 eV** |
-| **Optical gap** = direct G₀W₀ − exciton | the two above | 184 | **0.22 eV** |
+| **Quasiparticle gap** — photoemission, transport | G₀W₀ from C2DB | 171 | **0.24 eV** |
+| **Exciton binding energy** | Bethe–Salpeter from C2DB | 171 | **0.13 eV** |
+| **Optical gap** = direct G₀W₀ − exciton | the two above | 171 | **0.20 eV** |
 
 All three are cross-validated on **composition-disjoint** folds, the same protocol
 as the gap model, because C2DB holds several entries per composition.
@@ -257,9 +283,9 @@ structure, and the structure is what the encoder already saw.
 
 | | gap alone | latent head |
 |---|---|---|
-| Quasiparticle gap (G₀W₀) | 0.42 | **0.25** |
-| Exciton binding (BSE) | 0.23 | **0.14** |
-| Optical gap | 0.38 | **0.22** |
+| Quasiparticle gap (G₀W₀) | 0.39 | **0.24** |
+| Exciton binding (BSE) | 0.22 | **0.13** |
+| Optical gap | 0.36 | **0.20** |
 
 The head wins in every band of predicted gap, from 0–1 eV to above 5. It also makes
 the three numbers **consistent by construction** — optical is the direct
@@ -389,7 +415,7 @@ measurement attached, so nobody has to rediscover it.
   (`e_above_hull` up to 0.2) and two other DFT functionals, the verdict still ranks
   error correctly (0.33 / 0.43 / 0.57 eV across the three tiers), but the 90%
   interval covers only 78% instead of 90% and the per-tier error figures are
-  optimistic. On stable Alexandria 2D the test MAE is 0.261 eV; on metastable
+  optimistic. On stable Alexandria 2D the test MAE is 0.246 eV; on metastable
   structures it is 0.509 eV. Re-run
   [`scripts/calibrate_uncertainty.py`](scripts/calibrate_uncertainty.py) on the
   population you actually screen. The precompute script checks this and warns.

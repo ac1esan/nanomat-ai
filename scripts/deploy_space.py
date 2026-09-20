@@ -61,9 +61,9 @@ element, gap range and trust verdict, and see a periodic-table map of where the
 model actually works.
 
 A CGCNN ensemble of five models trained on 13 349 stable 2D semiconductors from
-Alexandria. Test MAE **0.26 eV** on a split where no composition is shared between
-training and test. Nothing is computed in this page: the predictions were made
-once and are served as a static table.
+Alexandria, reading bond angles as well as bond lengths. Test MAE **0.25 eV** on a
+split where no composition is shared between training and test. Nothing is computed
+in this page: the predictions were made once and are served as a static table.
 
 **The verdict is the point.** Three independent checks decide whether to trust a
 prediction, and each exists because the previous one was caught failing on a real

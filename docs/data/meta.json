@@ -58,14 +58,14 @@
    "jarvis_dft2d": 696
   },
   "by_tier": {
-   "reliable": 11276,
-   "check": 5933,
-   "out-of-domain": 11163
+   "reliable": 10967,
+   "check": 5955,
+   "out-of-domain": 11450
   },
   "stable": 13349,
   "default_view": 2616,
   "work_function": 28372,
-  "band_edges": 8210,
+  "band_edges": 8090,
   "by_wf_tier": {
    "reliable": 7220,
    "check": 5615,
@@ -75,37 +75,37 @@
  "calibration": {
   "n_val": 1290,
   "n_test": 1326,
-  "test_mae": 0.2614018055101573,
-  "scale68": 2.370862928447392,
-  "scale90": 5.094074726337004,
-  "unc_q25": 0.05735804419964552,
-  "unc_median": 0.08869214728474617,
-  "unc_q75": 0.14186714962124825,
+  "test_mae": 0.2454969188273178,
+  "scale68": 2.361972800378151,
+  "scale90": 4.601515083200691,
+  "unc_q25": 0.054994518868625164,
+  "unc_median": 0.08216911181807518,
+  "unc_q75": 0.1352698691189289,
   "tier_mae": {
-   "reliable": 0.14152141902656967,
-   "check": 0.24568744170651552,
-   "out_of_domain": 0.45455578482650755
+   "reliable": 0.12979543930084586,
+   "check": 0.21511639797722182,
+   "out_of_domain": 0.44074719886833563
   },
-  "raw_coverage_1sigma": 0.37254901960784315,
-  "test_coverage68": 0.6613876319758673,
-  "test_coverage90": 0.9177978883861236,
+  "raw_coverage_1sigma": 0.36576168929110103,
+  "test_coverage68": 0.6802413273001509,
+  "test_coverage90": 0.9012066365007542,
   "test_coverage90_by_unc_quartile": [
-   0.8368580060422961,
-   0.9201520912547528,
-   0.9434523809523809,
-   0.9621212121212122
+   0.8118811881188119,
+   0.8857142857142857,
+   0.9186046511627907,
+   0.9649122807017544
   ],
-  "global_conformal90_eV": 0.6159892069053655,
-  "latent_q25": 0.1168593019247055,
-  "latent_median": 0.1617245078086853,
-  "latent_q75": 0.22557589411735535,
-  "latent_q90": 0.28835657835006717,
-  "spearman_unc": 0.44998516195332594,
-  "spearman_latent": 0.46945047629016795,
-  "spearman_combined": 0.4998008679192527,
+  "global_conformal90_eV": 0.5507837147331254,
+  "latent_q25": 0.1114148199558258,
+  "latent_median": 0.15911230444908142,
+  "latent_q75": 0.22454501688480377,
+  "latent_q90": 0.28996104001998907,
+  "spearman_unc": 0.46741681400380136,
+  "spearman_latent": 0.4507467887302903,
+  "spearman_combined": 0.49833526548123996,
   "latent_tier_mae": {
-   "near": 0.17621303740173125,
-   "far": 0.45720882474444985
+   "near": 0.17124293024048354,
+   "far": 0.4096467773739997
   },
   "type_threshold": 0.32657402276992803,
   "metal_threshold": 0.6476057171821595
@@ -147,22 +147,22 @@
   }
  },
  "optical_heads": {
-  "n": 184,
-  "n_compositions": 135,
+  "n": 171,
+  "n_compositions": 129,
   "features": 641,
   "members": 5,
   "folds": 8,
   "shuffles": 6,
   "mae_cv": {
-   "gap_gw": 0.25092433808461284,
-   "gap_dir_gw": 0.2580043183680871,
-   "exciton_binding": 0.13882731042922247,
-   "optical": 0.22111922183599939
+   "gap_gw": 0.2428611695294021,
+   "gap_dir_gw": 0.2526511934373355,
+   "exciton_binding": 0.13345930210480716,
+   "optical": 0.19777051366296183
   },
   "stress_test": {
-   "mae_head": 0.462113439076249,
-   "mae_polynomial": 0.30339599139059026,
-   "mae_head_tmd": 0.283376978239313,
+   "mae_head": 0.40443434978475634,
+   "mae_polynomial": 0.2903692256514202,
+   "mae_head_tmd": 0.22816038198790967,
    "n": 5,
    "note": "compositions of the measured monolayers removed before fitting"
   },
@@ -174,63 +174,63 @@
     1.179,
     0.45
    ],
-   "a": 1.1788322794968842,
-   "b": 0.44987077216104804,
-   "n": 32,
-   "mae_loo": 0.19327366976946592,
+   "a": 1.1379818662831307,
+   "b": 0.5138243215639455,
+   "n": 33,
+   "mae_loo": 0.2818293693595893,
    "reference": "HSE06",
-   "mae_in_sample": 0.17965523357956847,
-   "mae_uncorrected": 0.9454373919963837,
-   "pearson": 0.9879857067917465,
+   "mae_in_sample": 0.26202452940051185,
+   "mae_uncorrected": 0.9524770870714477,
+   "pearson": 0.9712816799255026,
    "source": "JARVIS dft_2d hse_gap"
   },
   "optical": {
    "coeffs": [
-    0.07447014942853449,
-    0.7234496256563658,
-    0.6757395497810971
+    0.08785846613285164,
+    0.68535568444104,
+    0.7046595529711834
    ],
-   "n": 184,
-   "mae_cv": 0.3832008120904155,
+   "n": 171,
+   "mae_cv": 0.3595796627774086,
    "reference": "G0W0 - BSE exciton",
    "degree": 2,
-   "mae_in_sample": 0.3759375827475023,
-   "mae_cv_sd": 0.0016319042371984041,
-   "mae_uncorrected": 0.5912653388768111,
-   "pearson": 0.9414250570831296,
+   "mae_in_sample": 0.35318883884180485,
+   "mae_cv_sd": 0.00152139883712178,
+   "mae_uncorrected": 0.6162096892630148,
+   "pearson": 0.9531558747157403,
    "source": "C2DB (Haastrup 2018, Gjerding 2021), CC-BY-SA 4.0",
    "held_out_measured": {
-    "n": 5,
-    "mae_new": 0.2967761647869963,
-    "mae_old_in_sample": 0.16472360439300524,
+    "n": 6,
+    "mae_new": 0.34397789619303804,
+    "mae_old_in_sample": 0.33066082950433096,
     "mae_old_loo": 0.705
    }
   },
   "exciton_binding": {
-   "median_ratio_to_gw": 0.28909711133026583,
-   "sd_ratio": 0.08133043690172263,
-   "median_eV": 0.75,
-   "n": 184,
+   "median_ratio_to_gw": 0.2781980742778542,
+   "sd_ratio": 0.07348924773401568,
+   "median_eV": 0.748,
+   "n": 171,
    "tmd": [
     {
      "material": "WS2",
      "bse_eV": 0.516,
-     "implied_eV": 0.376
+     "implied_eV": 0.357
     },
     {
      "material": "WSe2",
      "bse_eV": 0.48,
-     "implied_eV": 0.227
+     "implied_eV": 0.256
     },
     {
      "material": "MoS2",
      "bse_eV": 0.547,
-     "implied_eV": 0.33
+     "implied_eV": 0.324
     },
     {
      "material": "MoSe2",
      "bse_eV": 0.5,
-     "implied_eV": 0.298
+     "implied_eV": 0.302
     }
    ],
    "note": "measured by BSE in C2DB; NOT the difference between the two corrections, which are referenced to different quantities"
@@ -240,297 +240,297 @@
  "trust_map": {
   "Ac": {
    "n": 42,
-   "mae": 0.664,
+   "mae": 0.615,
    "sparse": 1
   },
   "Ag": {
    "n": 1545,
-   "mae": 0.378,
+   "mae": 0.37,
    "sparse": 0
   },
   "Al": {
    "n": 417,
-   "mae": 0.57,
+   "mae": 0.574,
    "sparse": 0
   },
   "As": {
    "n": 528,
-   "mae": 0.363,
+   "mae": 0.364,
    "sparse": 0
   },
   "Au": {
    "n": 731,
-   "mae": 0.413,
+   "mae": 0.368,
    "sparse": 0
   },
   "B": {
    "n": 141,
-   "mae": 0.85,
+   "mae": 0.873,
    "sparse": 0
   },
   "Ba": {
    "n": 170,
-   "mae": 0.384,
+   "mae": 0.356,
    "sparse": 0
   },
   "Be": {
    "n": 296,
-   "mae": 0.568,
+   "mae": 0.582,
    "sparse": 0
   },
   "Bi": {
    "n": 407,
-   "mae": 0.444,
+   "mae": 0.456,
    "sparse": 0
   },
   "Br": {
    "n": 3358,
-   "mae": 0.427,
+   "mae": 0.415,
    "sparse": 0
   },
   "C": {
    "n": 44,
-   "mae": 1.24,
+   "mae": 1.307,
    "sparse": 1
   },
   "Ca": {
    "n": 281,
-   "mae": 0.508,
+   "mae": 0.525,
    "sparse": 0
   },
   "Cd": {
    "n": 466,
-   "mae": 0.511,
+   "mae": 0.5,
    "sparse": 0
   },
   "Ce": {
    "n": 131,
-   "mae": 0.264,
+   "mae": 0.28,
    "sparse": 0
   },
   "Cl": {
    "n": 3645,
-   "mae": 0.467,
+   "mae": 0.449,
    "sparse": 0
   },
   "Co": {
    "n": 222,
-   "mae": 0.271,
+   "mae": 0.278,
    "sparse": 0
   },
   "Cr": {
    "n": 255,
-   "mae": 0.341,
+   "mae": 0.357,
    "sparse": 0
   },
   "Cs": {
    "n": 495,
-   "mae": 0.422,
+   "mae": 0.457,
    "sparse": 0
   },
   "Cu": {
    "n": 910,
-   "mae": 0.381,
+   "mae": 0.358,
    "sparse": 0
   },
   "Dy": {
    "n": 159,
-   "mae": 0.372,
+   "mae": 0.422,
    "sparse": 0
   },
   "Er": {
    "n": 161,
-   "mae": 0.45,
+   "mae": 0.467,
    "sparse": 0
   },
   "F": {
    "n": 2194,
-   "mae": 0.608,
+   "mae": 0.598,
    "sparse": 0
   },
   "Fe": {
    "n": 266,
-   "mae": 0.279,
+   "mae": 0.28,
    "sparse": 0
   },
   "Ga": {
    "n": 306,
-   "mae": 0.531,
+   "mae": 0.496,
    "sparse": 0
   },
   "Gd": {
    "n": 120,
-   "mae": 0.363,
+   "mae": 0.365,
    "sparse": 0
   },
   "Ge": {
    "n": 220,
-   "mae": 0.695,
+   "mae": 0.697,
    "sparse": 0
   },
   "H": {
    "n": 348,
-   "mae": 1.103,
+   "mae": 1.08,
    "sparse": 0
   },
   "Hf": {
    "n": 186,
-   "mae": 0.459,
+   "mae": 0.466,
    "sparse": 0
   },
   "Hg": {
    "n": 619,
-   "mae": 0.451,
+   "mae": 0.446,
    "sparse": 0
   },
   "Ho": {
    "n": 166,
-   "mae": 0.433,
+   "mae": 0.436,
    "sparse": 0
   },
   "I": {
    "n": 3137,
-   "mae": 0.402,
+   "mae": 0.387,
    "sparse": 0
   },
   "In": {
    "n": 1074,
-   "mae": 0.519,
+   "mae": 0.477,
    "sparse": 0
   },
   "Ir": {
    "n": 50,
-   "mae": 0.377,
+   "mae": 0.361,
    "sparse": 1
   },
   "K": {
    "n": 623,
-   "mae": 0.588,
+   "mae": 0.589,
    "sparse": 0
   },
   "La": {
    "n": 155,
-   "mae": 0.439,
+   "mae": 0.476,
    "sparse": 0
   },
   "Li": {
    "n": 853,
-   "mae": 0.549,
+   "mae": 0.522,
    "sparse": 0
   },
   "Lu": {
    "n": 90,
-   "mae": 0.437,
+   "mae": 0.377,
    "sparse": 0
   },
   "Mg": {
    "n": 409,
-   "mae": 0.494,
+   "mae": 0.543,
    "sparse": 0
   },
   "Mn": {
    "n": 367,
-   "mae": 0.376,
+   "mae": 0.327,
    "sparse": 0
   },
   "Mo": {
    "n": 101,
-   "mae": 0.368,
+   "mae": 0.382,
    "sparse": 0
   },
   "N": {
    "n": 182,
-   "mae": 0.787,
+   "mae": 0.911,
    "sparse": 0
   },
   "Na": {
    "n": 762,
-   "mae": 0.46,
+   "mae": 0.439,
    "sparse": 0
   },
   "Nb": {
    "n": 169,
-   "mae": 0.366,
+   "mae": 0.358,
    "sparse": 0
   },
   "Nd": {
    "n": 164,
-   "mae": 0.523,
+   "mae": 0.541,
    "sparse": 0
   },
   "Ni": {
    "n": 201,
-   "mae": 0.331,
+   "mae": 0.323,
    "sparse": 0
   },
   "Np": {
    "n": 55,
-   "mae": 0.114,
+   "mae": 0.122,
    "sparse": 1
   },
   "O": {
    "n": 859,
-   "mae": 0.748,
+   "mae": 0.744,
    "sparse": 0
   },
   "Os": {
    "n": 70,
-   "mae": 0.337,
+   "mae": 0.319,
    "sparse": 0
   },
   "P": {
    "n": 322,
-   "mae": 0.467,
+   "mae": 0.457,
    "sparse": 0
   },
   "Pa": {
    "n": 49,
-   "mae": 0.224,
+   "mae": 0.227,
    "sparse": 1
   },
   "Pb": {
    "n": 528,
-   "mae": 0.389,
+   "mae": 0.393,
    "sparse": 0
   },
   "Pd": {
    "n": 328,
-   "mae": 0.378,
+   "mae": 0.393,
    "sparse": 0
   },
   "Pm": {
    "n": 55,
-   "mae": 0.508,
+   "mae": 0.549,
    "sparse": 1
   },
   "Pr": {
    "n": 59,
-   "mae": 0.547,
+   "mae": 0.571,
    "sparse": 1
   },
   "Pt": {
    "n": 166,
-   "mae": 0.444,
+   "mae": 0.443,
    "sparse": 0
   },
   "Pu": {
    "n": 63,
-   "mae": 0.094,
+   "mae": 0.097,
    "sparse": 0
   },
   "Rb": {
    "n": 558,
-   "mae": 0.403,
+   "mae": 0.413,
    "sparse": 0
   },
   "Re": {
    "n": 79,
-   "mae": 0.469,
+   "mae": 0.442,
    "sparse": 0
   },
   "Rh": {
    "n": 97,
-   "mae": 0.412,
+   "mae": 0.414,
    "sparse": 0
   },
   "Ru": {
@@ -540,112 +540,112 @@
   },
   "S": {
    "n": 1356,
-   "mae": 0.471,
+   "mae": 0.449,
    "sparse": 0
   },
   "Sb": {
    "n": 440,
-   "mae": 0.484,
+   "mae": 0.486,
    "sparse": 0
   },
   "Sc": {
    "n": 213,
-   "mae": 0.394,
+   "mae": 0.4,
    "sparse": 0
   },
   "Se": {
    "n": 2296,
-   "mae": 0.427,
+   "mae": 0.418,
    "sparse": 0
   },
   "Si": {
    "n": 129,
-   "mae": 0.719,
+   "mae": 0.74,
    "sparse": 0
   },
   "Sm": {
    "n": 178,
-   "mae": 0.421,
+   "mae": 0.409,
    "sparse": 0
   },
   "Sn": {
    "n": 582,
-   "mae": 0.46,
+   "mae": 0.448,
    "sparse": 0
   },
   "Sr": {
    "n": 196,
-   "mae": 0.6,
+   "mae": 0.554,
    "sparse": 0
   },
   "Ta": {
    "n": 172,
-   "mae": 0.393,
+   "mae": 0.387,
    "sparse": 0
   },
   "Tb": {
    "n": 183,
-   "mae": 0.373,
+   "mae": 0.377,
    "sparse": 0
   },
   "Tc": {
    "n": 30,
-   "mae": 0.156,
+   "mae": 0.169,
    "sparse": 1
   },
   "Te": {
    "n": 1752,
-   "mae": 0.384,
+   "mae": 0.371,
    "sparse": 0
   },
   "Th": {
    "n": 52,
-   "mae": 0.476,
+   "mae": 0.446,
    "sparse": 1
   },
   "Ti": {
    "n": 304,
-   "mae": 0.339,
+   "mae": 0.333,
    "sparse": 0
   },
   "Tl": {
    "n": 1576,
-   "mae": 0.405,
+   "mae": 0.39,
    "sparse": 0
   },
   "Tm": {
    "n": 176,
-   "mae": 0.458,
+   "mae": 0.444,
    "sparse": 0
   },
   "U": {
    "n": 66,
-   "mae": 0.125,
+   "mae": 0.134,
    "sparse": 0
   },
   "V": {
    "n": 248,
-   "mae": 0.336,
+   "mae": 0.354,
    "sparse": 0
   },
   "W": {
    "n": 91,
-   "mae": 0.503,
+   "mae": 0.455,
    "sparse": 0
   },
   "Y": {
    "n": 179,
-   "mae": 0.415,
+   "mae": 0.397,
    "sparse": 0
   },
   "Zn": {
    "n": 445,
-   "mae": 0.465,
+   "mae": 0.464,
    "sparse": 0
   },
   "Zr": {
    "n": 239,
-   "mae": 0.427,
+   "mae": 0.422,
    "sparse": 0
   }
  },

@@ -10,14 +10,15 @@ feature = distance, atomic number embedded at the nodes.
 | | |
 |---|---|
 | **Task** | Band gap (eV, PBE level) of an isolated 2D layer from its structure |
-| **Architecture** | Z-embedding 128, 4 × `CGConv`, Gaussian RBF edge features (40 centres on 0–8 Å), mean pooling, MLP head, dropout 0.2 |
+| **Architecture** | Z-embedding 128 **plus a 9-bin angular descriptor**, 4 × `CGConv`, Gaussian RBF edge features (40 centres on 0–8 Å), mean pooling, MLP head, dropout 0.2 |
+| **Why angles** | An edge carries a distance and nothing else, so two polymorphs of one composition are nearly the same graph. Against a control trained on the identical split and in the identical environment, adding a per-atom bond-angle histogram takes MAE from 0.271 to 0.246 eV — paired difference +0.026 eV, bootstrap 95% +0.015…+0.037, Wilcoxon p = 4·10⁻⁵ — and roughly doubles how far the model separates 1H-MX₂ from 1T-MX₂ (see below) |
 | **Training data** | Alexandria 2D (`alex_pbe_2d_all` via JARVIS-Tools), `e_above_hull ≤ 0.1` eV/atom, `band_gap_ind > 0.01` eV → 13 349 stable 2D semiconductors |
 | **Split** | Composition-disjoint (`GroupShuffleSplit` on reduced formula): 10 733 train / 1 290 val / 1 326 test. The dataset holds only 8 388 unique compositions, so a random split leaks near-duplicates |
 | **Ensemble** | 5 members, seeds 0–4, 200 epochs, batch 64, Adam 1e-3 with plateau decay and early stopping |
-| **Test performance** | **MAE 0.261 eV** (95% bootstrap CI 0.242–0.283), RMSE 0.454, R² 0.889. Members: 0.281 / 0.305 / 0.274 / 0.277 / 0.319 |
+| **Test performance** | **MAE 0.246 eV** (95% bootstrap CI 0.226–0.268), RMSE 0.435, R² 0.898. Members: 0.261 / 0.279 / 0.298 / 0.276 / 0.267 |
 | **Control** | Identical code and data on a random split: MAE 0.252. The honest split costs ≈ 0.01 eV |
-| **Composition baseline** | **0.430 eV** on the identical test set (`scripts/composition_baseline.py`), so structure wins by 39%. The 0.360 eV quoted previously came from five-fold cross-validation, a different protocol that leaks near-duplicate compositions; comparing it against a composition-disjoint number understated this model's advantage |
-| **Checksum** | SHA-256 `0921bf439b00ec440e41c1d3fdc20b2522982957180897fb77429250e0b34e72` |
+| **Composition baseline** | **0.430 eV** on the identical test set (`scripts/composition_baseline.py`), so structure wins by 43%. The 0.360 eV quoted previously came from five-fold cross-validation, a different protocol that leaks near-duplicate compositions; comparing it against a composition-disjoint number understated this model's advantage |
+| **Checksum** | SHA-256 `23a5b8ab85e8a77f9f91c64ac9079d08bdcdbbcd19245e42bcd7960d75e7c0aa` |
 
 The checkpoint also carries its own `calibration` block, both gap corrections and
 10 733 reference embeddings, so it can judge and correct its own output without
@@ -34,7 +35,7 @@ refitted, not only when the weights are retrained.
 | The two combined | 0.50 |
 
 Coverage of the raw spread is poor: ±1σ contains 37% of cases, not 68%. A scale
-factor fitted on validation (×5.09 for 90%, ×2.37 for 68%) gives 91.8% coverage on
+factor fitted on validation (×4.60 for 90%, ×2.15 for 68%) gives 90% coverage on
 the held-out test split. Conditional coverage by uncertainty quartile is
 84 / 92 / 94 / 96%, so the most confident quartile stays slightly optimistic.
 
@@ -141,7 +142,7 @@ trained on against 0.263 for held-out ones, which is why the browser tags them.
 
 Accuracy is meaningless here (majority baseline 79.5%). Deriving the type from the
 difference of two regressed gaps was tried first and collapsed to that baseline:
-the difference of two predictions with MAE ≈ 0.26 eV is noise. A separate model is
+the difference of two predictions with MAE ≈ 0.25 eV is noise. A separate model is
 used instead of a multi-task head because multi-tasking cost the regressor 0.05 eV.
 
 ## Intended use and limits
@@ -158,10 +159,10 @@ under `out-of-domain`.
 
   | Head | Fitted against | n | MAE, composition-disjoint | same target from the gap alone |
   |---|---|---|---|---|
-  | Quasiparticle gap (G₀W₀) | C2DB G₀W₀ | 184 | **0.251 eV** | 0.417 eV |
-  | Direct quasiparticle gap | C2DB G₀W₀ | 184 | **0.258 eV** | 0.514 eV |
-  | Exciton binding energy | C2DB BSE | 184 | **0.139 eV** | 0.232 eV |
-  | Optical gap = direct − exciton | — | 184 | **0.221 eV** | 0.383 eV |
+  | Quasiparticle gap (G₀W₀) | C2DB G₀W₀ | 171 | **0.243 eV** | 0.391 eV |
+  | Direct quasiparticle gap | C2DB G₀W₀ | 171 | **0.253 eV** | 0.479 eV |
+  | Exciton binding energy | C2DB BSE | 171 | **0.133 eV** | 0.217 eV |
+  | Optical gap = direct − exciton | — | 171 | **0.198 eV** | 0.360 eV |
 
   Validated on 8 folds × 6 shuffles, split by composition because C2DB holds several
   entries per composition. The head wins in every band of predicted gap.
@@ -186,6 +187,25 @@ under `out-of-domain`.
   settle it by predicting the binding energy instead of inferring it: 0.56 / 0.53 /
   0.54 / 0.52 eV on the four TMDs against BSE's 0.55 / 0.50 / 0.52 / 0.48, and the
   optical gap is the direct gap minus that number by construction.
+- **Polymorphs: much better, still not right.** `scripts/polymorph_sensitivity.py`
+  compares the spread of predictions against the spread of the reference at three
+  levels, from the least to the most dependent on geometry alone. 1.00 would mean
+  the model reproduces the variation exactly.
+
+  | | control (no angles) | shipped (angles) |
+  |---|---|---|
+  | global, C2DB / Alexandria | 1.01 / 0.96 | 1.00 / 0.96 |
+  | within one composition | 0.37 / 0.59 | **0.49 / 0.63** |
+  | 1H-MX₂ against 1T-MX₂ | 0.18 / 0.35 | **0.37 / 0.55** |
+
+  Both models are healthy at the level of composition and get worse as the answer
+  comes to depend on geometry alone; angles roughly halve that deficit but do not
+  close it. The 1H/1T case is the extreme one — same composition, same coordination
+  number, nearly the same bond lengths, median X–M–X angle 85.0° against 91.7°. It
+  matters because 1H-MoS₂ is a semiconductor and 1T-MoS₂ is metallic. One number
+  went the other way: the sign of the 1H−1T difference is right 74–79% of the time
+  against 79–85% before, which on 19 and 53 pairs is one and three pairs.
+
 - **Data-density bias.** Error is lowest on transition-metal and heavy-element
   chemistries where Alexandria is dense, highest on light main-group compounds. It
   does not grow with the size of the gap.
@@ -197,7 +217,7 @@ under `out-of-domain`.
   Alexandria 2D semiconductors. Verified at scale on 16 349 unseen structures
   spanning metastable entries and two other functionals: tier ordering survives
   (MAE 0.327 / 0.431 / 0.569 eV for reliable / check / out-of-domain), but 90%
-  intervals cover 78% and per-tier errors are optimistic. MAE is 0.261 eV on stable
+  intervals cover 78% and per-tier errors are optimistic. MAE is 0.246 eV on stable
   structures and 0.509 eV on metastable ones. Re-calibrate before trusting absolute
   intervals on a different population.
 - **Licence.** MIT for code and weights. Data: Alexandria (CC-BY 4.0), C2DB and

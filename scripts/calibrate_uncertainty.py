@@ -44,7 +44,7 @@ def embed(P: Predictor, data_dir: str, names: list[str], batch: int = 256) -> np
 
     chunks = []
     for i in range(0, len(names), batch):
-        graphs = [to_graph(Structure.from_file(os.path.join(data_dir, f)), P.cutoff)
+        graphs = [P.graph(Structure.from_file(os.path.join(data_dir, f)), pad_vacuum=False)
                   for f in names[i:i + batch]]
         graphs = [g for g in graphs if g is not None]
         chunks.append(P.models[0].encode(PyGBatch.from_data_list(graphs)).numpy())
