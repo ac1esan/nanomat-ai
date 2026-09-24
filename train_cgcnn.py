@@ -47,7 +47,7 @@ from torch_geometric.loader import DataLoader
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from nanomat.graph import to_graph  # noqa: E402
+from nanomat.graph import ensure_vacuum, to_graph  # noqa: E402
 from nanomat.model import CGCNN, CGCNNcls, load_trunk_from  # noqa: E402
 
 
@@ -66,9 +66,10 @@ def read_id_prop(data_dir: str) -> pd.DataFrame:
 def build_graphs(data_dir: str, files: list[str], cutoff: float, cache: bool,
                  n_ang: int = 0):
     # the angular width is part of the cache key: a cache built without angles would
-    # silently train a model whose angular layer never sees anything
+    # silently train a model whose angular layer never sees anything. "_pad" marks
+    # graphs built after the vacuum padding below; an older cache holds unpadded ones
     suffix = f"_a{n_ang}" if n_ang else ""
-    cache_path = os.path.join(data_dir, f"graphs_cache_c{cutoff:g}{suffix}.pt")
+    cache_path = os.path.join(data_dir, f"graphs_cache_c{cutoff:g}{suffix}_pad.pt")
     if cache and os.path.exists(cache_path):
         ck = torch.load(cache_path, weights_only=False)
         if ck["files"] == files:
@@ -77,6 +78,10 @@ def build_graphs(data_dir: str, files: list[str], cutoff: float, cache: bool,
     graphs, formulas, t0 = [], [], time.time()
     for i, f in enumerate(files):
         st = Structure.from_file(os.path.join(data_dir, f))
+        # the padding Predictor.prepare applies. Without it a layer with less vacuum
+        # than the cutoff trains on edges to its own periodic image and is predicted
+        # without them (2 of 13 349 Alexandria cells, elemental Br and Cl2)
+        st, _ = ensure_vacuum(st, cutoff)
         g = to_graph(st, cutoff, n_ang=n_ang)
         graphs.append(g)
         formulas.append(st.composition.reduced_formula)
@@ -346,6 +351,9 @@ def main():
     if len(keep) < len(graphs):
         print(f"dropped {len(graphs) - len(keep)} structures without neighbours within cutoff")
     df, graphs, formulas = df.iloc[keep].reset_index(drop=True), [graphs[i] for i in keep], [formulas[i] for i in keep]
+    # the names must follow the drop: --split-file maps names to positions, and a list
+    # left one entry longer would shift every later structure onto its neighbour's label
+    files = df["file"].tolist()
 
     y = df["target"].to_numpy(dtype=np.float32)
     for g, v in zip(graphs, y):
