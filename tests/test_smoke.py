@@ -41,15 +41,16 @@ def test_mos2_reference_prediction(P):
     """Pinned regression values for the shipped ensemble (MoS2 from JARVIS dft_2d)."""
     r = P.run(read_structure(os.path.join(EX, "MoS2.vasp")))
     assert r.formula == "MoS2"
-    assert abs(r.gap - 1.700) < 0.02
-    assert abs(r.unc - 0.034) < 0.015
+    # The ensemble trained with metastable Alexandria and 2DMatPedia monolayers:
+    # 1.676 against a PBE literature value near 1.67. Its spread on MoS2 doubled
+    # (0.034 -> 0.063) and is still well inside the reliable tier.
+    assert abs(r.gap - 1.676) < 0.02
+    assert abs(r.unc - 0.063) < 0.015
     assert r.verdict == "reliable"
     assert r.gap_type == "direct"
-    # experiment says 1.88 eV. The correction was refitted from five measured
-    # monolayers onto 184 C2DB materials with G0W0 + BSE, which moved this from 1.90
-    # to 2.11: the old value was memorised, since MoS2 was one of the five.
+    # experiment says 1.88 eV; the latent optical head gives 2.03
     assert 1.8 < r.exp_gap_est < 2.3
-    assert r.interval90 is not None and 0.05 < r.interval90 < 0.25
+    assert r.interval90 is not None and 0.1 < r.interval90 < 0.4
     assert r.latent_distance is not None and r.latent_distance < P.cal["latent_q75"]
 
 
@@ -63,26 +64,31 @@ def test_checkpoint_carries_calibration(P):
 
 
 def test_phosphorene_caught_by_latent_distance(P):
-    """The failure mode that the ensemble spread alone misses.
+    """A sparse neighbourhood, which the ensemble spread alone does not see.
 
-    Alexandria contains exactly one elemental-phosphorus 2D structure, so every
-    ensemble member learned the same thing from the same single example and they
-    agree confidently (spread ~0.04 eV) while being ~1.2 eV wrong. Distance to the
-    training set in latent space is what flags it.
+    Phosphorene is the only elemental-phosphorus layer in training (it is itself a
+    training structure, agm2000000335), so every member learns it identically and
+    the first ensembles agreed on it with a spread of 0.035 eV. This project once
+    called that a confident failure; it was not - the PBE gap is 0.85-0.90 eV in
+    all four databases and the prediction matched it. The 2.0 eV it was compared
+    with is an optical measurement. What is real is the sparse coverage, and that is
+    what the latent distance measures. The current ensemble shows some doubt of its
+    own (0.096 against a median of 0.092), a knife edge, so the test pins the
+    outcome - not endorsed, and noticed by the latent distance - and the mechanism
+    separately, on the verdict function.
     """
     from nanomat.predict import verdict
 
     r = P.run(read_structure(os.path.join(EX, "phosphorene.vasp")))
-    assert r.unc < P.cal["unc_median"], "premise: the ensemble is confident here"
+    assert not r.verdict.startswith("reliable"), "phosphorene must not be endorsed"
     assert r.latent_distance > P.cal["latent_q75"], "latent distance must notice it"
-    # The mechanism, not which side of a threshold it lands on. Phosphorene sits at
-    # 0.282 against a q90 of 0.290 in the angular ensemble and sat at 0.325 against
-    # 0.314 in the one before - a knife edge both times, so pinning the crossing
-    # tests luck. What must hold is that the spread alone would endorse this
-    # prediction and the latent distance takes that endorsement away.
-    assert verdict(r.unc, P.cal, None).startswith("reliable"), \
-        "premise: without the latent check this would be endorsed"
-    assert not r.verdict.startswith("reliable"), "the latent check must downgrade it"
+
+    # the mechanism: a spread the tiers would endorse, far from the training set
+    confident = 0.5 * P.cal["unc_median"]
+    assert verdict(confident, P.cal, None).startswith("reliable")
+    between = 0.5 * (P.cal["latent_q75"] + P.cal["latent_q90"])
+    assert verdict(confident, P.cal, between).startswith("check")
+    assert verdict(confident, P.cal, 1.1 * P.cal["latent_q90"]).startswith("out-of-domain")
 
 
 def test_ensemble_is_deterministic(P):
@@ -106,6 +112,22 @@ def test_vacuum_padding_is_graph_invariant(P):
     r_thin, r_orig = P.run(thin), P.run(orig)
     assert abs(r_thin.gap - r_orig.gap) < 1e-3
     assert r_thin.layer["padded"] and any("padded" in w for w in r_thin.warnings)
+
+
+def test_training_graph_is_the_inference_graph(P, tmp_path):
+    """The predictor pads a thin vacuum, so the trainer has to as well. Otherwise a
+    layer with less vacuum than the cutoff trains on edges to its own periodic image
+    and is later predicted without them - two Alexandria cells (elemental Br and
+    Cl2) were, until build_graphs learned to pad."""
+    import shutil
+    from train_cgcnn import build_graphs
+    shutil.copy(os.path.join(EX, "MoS2_thin_vacuum.vasp"), tmp_path / "thin.vasp")
+    graphs, _ = build_graphs(str(tmp_path), ["thin.vasp"], P.cutoff, cache=False,
+                             n_ang=P.n_ang)
+    g_inf = P.graph(read_structure(os.path.join(EX, "MoS2_thin_vacuum.vasp")))
+    assert graphs[0].num_edges == g_inf.num_edges
+    assert torch.allclose(graphs[0].edge_weight.sort().values,
+                          g_inf.edge_weight.sort().values, atol=1e-4)
 
 
 def test_bulk_cell_is_flagged_out_of_domain(P):
@@ -291,7 +313,10 @@ def test_corrections_carry_their_own_provenance(P):
     """
     qp, opt = P.corr["quasiparticle"], P.corr["optical"]
     assert qp["reference"] != opt["reference"], "different targets, or the pair is pointless"
-    assert qp["n"] >= 32 and opt["n"] >= 100
+    # JARVIS dft_2d has 54 HSE gaps and only the in-domain ones are fitted: 32 for the
+    # angular ensemble, 28 for the one trained with metastable data. 25 is the floor
+    # below which a two-parameter leave-one-out stops meaning much.
+    assert qp["n"] >= 25 and opt["n"] >= 100
     assert 0 < opt["mae_cv"] < 0.5, "a cross-validated error, not an in-sample one"
     assert len(opt["coeffs"]) >= 2
 

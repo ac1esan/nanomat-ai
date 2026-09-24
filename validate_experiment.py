@@ -62,6 +62,7 @@ def evaluate(P: Predictor | None = None) -> list[dict]:
         r = P.run(read_structure(path))
         rows.append({
             "material": name, "model": r.gap, "unc": r.unc, "exp": exp,
+            "optical": r.exp_gap_est,
             "type_model": r.gap_type or "—", "type_exp": etype,
             "verdict": r.verdict, "note": note,
         })

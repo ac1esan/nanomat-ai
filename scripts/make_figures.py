@@ -35,6 +35,9 @@ plt.rcParams.update({
 # The composition-disjoint ("grouped") re-measurement of the 13 349 point is marked
 # separately: same code, same data, only the split differs.
 GROUPED_13K = (13349, 0.2614)
+# The shipped ensemble: angles, plus metastable Alexandria and 2DMatPedia in training,
+# scored on the same composition-disjoint stable test set as the diamond above.
+SHIPPED = (22103, 0.2246)
 # (dataset, N, composition CV MAE, CGCNN MAE)
 SCALING = [
     ("JARVIS dft_2d", 696, 0.583, 0.585),
@@ -53,11 +56,16 @@ def fig_scaling():
     ax.plot(n, gnn, color=C_GNN, lw=2, marker="o", ms=7, label="Structure (CGCNN, PyTorch Geometric)")
     gx, gy = GROUPED_13K
     ax.plot([gx], [gy], marker="D", ms=8, mfc="white", mec=C_GNN, mew=2, ls="none",
-            label="Structure, composition-disjoint split (honest)")
-    ax.annotate(f"{gy:.2f}", (gx, gy), textcoords="offset points", xytext=(26, -3),
+            label="First ensemble, composition-disjoint split")
+    ax.annotate(f"{gy:.2f}", (gx, gy), textcoords="offset points", xytext=(-32, -3),
                 color=C_TEXT, fontsize=9.5)
     ax.annotate("", xy=(gx, gy - 0.004), xytext=(gx, 0.2214),
                 arrowprops=dict(arrowstyle="-", color=C_MUTED, lw=0.8, ls=":"))
+    sx, sy = SHIPPED
+    ax.plot([sx], [sy], marker="D", ms=8, color=C_GNN, ls="none",
+            label="Shipped: + metastable + 2DMatPedia, same test")
+    ax.annotate(f"{sy:.3f}", (sx, sy), textcoords="offset points", xytext=(0, -16),
+                ha="center", color=C_TEXT, fontsize=9.5)
     for x, yc, yg in zip(n, comp, gnn):
         ax.annotate(f"{yc:.2f}", (x, yc), textcoords="offset points", xytext=(0, 9),
                     ha="center", color=C_TEXT, fontsize=9.5)
@@ -75,9 +83,9 @@ def fig_scaling():
     ax.grid(axis="y", color=C_GRID, lw=0.8)
     ax.set_title("Structure beats composition only once there is enough data",
                  loc="left", color=C_TEXT, fontsize=12.5, pad=26)
-    ax.text(0, 1.005, "Solid line: random split, consistent across all N. The diamond "
-            "re-measures 13 349 with no composition\nshared between train and test - "
-            "the same code and data, and the honest number for unseen chemistry",
+    ax.text(0, 1.005, "Solid lines: random split. Diamonds: no composition shared between "
+            "train and test, one fixed stable test set -\nhollow for the first ensemble, "
+            "filled for the shipped one, which also trains on metastable and 2DMatPedia data",
             transform=ax.transAxes, color=C_MUTED, fontsize=8.5, va="bottom")
     ax.legend(frameon=False, loc="upper right", fontsize=9.5)
     fig.tight_layout()
@@ -86,50 +94,62 @@ def fig_scaling():
 
 
 def fig_experiment():
-    from validate_experiment import evaluate, summarize
+    """Model against measured optical gaps on the reference monolayers.
+
+    Two markers per material: the PBE-level prediction (hollow), below the
+    measurement by design, and the optical-gap estimate from the latent heads
+    (filled) - direct G0W0 gap minus exciton binding - which is the number the tool
+    offers for comparison with absorption. No fitted line: an earlier version drew a
+    descriptive fit through these seven points, which read as the shipped correction.
+    """
+    import numpy as np
+    from validate_experiment import evaluate
     rows = evaluate()
-    s = summarize(rows)
     fig, ax = plt.subplots(figsize=(6.8, 6.4), dpi=160)
     ax.set_aspect("equal")
     lim = (-0.3, 6.6)
     ax.plot(lim, lim, color=C_GRID, lw=1.2, ls="--", zorder=1)
-    xs = [0, 6.6]
-    ax.plot(xs, [(x - s["corr_b"]) / s["corr_a"] for x in xs], color=C_MUTED, lw=1.2, ls=":",
-            zorder=1)
-    import math
-    ang = math.degrees(math.atan(1 / s["corr_a"]))
-    ax.text(3.35, (3.35 - s["corr_b"]) / s["corr_a"] - 0.42,
-            f"linear fit: exp ≈ {s['corr_a']:.2f}·PBE {s['corr_b']:+.2f}", color=C_MUTED,
-            fontsize=8.5, rotation=ang, rotation_mode="anchor")
-    ax.text(4.75, 5.05, "exp = PBE", color=C_MUTED, fontsize=8.5, rotation=45, rotation_mode="anchor")
-    # label positions (data coords) chosen by hand to avoid the TMD cluster overlap
-    LBL = {"WS2": (2.75, 2.75), "MoS2": (2.75, 2.25), "phosphorene": (2.75, 0.75),
-           "MoSe2": (0.05, 3.15), "WSe2": (0.05, 2.55), "h-BN": (6.15, 4.2),
+    ax.text(4.9, 5.2, "measured = predicted", color=C_MUTED, fontsize=8.5, rotation=45,
+            rotation_mode="anchor")
+    # label positions (data coords) chosen by hand to keep the TMD cluster legible
+    LBL = {"WS2": (2.75, 2.75), "MoS2": (2.75, 2.2), "phosphorene": (2.75, 0.75),
+           "MoSe2": (0.05, 3.15), "WSe2": (0.05, 2.55), "h-BN": (5.9, 3.9),
            "graphene": (0.75, 5.35)}
+    errs = []
     for r in rows:
         ood = r["verdict"].startswith("out-of-domain")
         c = C_OOD if ood else C_COMP
-        ax.errorbar(r["exp"], r["model"], yerr=r["unc"], fmt="o", color=c, ms=7,
-                    capsize=3, lw=1.5, zorder=3)
-        label = f"{r['material']}  {r['model']:.2f} ± {r['unc']:.2f}"
-        if ood:
-            label = f"{r['material']}\nflagged out-of-domain"
+        ax.errorbar(r["exp"], r["model"], yerr=r["unc"], fmt="o", mfc="white", mec=c,
+                    color=c, ms=7, capsize=3, lw=1.2, zorder=3)
+        opt = r.get("optical")
+        if opt is not None and not ood:
+            ax.plot([r["exp"], r["exp"]], [r["model"], opt], color=C_MUTED, lw=0.7,
+                    ls=":", zorder=2)
+            ax.plot(r["exp"], opt, "o", color=C_GNN, ms=7, zorder=4)
+            errs.append(abs(opt - r["exp"]))
+            label, at = f"{r['material']}  {r['model']:.2f} → {opt:.2f}", opt
+        else:
+            label, at = f"{r['material']}\nrejected by the metal gate", r["model"]
         left_side = r["material"] in ("MoSe2", "WSe2")   # label sits left of the point
-        ax.annotate(label, (r["exp"], r["model"]), xytext=LBL[r["material"]],
-                    color=C_TEXT, fontsize=8.5, va="center",
-                    arrowprops=dict(arrowstyle="-", color=C_MUTED, lw=0.7,
-                                    shrinkA=0, shrinkB=5,
-                                    relpos=(1, 0.5) if left_side else (0, 0.5)))
+        ax.annotate(label, (r["exp"], at), xytext=LBL[r["material"]], color=C_TEXT,
+                    fontsize=8.5, va="center",
+                    arrowprops=dict(arrowstyle="-", color=C_MUTED, lw=0.7, shrinkA=0,
+                                    shrinkB=5, relpos=(1, 0.5) if left_side else (0, 0.5)))
+    ax.plot([], [], "o", mfc="white", mec=C_COMP, ms=7, ls="none",
+            label="PBE-level prediction ± ensemble spread")
+    ax.plot([], [], "o", color=C_GNN, ms=7, ls="none",
+            label="optical estimate (G₀W₀ − exciton heads)")
+    ax.legend(frameon=False, loc="lower right", fontsize=8.5)
     ax.set_xlim(lim)
     ax.set_ylim(lim)
-    ax.set_xlabel("experimental optical gap, eV", color=C_MUTED)
-    ax.set_ylabel("model prediction (PBE level), eV  ± ensemble spread", color=C_MUTED)
+    ax.set_xlabel("measured optical gap, eV", color=C_MUTED)
+    ax.set_ylabel("model, eV", color=C_MUTED)
     ax.grid(color=C_GRID, lw=0.8)
-    ax.set_title("PBE-trained model vs experiment on reference monolayers",
+    ax.set_title("Model against experiment on reference monolayers",
                  loc="left", color=C_TEXT, fontsize=12.5, pad=26)
-    ax.text(0, 1.005, f"PBE underestimates by {s['mean_shift_eV']:+.2f} eV on average; the fit "
-            "uses only the points the tool calls usable.\nGrey points are the two the tool "
-            "flags itself - graphene by the metal gate, phosphorene by latent distance",
+    ax.text(0, 1.005, "The PBE-level number sits below the measurement by design; the "
+            f"optical estimate is what compares with\nabsorption (MAE {np.mean(errs):.2f} eV "
+            "over the six semiconductors). Grey: graphene, rejected by the metal gate",
             transform=ax.transAxes, color=C_MUTED, fontsize=8.5, va="bottom")
     fig.tight_layout()
     fig.savefig(os.path.join(FIG, "experiment_validation.png"))
