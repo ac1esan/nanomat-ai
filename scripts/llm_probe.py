@@ -5,7 +5,8 @@ The same eight questions go to every model, through the same MCP server
 (`nanomat/mcp_server.py`) and under the same short system prompt, which says
 nothing about verdicts: the test is whether the tool's own output is enough. Each
 question has a trap the tool's output can defuse - an out-of-domain graphene, a
-"reliable" 1T'-MoS2 whose DFT reference contradicts it, a PBE number set against
+1T'-MoS2 the model gets wrong by 0.9 eV (once called reliable; the retrained metal
+gate now rejects it), a PBE number set against
 an optical measurement, a user who insists.
 
 Two backends, one record format:

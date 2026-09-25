@@ -147,6 +147,7 @@ def _row(r, full: bool = False) -> dict:
         "quasiparticle_gap_eV": None if ood else _num(r["gap_quasiparticle_eV"]),
         "gap_type": r["gap_type"] if isinstance(r["gap_type"], str) else None,
         "p_metal": _num(r["p_metal"], 2),
+        "p_metastable": _num(r.get("p_metastable"), 2),
         "reference_dft_gap_eV": _num(r["dft_gap_eV"]),
         "reference_method": REFERENCE.get(r["source"], r["source"]),
         "training_role": ROLE.get(str(r["in_training_set"]), str(r["in_training_set"])),
@@ -232,7 +233,8 @@ def predict_structure(structure: str, fmt: str = "") -> dict:
         "gap_range90_eV": None if ood else _range(r.gap, r.interval90),
         "interval90_halfwidth_eV": None if ood else _num(r.interval90),
         "uncertainty_eV": _num(r.unc), "latent_distance": _num(r.latent_distance),
-        "p_metal": _num(r.p_metal, 2), "gap_type": r.gap_type,
+        "p_metal": _num(r.p_metal, 2), "p_metastable": _num(r.p_metastable, 2),
+        "gap_type": r.gap_type,
         "quasiparticle_gap_eV": None if ood else _num(r.gap_quasiparticle),
         "optical_gap_estimate_eV": None if ood else _num(r.exp_gap_est),
         "exciton_binding_eV": None if ood else _num(r.exciton_binding),
@@ -359,9 +361,11 @@ def model_card() -> dict:
         "accuracy": f"MAE {cal.get('test_mae', 0.225):.3f} eV on 1 326 held-out stable monolayers "
                     "whose compositions never appear in training; 0.43 for composition alone",
         "verdict_tiers": {k: f"typical error {v:.2f} eV" for k, v in _tier_mae().items()},
-        "interval": f"gap_range90_eV spans +-{cal.get('scale90', 4.19):.2f} x the ensemble spread; "
-                    "it covers 90% on stable held-out structures and about 83% on the wider "
-                    "population",
+        "interval": "gap_range90_eV is the prediction plus or minus the ensemble spread times a "
+                    "calibrated scale, read per cell of (does the structure resemble the metastable "
+                    "population?, spread quartile). It covers about 92% of held-out near-hull "
+                    "monolayers and 88% of held-out metastable ones; against references computed "
+                    "with other methods (C2DB, JARVIS) it covers less",
         "training_data": "22 103 PBE monolayers: Alexandria 2D (stable and metastable) and "
                          "non-magnetic 2DMatPedia",
         "limits": [
@@ -371,6 +375,8 @@ def model_card() -> dict:
             "of heavy elements (W, Bi, Pb, Tl, I, Te, ...) the SOC-inclusive gap is lower than this "
             "number: against C2DB, which includes SOC, the model is 0.27 eV higher on average there "
             "and 0.03 eV higher without heavy elements.",
+            "Structures that resemble the metastable population (p_metastable > 0.5) err about twice "
+            "as much at the same verdict; their gap_range90_eV is widened for it.",
             "Weakest on light main-group chemistry (C, B, N, H), strongest on transition-metal compounds.",
             "Labels carry database errors: Alexandria misses the Dirac point of honeycombs (graphene "
             "is labelled 1.23 eV).",

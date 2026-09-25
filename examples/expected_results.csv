@@ -1,9 +1,9 @@
-file,formula,natoms,band_gap_PBE_eV,work_function_eV,electron_affinity_eV,ionisation_potential_eV,work_function_unc_eV,work_function_verdict,gap_quasiparticle_eV,gap_quasiparticle_direct_eV,exciton_binding_eV,exp_gap_est_eV,uncertainty_eV,interval90_eV,latent_distance,typical_error_eV,verdict,p_metal,gap_type,p_indirect,vacuum_A,warnings
-phosphorene.vasp,P,4,0.965,4.66,,,0.105,out-of-domain (chemistry unlike anything in training),2.062,2.112,0.608,1.504,0.096,0.401,0.255,0.207,check (elevated uncertainty),0.0,direct,0.0,20.0,
-graphene.vasp,C,2,1.066,3.177,,,0.319,out-of-domain (chemistry unlike anything in training),,,,,0.71,2.975,0.38,0.408,out-of-domain (metal gate: p_metal=1.00),1.0,indirect,1.0,20.0,metal gate says metal; gap regressor is not trained on metals
-MoSe2.vasp,MoSe2,3,1.536,4.721,3.953,5.489,0.031,reliable,2.101,2.088,0.504,1.584,0.047,0.196,0.105,0.116,reliable,0.26,direct,0.02,20.0,
-WSe2.vasp,WSe2,3,1.605,4.42,3.617,5.222,0.049,reliable,2.246,2.264,0.518,1.746,0.049,0.207,0.126,0.116,reliable,0.4,direct,0.0,31.7,
-MoS2.vasp,MoS2,3,1.676,5.256,4.418,6.094,0.029,reliable,2.579,2.586,0.559,2.027,0.063,0.262,0.139,0.116,reliable,0.11,direct,0.11,31.7,
-MoS2_thin_vacuum.vasp,MoS2,3,1.676,5.256,4.418,6.094,0.029,reliable,2.579,2.586,0.559,2.027,0.063,0.262,0.139,0.116,reliable,0.11,direct,0.11,7.0,vacuum was 7.0 A < cutoff 8 A; padded to 20 A to avoid spurious inter-layer edges
-WS2.vasp,WS2,3,1.884,4.953,4.011,5.895,0.035,reliable,2.709,2.749,0.529,2.219,0.071,0.298,0.166,0.116,reliable,0.34,direct,0.04,27.1,
-hBN.vasp,BN,2,4.719,3.425,,,0.049,out-of-domain (chemistry unlike anything in training),7.046,7.623,1.991,5.632,0.058,0.241,0.138,0.116,reliable,0.0,indirect,0.73,20.0,
+file,formula,natoms,band_gap_PBE_eV,work_function_eV,electron_affinity_eV,ionisation_potential_eV,work_function_unc_eV,work_function_verdict,gap_quasiparticle_eV,gap_quasiparticle_direct_eV,exciton_binding_eV,exp_gap_est_eV,uncertainty_eV,interval90_eV,latent_distance,typical_error_eV,verdict,p_metal,p_metastable,gap_type,p_indirect,vacuum_A,warnings
+phosphorene.vasp,P,4,0.965,4.66,,,0.105,out-of-domain (chemistry unlike anything in training),2.062,2.112,0.608,1.504,0.096,0.433,0.255,0.19,check (elevated uncertainty),0.01,0.83,direct,0.0,20.0,
+graphene.vasp,C,2,1.066,3.177,,,0.319,out-of-domain (chemistry unlike anything in training),,,,,0.71,2.877,0.38,0.401,out-of-domain (metal gate: p_metal=1.00),1.0,0.21,indirect,1.0,20.0,metal gate says metal; gap regressor is not trained on metals
+MoSe2.vasp,MoSe2,3,1.536,4.721,3.953,5.489,0.031,reliable,2.101,2.088,0.504,1.584,0.047,0.316,0.105,0.104,reliable,0.11,0.16,direct,0.02,20.0,
+WSe2.vasp,WSe2,3,1.605,4.42,3.617,5.222,0.049,reliable,2.246,2.264,0.518,1.746,0.049,0.334,0.126,0.104,reliable,0.09,0.07,direct,0.0,31.7,
+MoS2.vasp,MoS2,3,1.676,5.256,4.418,6.094,0.029,reliable,2.579,2.586,0.559,2.027,0.063,0.295,0.139,0.104,reliable,0.07,0.16,direct,0.11,31.7,
+MoS2_thin_vacuum.vasp,MoS2,3,1.676,5.256,4.418,6.094,0.029,reliable,2.579,2.586,0.559,2.027,0.063,0.295,0.139,0.104,reliable,0.07,0.16,direct,0.11,7.0,vacuum was 7.0 A < cutoff 8 A; padded to 20 A to avoid spurious inter-layer edges
+WS2.vasp,WS2,3,1.884,4.953,4.011,5.895,0.035,reliable,2.709,2.749,0.529,2.219,0.071,0.336,0.166,0.104,reliable,0.13,0.08,direct,0.04,27.1,
+hBN.vasp,BN,2,4.719,3.425,,,0.049,out-of-domain (chemistry unlike anything in training),7.046,7.623,1.991,5.632,0.058,0.389,0.138,0.104,reliable,0.0,0.37,indirect,0.73,20.0,

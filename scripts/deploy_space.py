@@ -60,18 +60,19 @@ Browse predicted band gaps for **28 372 two-dimensional structures**. Filter by
 element, gap range and trust verdict, and see a periodic-table map of where the
 model actually works.
 
-A CGCNN ensemble of five models trained on 13 349 stable 2D semiconductors from
-Alexandria, reading bond angles as well as bond lengths. Test MAE **0.25 eV** on a
-split where no composition is shared between training and test. Nothing is computed
+A CGCNN ensemble of five models trained on 22 103 two-dimensional semiconductors
+(Alexandria, stable and metastable, and non-magnetic 2DMatPedia), reading bond angles
+as well as bond lengths. Test MAE **0.23 eV** on a split where no composition is
+shared between training and test. Nothing is computed
 in this page: the predictions were made once and are served as a static table.
 
 **The verdict is the point.** Three independent checks decide whether to trust a
 prediction, and each exists because the previous one was caught failing on a real
 case: a metal gate that rejects metals outright, the spread between ensemble
 members, and the distance to the training set in the model's own latent space. The
-last one exists because every ensemble member shares one training set, so a
-chemistry none of them saw produces confident agreement — phosphorene came out at
-0.82 eV against an experimental 2.0 with a spread of 0.035 eV.
+last one exists because every ensemble member shares one training set, so on a
+chemistry the training set barely covers they can agree for the wrong reason. On the
+structures the model never trained on, the three tiers err 0.20, 0.23 and 0.42 eV.
 
 Three many-body numbers are reported alongside the raw PBE gap: the **quasiparticle
 gap** that photoemission and transport see, the **exciton binding energy**, and the

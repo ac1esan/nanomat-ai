@@ -5,25 +5,25 @@
     {
       "n": 2440,
       "positive_rate": 0.3987704813480377,
-      "threshold": 0.6476057171821595,
-      "roc_auc": 0.9442016938596361,
-      "balanced_accuracy": 0.8758630256180682,
-      "f1_positive": 0.851619644723093,
-      "accuracy": 0.8836065573770492,
-      "precision_positive": 0.8660998940467834
+      "threshold": 0.5169046372175217,
+      "roc_auc": 0.9686774681919671,
+      "balanced_accuracy": 0.9154576426501218,
+      "f1_positive": 0.8948412698412699,
+      "accuracy": 0.9131147540983606,
+      "precision_positive": 0.8648130297660828
     }
   ],
-  "n_train": 19478,
+  "n_train": 41611,
   "n_val": 2396,
   "n_test": 2440,
   "ensemble": {
     "n": 2440,
     "positive_rate": 0.3987704813480377,
-    "threshold": 0.6476057171821595,
-    "roc_auc": 0.9442016938596361,
-    "balanced_accuracy": 0.8758630256180682,
-    "f1_positive": 0.851619644723093,
-    "accuracy": 0.8836065573770492,
-    "precision_positive": 0.8660998940467834
+    "threshold": 0.5169046372175217,
+    "roc_auc": 0.9686774681919671,
+    "balanced_accuracy": 0.9154576426501218,
+    "f1_positive": 0.8948412698412699,
+    "accuracy": 0.9131147540983606,
+    "precision_positive": 0.8648130297660828
   }
 }

@@ -183,7 +183,8 @@ def format_markdown(r, cal: dict | None = None) -> str:
     mae = cal.get("test_mae")
     lines += [
         "",
-        "<sub>CGCNN ensemble (5 models) on 13 349 stable 2D semiconductors (Alexandria, PBE), "
+        "<sub>CGCNN ensemble (5 models) on 22 103 2D semiconductors (Alexandria, stable and "
+        "metastable, and non-magnetic 2DMatPedia; PBE), "
         f"evaluated on a composition-disjoint split: test MAE {mae:.2f} eV. "
         "Two independent out-of-domain signals are used, because neither alone is enough: "
         "the spread between ensemble members, and the distance to the training set in the "

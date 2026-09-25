@@ -47,7 +47,7 @@ python screen_bandgap.py --app                                # web UI at http:/
 ```
 
 ```bash
-pytest -q                                                     # 22 smoke and contract tests
+pytest -q                                                     # 24 smoke and contract tests
 ```
 
 From a language model, over the Model Context Protocol
@@ -70,12 +70,12 @@ Output for the bundled examples ([examples/expected_results.csv](examples/expect
 
 | file | formula | gap (PBE), eV | 90% interval | verdict |
 |---|---|---|---|---|
-| WS2.vasp | WS2 | 1.88 | ±0.30 | reliable |
-| MoS2.vasp | MoS2 | 1.68 | ±0.26 | reliable |
-| MoSe2.vasp | MoSe2 | 1.54 | ±0.20 | reliable |
-| WSe2.vasp | WSe2 | 1.60 | ±0.21 | reliable |
-| hBN.vasp | BN | 4.72 | ±0.24 | reliable |
-| phosphorene.vasp | P | 0.96 | ±0.40 | **check: elevated uncertainty** |
+| WS2.vasp | WS2 | 1.88 | ±0.34 | reliable |
+| MoS2.vasp | MoS2 | 1.68 | ±0.30 | reliable |
+| MoSe2.vasp | MoSe2 | 1.54 | ±0.32 | reliable |
+| WSe2.vasp | WSe2 | 1.60 | ±0.33 | reliable |
+| hBN.vasp | BN | 4.72 | ±0.39 | reliable |
+| phosphorene.vasp | P | 0.96 | ±0.43 | **check: elevated uncertainty** |
 | graphene.vasp | C | 1.07 | — | **out-of-domain: metal gate** |
 
 The last row is the point of the project: graphene is a semimetal, the regressor
@@ -91,8 +91,10 @@ three independent checks, and each exists because the previous one was caught
 failing on a real case.
 
 **1. A metal gate.** The regressor is trained on semiconductors only, so a metal
-produces a meaningless number. A separate classifier (ROC-AUC 0.944, precision on
-metals 0.866) rejects them first.
+produces a meaningless number. A separate classifier rejects them first: ROC-AUC 0.969
+on its held-out split, and 0.919 and 0.892 on held-out metastable Alexandria and
+2DMatPedia, where it catches 86–88% of the metals (retrained this release; the
+experiment is under Results).
 
 The first version of this gate, trained on Alexandria alone, scored ROC-AUC 0.952
 and still gave graphene `p(metal) = 0.00`. Cause: of 19 691 training structures,
@@ -133,7 +135,44 @@ because chemically rich systems are both better represented and intrinsically ha
 not 68% — deep ensembles rank well but are overconfident. A scale factor fitted on the
 validation split (×4.19) gives 90% coverage on the held-out test split against a 90%
 target. It beats a fixed conformal interval, which would have to be ±0.51 eV for
-everyone; a prediction in the reliable tier carries a median ±0.24 eV instead.
+everyone; a prediction in the reliable tier carries a median ±0.34 eV instead. (It was
+±0.24 under a single scale, which covered only 82% of the most confident quartile.)
+
+**Calibrated for the population it meets, not only the one it was fitted on.** That
+scale came from near-hull structures, and the ensemble now also trains on metastable
+ones (0.1–0.2 eV/atom above the hull). On held-out metastable monolayers the same
+interval covered 84%, and inside the reliable tier 74%: a confident prediction there
+errs twice as much (0.20 against 0.10 eV). Neither trust signal sees this. The spread
+and the latent distance each separate the two populations barely better than chance
+(ROC-AUC 0.59 and 0.60), and at equal values of either a metastable structure errs
+more. The latent space itself does see it: a linear head on the five members'
+embeddings tells a held-out metastable structure from a held-out near-hull one at
+ROC-AUC 0.85. So the interval scale is now read per cell of *resembles metastable ×
+spread quartile*. Over 20 composition-grouped halvings of the metastable test set,
+fitting on one half and reporting on the other:
+
+| | one scale | per cell |
+|---|---|---|
+| held-out metastable | 83.7% ± 1.0 | **87.8% ± 1.4** |
+| near-hull test split | 90.2% | **92.4%**, same median width ±0.42 eV |
+| most confident spread quartile (near-hull) | 82% | **92%** |
+| 2DMatPedia, in no part of the fit | 86.9% | 87.9% |
+
+Across the screening table's rows the ensemble never trained on, coverage goes from
+83.4% to 87.7%: 84.7 → 88.6% on metastable Alexandria, 74.5 → 82.3% on C2DB and
+77.3 → 81.3% on JARVIS dft_2d, the last two computed with other methods than the
+target.
+
+The same head was also tried as a verdict rule — reliable becomes check when a
+structure resembles the metastable population — and rejected. It sharpened the
+reliable tier on near-hull structures (0.104 → 0.094 eV) but inverted the tier order on
+every population the model never trained on: on held-out metastable Alexandria the
+reliable tier ended at 0.251 eV against 0.212 for check. The structures it left in the
+reliable tier were the metastable ones the head mistakes for near-hull, which is
+exactly where the model is confidently wrong. So the resemblance widens the interval
+and does not touch the verdict, and a reliable metastable structure still errs about
+twice as much as a reliable near-hull one (0.20 against 0.10 eV).
+(`scripts/calibrate_population.py`)
 
 ## How it works
 
@@ -273,6 +312,47 @@ visible; the data supplied it.
 Errors still follow data density rather than physics — best on transition-metal
 chemistries, worst on light main-group ones, flat in the size of the gap — but the
 gradient is much shallower than it was.
+
+### The two classifiers, retrained on the same data
+
+The metal gate and the gap-type classifier were still trained on the old, stable-only
+data. [`scripts/classifier_experiment.py`](scripts/classifier_experiment.py) repeats the
+stability experiment's design for both: one environment, the shipped validation and
+test splits in every arm, extra test sets cut from the additions by composition, and a
+decision rule written before any arm trained. ROC-AUC, paired against a control
+retrained in the same session:
+
+| Metal gate | shipped | control | **retrained** | Δ vs control, 95% CI |
+|---|---|---|---|---|
+| its own test split (n = 2 440) | 0.944 | 0.949 | **0.969** | +0.020 [+0.013, +0.027] |
+| held-out metastable Alexandria (2 998) | 0.813 | 0.796 | **0.919** | +0.123 [+0.108, +0.137] |
+| held-out 2DMatPedia (478) | 0.783 | 0.784 | **0.892** | +0.108 [+0.067, +0.150] |
+
+On 2DMatPedia the gate now catches 88% of the metals instead of 67%, at 26% of the
+semiconductors wrongly rejected instead of 21%; on metastable Alexandria, 86% instead
+of 60%, at 18% instead of 16%. Graphene is still rejected.
+
+Two decisions departed from the written rule. Both are recorded here, because a rule
+is only worth writing down if departures from it are visible:
+
+- **The gate that ships uses the angular descriptor.** With and without angles the
+  two arms were indistinguishable on all three tests, and the rule's tie-breaker
+  picked the one without. That one calls WS₂ a metal at +1% in-plane strain (p 0.56
+  against its threshold 0.47), well inside the spread of lattice constants between
+  functionals. The one with angles holds all six reference semiconductors from −1% to
+  +1% and first slips on WSe₂ at +2%. A test now checks the shipped gate at −1%, 0
+  and +1%.
+- **The gap-type classifier was not replaced.** Retrained on the metastable data it
+  passed the rule — ROC-AUC +0.072 [+0.052, +0.094] on held-out metastable structures,
+  −0.001 on the stable test — and it calls monolayer MoS₂, MoSe₂ and phosphorene
+  indirect, which both Alexandria's own labels and experiment call direct. The rule
+  had a reference-material check for the gate and none for this classifier. The
+  control retrained with another seed flips MoS₂ as well, so near the boundary a
+  single classifier's call on one material is partly seed luck even when its ranking
+  improves. An ensemble of seeds, as the gap already has, is the next thing to measure.
+
+That seed noise is large on unfamiliar data in general: retraining the gate's control
+with a different seed moved its ROC-AUC on 2DMatPedia by −0.046.
 
 ### A second database, checked structure by structure
 
@@ -504,26 +584,33 @@ measurement attached, so nobody has to rediscover it.
 ## Honest limits
 
 - Trained on semiconductors only; the metal gate is the first stage, not a
-  guarantee. Its blind spots are whatever the three merged databases miss, and on
-  2DMatPedia's metals it caught 71%.
+  guarantee. On held-out 2DMatPedia it catches 88% of the metals and wrongly rejects
+  26% of the semiconductors, and it is sensitive to strain: WSe₂ stretched by 2% in
+  plane is rejected as a metal.
 - The labels carry the errors of their databases. Alexandria misses the Dirac point of
   honeycomb layers (graphene is labelled 1.23 eV and sits in the test split);
   2DMatPedia is about 1 eV high on the ZrNCl family and less reliable on magnetic
   materials, which is why only its non-magnetic entries are used.
+- **No spin-orbit coupling in the target** (Alexandria's PBE), and spin-orbit coupling
+  lowers a gap. Against C2DB, which includes it, compounds of heavy elements (Z ≥ 52)
+  come out 0.27 eV higher on average (median 0.20, n = 389) and the rest 0.03 eV
+  (n = 262); against held-out Alexandria, which does not, the same groups show no
+  offset (−0.02 and −0.04). C2DB's web table has no SOC-free gap to train a
+  correction on, so the offset is documented, not corrected.
 - The quasiparticle and optical outputs are linear heads fitted on 184 C2DB materials
   (G₀W₀ and BSE), cross-validated at 0.12–0.28 eV and checked against five measured
   monolayers. Treat them as estimates.
 - The calibrated interval assumes the ensemble spread is meaningful, which is exactly
   what fails out-of-domain. That is why out-of-domain results hide the interval
   instead of showing a tight one.
-- Conditional coverage is uneven: the most confident quartile gets 82% instead of
-  90%.
-- **The calibration is scoped to the population it was fitted on** — stable
-  Alexandria 2D. On the 6 625 rows of the screening table the ensemble never trained
-  on (held-out stable and metastable Alexandria, plus C2DB and JARVIS dft_2d under
-  their own functionals) the verdict ranks error correctly, 0.20 / 0.24 / 0.42 eV
-  across the tiers, but the 90% interval covers 83% rather than 90%. Re-run
-  [`scripts/calibrate_uncertainty.py`](scripts/calibrate_uncertainty.py) on the
+- **The calibration covers the populations it was fitted on** — near-hull and
+  metastable Alexandria 2D. On the 6 625 rows of the screening table the ensemble
+  never trained on (held-out metastable Alexandria, plus C2DB and JARVIS dft_2d under
+  their own functionals) the verdict ranks error correctly, 0.20 / 0.23 / 0.42 eV
+  across the tiers, and the 90% interval covers 88%; on the C2DB and JARVIS rows
+  alone, 82% and 81%, because part of their error is the difference in method.
+  Re-run [`scripts/calibrate_uncertainty.py`](scripts/calibrate_uncertainty.py) and
+  [`scripts/calibrate_population.py`](scripts/calibrate_population.py) on the
   population you actually screen. The precompute script checks this and warns.
 - Inputs must be monolayers with a vacuum gap. Thin vacuum is padded automatically —
   at training time too, since this release — because with periodic boundaries it
@@ -613,9 +700,9 @@ figures/                  README figures and the scripts that regenerate them
    test of whether models of different sizes pass the verdict on or override it.
 2. **A 2D band-gap benchmark for JARVIS-Leaderboard.** Of its 322 benchmarks, 67 are
    about band gaps and none about 2D materials.
-3. **Scope the calibration to the population**: a second calibration fitted on held-out
-   metastable structures, switched with the population, so the interval stops
-   over-promising outside the stable set.
+3. **Close the rest of the calibration gap.** Per-cell scales took held-out metastable
+   coverage from 84% to 88%; the remainder is metastable structures the latent head
+   mistakes for near-hull ones.
 4. **Repair the known label errors** — Alexandria's missed Dirac points (graphene,
    silicene, GaAs) — using the arbiter agreement already measured.
 5. **More light-element data.** Full C2DB (16 789 entries against 3 520 mirrored in

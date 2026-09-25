@@ -126,6 +126,11 @@ def verdict(unc: float, cal: dict | None = None, latent: float | None = None,
     `high_unc_reason` is the wording for the top tier, because the reason differs per
     property: a metal has no gap to predict, but it does have a work function, and
     C2DB's metals are in that model's training set.
+
+    Resemblance to the metastable population deliberately does not enter here. It
+    sets the interval (Predictor.interval90); as a demotion rule it inverted the tier
+    order on all three populations the model never trained on - the structures it
+    left in the reliable tier were the worse ones (scripts/calibrate_population.py).
     """
     cal = cal or DEFAULT_CAL
     if unc <= cal["unc_median"]:
@@ -192,7 +197,7 @@ class PropertyEnsemble:
         """(values, spreads) for a list of graphs; spread is 0 for a single model."""
         if not graphs:
             return None, None
-        batch = Batch.from_data_list(graphs)
+        batch = Batch.from_data_list(graphs).to(next(self.models[0].parameters()).device)
         preds = torch.stack([m(batch) * self.std + self.mean for m in self.models])
         spread = (preds.std(0, unbiased=False) if len(self.models) > 1
                   else torch.zeros(preds.shape[1]))
@@ -203,9 +208,10 @@ class PropertyEnsemble:
         """Distance to this model's own training set, in this model's own space."""
         if self.ref_emb is None or not graphs:
             return None
-        e = self.models[0].encode(Batch.from_data_list(graphs))
+        dev = next(self.models[0].parameters()).device
+        e = self.models[0].encode(Batch.from_data_list(graphs).to(dev))
         e = e / e.norm(dim=1, keepdim=True).clamp_min(1e-9)
-        sims = e @ self.ref_emb.T
+        sims = e @ self.ref_emb.to(dev).T
         k = min(k, sims.shape[1])
         return (1 - sims.topk(k, dim=1).values.mean(1)).cpu().numpy()
 
@@ -307,6 +313,10 @@ class Prediction:
     gap_type: str | None = None      # "direct" / "indirect"
     p_indirect: float | None = None
     p_metal: float | None = None     # from the metal gate, if available
+    # how much the structure resembles the metastable population (0.1-0.2 eV/atom
+    # above the hull) in the ensemble's latent space; sets the interval's scale. A
+    # resemblance, not a stability calculation
+    p_metastable: float | None = None
     layer: dict = field(default_factory=dict)  # vacuum axis / thickness / padded
     warnings: list[str] = field(default_factory=list)
 
@@ -332,6 +342,8 @@ class Prediction:
         }
         if self.p_metal is not None:
             row["p_metal"] = round(self.p_metal, 2)
+        if self.p_metastable is not None:
+            row["p_metastable"] = round(self.p_metastable, 2)
         if self.gap_type is not None:
             row["gap_type"] = self.gap_type
             row["p_indirect"] = round(self.p_indirect, 2)
@@ -354,6 +366,10 @@ class Predictor:
         # exciton binding energy (scripts/fit_exciton.py). Absent = fall back to the
         # polynomial corrections above.
         self.heads: dict | None = None
+        # logistic head on the same embeddings: resemblance to the metastable
+        # population, plus the interval scales per (resemblance, spread) cell
+        # (scripts/calibrate_population.py). Absent = one global scale, as before.
+        self.pop: dict | None = None
         self.models: list[nn.Module] = []
         self.mean = self.std = 0.0
         self.type_model: CGCNNcls | None = None
@@ -390,6 +406,8 @@ class Predictor:
             oh = ck.get("optical_heads")
             if isinstance(oh, dict) and "exciton_binding" in oh:
                 self.heads = oh
+            if isinstance(ck.get("population"), dict):
+                self.pop = ck["population"]
             gc = ck.get("gap_corrections")
             if isinstance(gc, dict):
                 for kind in ("quasiparticle", "optical"):
@@ -426,9 +444,16 @@ class Predictor:
         if not os.path.exists(p):
             return None, 0.5
         ck = torch.load(p, map_location="cpu")
+        n_ang = int(ck.get("n_ang") or 0)
+        # graphs are built once, at the gap ensemble's angular width; a classifier
+        # trained with angles must share that width, or its angular layer reads
+        # nothing (width 0) or the wrong thing
+        if n_ang not in (0, self.n_ang):
+            raise ValueError(f"{WEIGHT_FILES[key]} was trained with {n_ang} angular bins, "
+                             f"the gap ensemble with {self.n_ang}")
         m = CGCNNcls(cutoff=float(ck.get("cutoff", self.cutoff)),
                      n_rbf=int(ck.get("n_rbf", self.n_rbf)),
-                     ang_dim=int(ck.get("n_ang", 0)))
+                     ang_dim=n_ang)
         m.load_state_dict(ck["state_dict"])
         m.eval()
         thr = float(ck.get("threshold", 0.5))
@@ -490,11 +515,34 @@ class Predictor:
         None when the checkpoint carries no reference embeddings."""
         if self.ref_emb is None or not graphs:
             return None
-        e = self.models[0].encode(Batch.from_data_list(graphs))
+        # wherever run_many(device=...) left the model; the graphs arrive on the CPU
+        dev = next(self.models[0].parameters()).device
+        e = self.models[0].encode(Batch.from_data_list(graphs).to(dev))
         e = e / e.norm(dim=1, keepdim=True).clamp_min(1e-9)
-        sims = e @ self.ref_emb.T
+        sims = e @ self.ref_emb.to(dev).T
         k = min(k, sims.shape[1])
         return (1 - sims.topk(k, dim=1).values.mean(1)).cpu().numpy()
+
+    def p_metastable(self, emb) -> float | None:
+        """Resemblance to the metastable training population, from the concatenated
+        member embeddings. None without the head or without an ensemble."""
+        if self.pop is None or emb is None:
+            return None
+        z = float(np.dot(self.pop["w"].numpy().astype(np.float64),
+                         np.asarray(emb, dtype=np.float64)) + self.pop["b"])
+        return float(1.0 / (1.0 + np.exp(-z)))
+
+    def interval90(self, unc: float, p_meta: float | None = None) -> float:
+        """Half-width of the 90% interval. With the population table, the scale is
+        read from the cell of (resembles metastable?, spread quartile): a single
+        scale fitted on near-hull structures covers them, but covers only ~85% of
+        metastable ones and under-covers the most confident quartile of both."""
+        t = None if self.pop is None else self.pop.get("scale90_table")
+        if t is None or p_meta is None:
+            return self.cal["scale90"] * unc
+        row = int(p_meta > t["p_threshold"])
+        col = int(np.digitize(unc, t["unc_edges"]))
+        return float(t["scale"][row][col]) * unc
 
     @torch.no_grad()
     def _cls_prob(self, model: CGCNNcls | None, st: Structure) -> float | None:
@@ -528,12 +576,13 @@ class Predictor:
             return None
         g = to_graph(st, self.cutoff, n_ang=self.n_ang)
         emb = None
-        if self.heads is not None and len(self.models) > 1:
+        if (self.heads is not None or self.pop is not None) and len(self.models) > 1:
             with torch.no_grad():
                 b_ = Batch.from_data_list([g])
                 emb = torch.cat([m.encode(b_) for m in self.models], dim=1).cpu().numpy()[0]
         ld = self.latent_distance([g])
         ld = None if ld is None else float(ld[0])
+        p_meta = self.p_metastable(emb)
         wf_v, wf_u = (self.wf.predict([g]) if self.wf else (None, None))
         wf_l = self.wf.latent_distance([g]) if self.wf else None
         p_metal = self.predict_metal(st)
@@ -553,10 +602,10 @@ class Predictor:
             **_wf_fields(self.wf, None if wf_v is None else wf_v[0],
                          None if wf_u is None else wf_u[0],
                          None if wf_l is None else wf_l[0], gap, v, metal_like),
-            interval90=self.cal["scale90"] * unc,
+            interval90=self.interval90(unc, p_meta),
             typical_error=self.cal["tier_mae"].get(tier_key(v)),
             gap_type=gap_type, p_indirect=p_ind,
-            p_metal=p_metal, layer=info, warnings=warns,
+            p_metal=p_metal, p_metastable=p_meta, layer=info, warnings=warns,
         )
 
 
@@ -641,6 +690,9 @@ class Predictor:
         for m in (self.type_model, self.metal_model):
             if m is not None:
                 m.to(device)
+        if self.wf is not None:
+            for m in self.wf.models:
+                m.to(device)
         gaps, uncs, p_type, p_metal, embs = self._forward_many(graphs, batch_size, device, mc)
         wfv = wfu = wfl = None
         if self.wf is not None and graphs:
@@ -663,6 +715,7 @@ class Predictor:
             pm = None if np.isnan(p_metal[j]) else float(p_metal[j])
             pt = None if np.isnan(p_type[j]) else float(p_type[j])
             ld = None if lat is None else float(lat[j])
+            p_meta = self.p_metastable(None if embs is None else embs[j])
             v = verdict(unc, self.cal, ld)
             w = list(warns)
             if pm is not None and pm >= self.metal_thr:
@@ -680,10 +733,10 @@ class Predictor:
                 **_wf_fields(self.wf, None if wfv is None else wfv[j],
                              None if wfu is None else wfu[j],
                              None if wfl is None else wfl[j], gap, v, metal_like),
-                interval90=self.cal["scale90"] * unc,
+                interval90=self.interval90(unc, p_meta),
                 typical_error=self.cal["tier_mae"].get(tier_key(v)),
                 gap_type=None if pt is None else ("indirect" if pt >= self.type_thr else "direct"),
-                p_indirect=pt, p_metal=pm, layer=info, warnings=w))
+                p_indirect=pt, p_metal=pm, p_metastable=p_meta, layer=info, warnings=w))
         return out
 
 

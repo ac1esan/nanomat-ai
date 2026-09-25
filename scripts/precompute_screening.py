@@ -64,6 +64,9 @@ def main():
     ap.add_argument("--out", default="screening_table.csv")
     ap.add_argument("--chunk", type=int, default=2000, help="structures held in RAM at once")
     ap.add_argument("--batch", type=int, default=256)
+    ap.add_argument("--device", default="cpu",
+                    help="cuda moves the forward passes of all ten models off the CPU; graph "
+                         "construction stays on it")
     ap.add_argument("--weights", help="weights directory (default ./weights)")
     args = ap.parse_args()
 
@@ -108,7 +111,7 @@ def main():
             # structural prototype, so predictions can be pivoted into the families
             # people actually think in (MX2 across the chalcogens, and so on)
             fams = {k: classify(st) for k, st in items}
-            for key, r in P.run_many(items, batch_size=args.batch):
+            for key, r in P.run_many(items, batch_size=args.batch, device=args.device):
                 if r is None:
                     continue
                 rows.append({
@@ -125,6 +128,7 @@ def main():
                     "interval90_eV": None if r.interval90 is None else round(r.interval90, 3),
                     "latent_distance": None if r.latent_distance is None else round(r.latent_distance, 3),
                     "p_metal": None if r.p_metal is None else round(r.p_metal, 2),
+                    "p_metastable": None if r.p_metastable is None else round(r.p_metastable, 2),
                     "gap_type": r.gap_type,
                     "p_indirect": None if r.p_indirect is None else round(r.p_indirect, 2),
                     # the corrected gaps now come from linear heads on the model's

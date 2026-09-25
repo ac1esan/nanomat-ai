@@ -176,6 +176,57 @@ def test_batched_matches_single_structure(P):
         assert abs(a.unc - b.unc) < 1e-4, (key, a.unc, b.unc)
         assert a.verdict == b.verdict, key
         assert a.gap_type == b.gap_type, key
+        assert (a.p_metastable is None) == (b.p_metastable is None), key
+        if a.p_metastable is not None:
+            assert abs(a.p_metastable - b.p_metastable) < 1e-4, key
+            assert abs(a.interval90 - b.interval90) < 1e-4, key
+
+
+def test_interval_reads_the_population_the_structure_resembles(P):
+    """One scale fitted on near-hull structures covers them, but covers ~84% of
+    held-out metastable ones and 82% of the most confident spread quartile.
+    scripts/calibrate_population.py fits a metastability head on the latent space
+    and a scale per (resemblance, spread quartile) cell; the shipped ensemble must
+    carry both, and near-hull reference monolayers must not look metastable."""
+    import numpy as np
+    assert P.pop is not None and "scale90_table" in P.pop
+    assert P.pop["auc_heldout"] > 0.8        # the head separates the populations
+    t = P.pop["scale90_table"]
+    assert len(t["scale"]) == 2 and all(len(r) == len(t["unc_edges"]) + 1 for r in t["scale"])
+    assert "population_threshold" not in P.cal   # it sets the interval, never the verdict
+    for name in ("MoS2", "WS2", "WSe2", "MoSe2"):
+        r = P.run(read_structure(os.path.join(EX, f"{name}.vasp")))
+        assert r.p_metastable is not None and r.p_metastable < 0.5, (name, r.p_metastable)
+        assert r.verdict == "reliable", name
+        cell = t["scale"][int(r.p_metastable > t["p_threshold"])][int(np.digitize(r.unc, t["unc_edges"]))]
+        assert abs(r.interval90 - cell * r.unc) < 1e-9, name
+
+
+def test_metal_gate_rejects_graphene_and_spares_the_reference_semiconductors(P):
+    """The gate is the first stage of the verdict, and its threshold is fitted on a
+    validation split: a retrain can move it past a canonical semiconductor. In the
+    retraining experiment the recipe of the shipped gate, rerun in a new environment,
+    flagged WS2 (0.80 against a threshold of 0.36), and the arm the written
+    tie-breaker preferred flagged WS2 at +1% in-plane strain - inside the spread of
+    lattice constants between functionals. So the check runs at -1%, 0 and +1%."""
+    from pymatgen.core import Structure
+    from nanomat.graph import layer_info
+    if P.metal_model is None:
+        pytest.skip("no metal gate in weights/")
+
+    def gate(name, eps=0.0):
+        st = P.prepare(read_structure(os.path.join(EX, f"{name}.vasp")))[0]
+        L, axis = st.lattice.matrix.copy(), layer_info(st)["axis"]
+        for i in range(3):
+            if i != axis:          # stretch in the plane of the layer only
+                L[i] *= 1 + eps
+        return P.predict_metal(Structure(L, st.species, st.frac_coords))
+
+    for eps in (-0.01, 0.0, 0.01):
+        assert gate("graphene", eps) >= P.metal_thr, eps
+        for name in ("MoS2", "MoSe2", "WS2", "WSe2", "hBN", "phosphorene"):
+            p = gate(name, eps)
+            assert p < P.metal_thr, (name, eps, p, P.metal_thr)
 
 
 def test_prototype_classification():

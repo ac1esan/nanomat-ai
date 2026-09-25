@@ -4,8 +4,9 @@
 Writes two files under docs/data/:
   screening.csv  - one row per structure, short column names, categoricals encoded
                    as small integers, and everything derivable dropped (the 90%
-                   interval, the experimental estimate and the absolute error are
-                   recomputed in the browser from meta.json).
+                   experimental estimate and the absolute error are recomputed in the
+                   browser from meta.json; the 90% interval is shipped, because its
+                   scale depends on a cell lookup the rounded columns cannot redo).
   meta.json      - calibration constants, verdict thresholds, source and tier
                    labels, dataset counts, and the per-element trust map.
 
@@ -103,6 +104,13 @@ def main():
         "q": df["gap_quasiparticle_eV"].round(3),
         "x": df["exciton_binding_eV"].round(3),
         "o": df["exp_gap_est_eV"].round(3),
+        # resemblance to the metastable population (scripts/calibrate_population.py),
+        # shown in the card
+        "pm": (df["p_metastable"].round(2) if "p_metastable" in df else np.nan),
+        # the 90% half-width itself. Its scale is looked up per cell of the resemblance
+        # and the spread quartile, and recomputing that from the rounded columns put
+        # 219 rows in the neighbouring cell (up to 0.2 eV off), so it is shipped
+        "iv": df["interval90_eV"].round(3),
     })
     csv_path = os.path.join(OUT_DIR, "screening.csv")
     out.to_csv(csv_path, index=False)
@@ -116,6 +124,13 @@ def main():
     cal = dict(ck.get("calibration", {}))
     cal.pop("fitted_on", None)
     cal.pop("verified_on", None)
+    pop = ck.get("population")
+    if isinstance(pop, dict) and isinstance(pop.get("scale90_table"), dict):
+        t = pop["scale90_table"]
+        cal["population"] = {"p_threshold": float(t["p_threshold"]),
+                             "unc_edges": [float(e) for e in t["unc_edges"]],
+                             "scale": [[float(v) for v in row] for row in t["scale"]],
+                             "auc_heldout": float(pop.get("auc_heldout", float("nan")))}
     for key, fname in (("type_threshold", "cgcnn_2d_typed.pt"),
                        ("metal_threshold", "cgcnn_2d_metal.pt")):
         fp = os.path.join(ROOT, "weights", fname)

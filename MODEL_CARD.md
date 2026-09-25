@@ -18,11 +18,13 @@ feature = distance, atomic number embedded at the nodes.
 | **Why the extra data** | Against a control trained on the stable set alone — same split, same seeds, same GPU session — MAE goes 0.249 → **0.225** on the stable test (paired −0.025 eV, bootstrap 95% −0.039…−0.011), 0.500 → **0.311** on held-out metastable Alexandria, 0.770 → **0.437** on held-out 2DMatPedia. Details below |
 | **Why angles** | An edge carries a distance and nothing else, so two polymorphs of one composition are nearly the same graph. Against its own control, adding a per-atom bond-angle histogram took MAE from 0.271 to 0.246 eV (paired +0.026, bootstrap 95% +0.015…+0.037, Wilcoxon p = 4·10⁻⁵) and doubled how far the model separates 1H-MX₂ from 1T-MX₂ |
 | **Composition baseline** | **0.430 eV** on the identical test set (`scripts/composition_baseline.py`), so structure wins by 48%. The 0.360 eV quoted in early versions came from five-fold cross-validation, a different protocol that leaks near-duplicate compositions |
-| **Checksum** | SHA-256 `3f167dfb1a5eac369f469be530c0ce103b90a935bfad4c7a1c816a1c624f7f21` |
+| **Checksum** | SHA-256 `31edff3dea3d043262cb7b37193299772f4cae4b24787526924386dffeca917c` |
 
 The checkpoint also carries its own `calibration` block, both gap corrections, the
-latent heads and 22 103 reference embeddings, so it can judge and correct its own
-output without any external file. Its checksum therefore changes whenever the
+latent heads, the metastability head with its interval table (`population`) and
+22 103 reference embeddings, so it can judge and correct its own output without any
+external file. The weights are the same as in the previous release; only the
+population block is new. Its checksum therefore changes whenever the
 calibration is refitted, not only when the weights are retrained.
 
 ### What the stability filter was costing
@@ -107,6 +109,37 @@ factor fitted on validation (×4.19 for 90%, ×2.13 for 68%) gives 90.2% coverag
 the held-out test split. Conditional coverage by uncertainty quartile is
 82 / 92 / 92 / 94%, so the most confident quartile stays slightly optimistic.
 
+**Population-scoped calibration** (`scripts/calibrate_population.py`). The validation
+split is near-hull; the training set is not. On the held-out metastable set (0.1–0.2
+eV/atom) the single scale covers 84%, 74% inside the reliable tier, where the MAE is
+0.20 eV against 0.10 on near-hull structures. Neither signal above separates the two
+populations (ROC-AUC 0.59 for the spread, 0.60 for latent distance); a logistic head
+on the concatenated member embeddings does, at 0.85 on held-out data. It is fitted on
+training structures only: 10 733 near-hull against 9 724 metastable Alexandria
+entries. 2DMatPedia records no hull distance. The 90% scale is looked up per cell of
+(head > 0.5) × spread quartile, fitted on the validation split plus the held-out
+metastable set:
+
+| | spread q1 | q2 | q3 | q4 |
+|---|---|---|---|---|
+| resembles near-hull | ×6.76 | ×4.72 | ×3.94 | ×4.06 |
+| resembles metastable | ×8.11 | ×5.98 | ×4.52 | ×3.59 |
+
+Scored by 20 composition-grouped halvings of the metastable set (fit on one half,
+report on the other): metastable coverage 83.7% ± 1.0 → 87.8% ± 1.4, near-hull test
+90.2% → 92.4% at the same median width (±0.42 eV), quartiles 92 / 94 / 91 / 93%.
+2DMatPedia, used by no fit here: 86.9% → 87.9%. On the screening table's unseen rows,
+83.4% → 87.7% (metastable Alexandria 88.6%, C2DB 82.3%, JARVIS 81.3%). The reliable
+tier's median interval widens from ±0.24 to ±0.34 eV, since the single scale covered
+only 82% of it.
+
+**Rejected: the head as a verdict rule.** Demoting reliable to check when the head
+says metastable sharpened the near-hull reliable tier (0.104 → 0.094 eV) and inverted
+the tier order on every unseen population: held-out metastable Alexandria reliable
+0.251 / check 0.212, and the same inversion on C2DB and JARVIS rows. The structures it
+kept in the reliable tier were the metastable ones the head takes for near-hull —
+where the model is confidently wrong. So the head sets the interval only.
+
 The tiers keep their order on data the model never trained on: 0.205 / 0.235 /
 0.396 eV on held-out metastable Alexandria and 0.140 / 0.238 / 0.489 eV on held-out
 2DMatPedia.
@@ -133,13 +166,18 @@ represented and intrinsically harder.
 ### Verdict tiers
 
 Thresholds are validation quartiles; the typical error of each tier is measured on
-the held-out test split.
+the held-out test split with the full verdict, spread and latent distance together.
+The numbers quoted earlier, 0.12 / 0.21 / 0.41, were measured on the spread alone.
 
 | Verdict | Condition | Typical error |
 |---|---|---|
-| reliable | spread ≤ 0.092 eV and latent distance ≤ 0.235 | 0.12 eV |
-| check | spread ≤ 0.144 eV, or reliable spread with latent distance > 0.235 | 0.21 eV |
-| out-of-domain | spread > 0.144 eV, or latent distance > 0.299, or the metal gate fires | 0.41 eV |
+| reliable | spread ≤ 0.092 eV and latent distance ≤ 0.235 | 0.10 eV |
+| check | spread ≤ 0.144 eV, or a reliable spread with latent distance > 0.235 | 0.19 eV |
+| out-of-domain | spread > 0.144 eV, or latent distance > 0.299, or the metal gate fires | 0.40 eV |
+
+On held-out metastable structures the same tiers err 0.20 / 0.23 / 0.45 eV: the order
+holds, the level is about twice the near-hull one in the reliable tier, and the
+interval widens for them (above).
 
 Out-of-domain results deliberately suppress the estimated experimental gap and the
 calibrated interval: that interval assumes the spread is meaningful, which is
@@ -150,10 +188,29 @@ precisely what fails there.
 | | |
 |---|---|
 | **Task** | Binary: is this 2D structure a metal/semimetal (gap ≤ 0.05 eV)? Runs before the regressor |
-| **Training data** | Alexandria 2D + C2DB + JARVIS dft_2d, metals kept: 24 314 structures, 39.8% metals |
-| **Split / performance** | Composition-disjoint. ROC-AUC 0.944, balanced accuracy 0.876, precision on metals 0.866, n_test 2 440 |
-| **Threshold** | 0.648, fitted on validation — `pos_weight` on the rare class shifts probabilities away from 0.5 |
-| **Checksum** | SHA-256 `1d4e77fda6fbf19390529c37d71e234d41002370c1e39fe633c586d490867b38` |
+| **Training data** | 41 611 structures, 43% metals: the previous release's 19 478 (Alexandria 2D ≤ 0.1 eV/atom + C2DB + JARVIS dft_2d, metals kept) plus 19 158 Alexandria monolayers at 0.1–0.2 eV/atom and 2 975 non-magnetic 2DMatPedia ones Alexandria does not contain |
+| **Architecture** | CGCNN classifier with the gap ensemble's 9-bin angular descriptor |
+| **Split / performance** | The previous release's composition-disjoint validation and test splits. ROC-AUC **0.969** on its test split (balanced accuracy 0.915, n 2 440), **0.919** on held-out metastable Alexandria (n 2 998), **0.892** on held-out 2DMatPedia (n 478), none of whose compositions are in training |
+| **Threshold** | 0.517, fitted on validation — `pos_weight` on the rare class shifts probabilities away from 0.5 |
+| **Checksum** | SHA-256 `7c4d41caaed82822fd9dfeea9e1b649f8d97cbd2bec9cd4f0187b0a255503dd0` |
+
+**Retrained this release** (`scripts/classifier_experiment.py`, rule written before
+training). Against a control rerun of the old recipe in the same session, paired on
+the same structures: +0.020 [+0.013, +0.027] on the old test split, +0.123 [+0.108,
++0.137] on metastable Alexandria, +0.108 [+0.067, +0.150] on 2DMatPedia. The control
+with another seed moved by −0.004, −0.002 and −0.046: a single classifier is
+seed-sensitive on unfamiliar data, and the gains are well outside it. At the
+validation threshold the gate catches 92.7 / 85.6 / 87.8% of metals and wrongly
+rejects 9.6 / 18.0 / 25.8% of semiconductors on the three sets; the previous gate
+caught 83.8 / 60.2 / 66.8% at 8.6 / 15.8 / 21.2%.
+
+**Departure from the written rule.** Arms with and without angles were
+indistinguishable on all three sets, and the tie-breaker picked the one without.
+That arm rejects WS₂ as a metal at +1% in-plane strain (p 0.56, threshold 0.47);
+this one holds all six reference semiconductors between −1% and +1% and first
+rejects WSe₂ at +2% (p 0.58, threshold 0.52). One percent is the spread of lattice
+constants between functionals, so the angular arm ships, and a test checks −1%, 0
+and +1%.
 
 Mixing three DFT functionals is deliberate and limited to this model: the
 metal/semiconductor distinction is far more robust across functionals than the gap
@@ -162,7 +219,8 @@ value. The same mixing would be wrong for the regressor and is not done there.
 An Alexandria-only version scored a higher ROC-AUC (0.952) and was useless where it
 mattered — `p(metal) = 0.00` on graphene, because only two of its 19 691 training
 structures were carbon-only and both were labelled semiconductors. The merged model
-returns 1.00 on graphene with no false positives on MoS₂, MoSe₂, WS₂, WSe₂ or h-BN.
+returned 1.00 on graphene with no false positives on MoS₂, MoSe₂, WS₂, WSe₂ or h-BN,
+and the retrained one still does (graphene 1.00; the five at 0.00–0.13).
 
 ## Work function — `weights/cgcnn_2d_workfunction.pt`
 
@@ -223,6 +281,19 @@ difference of two regressed gaps was tried first and collapsed to that baseline:
 the difference of two predictions with MAE ≈ 0.25 eV is noise. A separate model is
 used instead of a multi-task head because multi-tasking cost the regressor 0.05 eV.
 
+**Retrained on the metastable data, and not shipped** (`scripts/classifier_experiment.py`).
+2DMatPedia records no direct gap, so only the metastable Alexandria monolayers were
+added (training 10 733 → 20 457). Paired against a same-session control, ROC-AUC
+moved −0.001 [−0.028, +0.025] on the stable test and +0.072 [+0.052, +0.094] on
+held-out metastable structures, against a seed-noise shift of +0.019 — the written
+rule accepted it. It also calls monolayer MoS₂ (0.45 against its threshold 0.38),
+MoSe₂ (0.52) and phosphorene (0.93) indirect; Alexandria's labels and experiment both
+call them direct. The rule had a reference-material check for the metal gate and none
+here, and this is the case it would have caught. The control retrained with seed 1
+flips MoS₂ too (0.47 against 0.43), so near the boundary a single classifier's call on
+one material is partly seed luck even when its ranking improves. The shipped
+classifier is unchanged; an ensemble of seeds is the next measurement.
+
 ## Intended use and limits
 
 Fast screening of candidate 2D semiconductors before committing DFT time. Trust the
@@ -273,6 +344,14 @@ under `out-of-domain`.
   settle it by predicting the binding energy instead of inferring it: 0.56 / 0.50 /
   0.53 / 0.52 eV on the four TMDs against BSE's 0.55 / 0.50 / 0.52 / 0.48, and the
   optical gap is the direct gap minus that number by construction.
+- **No spin-orbit coupling.** The target is Alexandria's PBE gap without SOC, and SOC
+  lowers a gap. On the 651 in-domain, gapped C2DB rows (PBE+SOC, none trained on), the
+  model is higher by +0.27 eV on average for compounds containing an element with
+  Z ≥ 52 (median +0.20, n = 389), +0.17 for tungsten compounds (median +0.23, n = 39)
+  and +0.03 without heavy elements (n = 262). Control on held-out Alexandria, computed
+  without SOC: −0.02 and −0.04, so the offset is the physics, not the model. A learned
+  SOC correction was planned, but C2DB's table interface exposes only the SOC-inclusive
+  gap.
 - **Polymorphs: much better, still not solved.** `scripts/polymorph_sensitivity.py`
   compares the spread of predictions against the spread of the reference at three
   levels, from the least to the most dependent on geometry alone; 1.00 would mean

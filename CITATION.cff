@@ -4,16 +4,20 @@ title: "NanoMatAI: band gaps of 2D semiconductors from crystal structure, with a
 abstract: >-
   A CGCNN ensemble that predicts the band gap of a two-dimensional monolayer from
   its crystal structure on CPU, together with a calibrated uncertainty interval and
-  an explicit verdict on whether the prediction is usable. Trained on 13 349 stable
-  2D semiconductors from Alexandria and evaluated on a composition-disjoint split
-  (MAE 0.246 eV). The graph reads bond angles as well as bond lengths, which is what
-  lets it separate polymorphs of one composition. Three independent out-of-domain
-  checks decide the verdict: a metal/semiconductor gate, the spread between ensemble
-  members, and the distance to the training set in the model's own latent space.
+  an explicit verdict on whether the prediction is usable. Trained on 22 103 PBE
+  monolayers - stable and metastable Alexandria entries and non-magnetic 2DMatPedia
+  ones - and evaluated on a composition-disjoint split (MAE 0.225 eV, against 0.430
+  for composition alone on the same test set). The graph reads bond angles as well as
+  bond lengths, which is what lets it separate polymorphs of one composition. Three
+  independent out-of-domain checks decide the verdict: a metal/semiconductor gate, the
+  spread between ensemble members, and the distance to the training set in the
+  model's own latent space. The 90% interval is calibrated per cell of spread and of
+  resemblance to the metastable population, which the latent space detects.
   Linear heads on that same latent space add a quasiparticle gap, an exciton binding
   energy and an absorption onset, and a second ensemble adds the work function, so
   the band edges a contact metal is chosen on follow from the pair. Predictions for
-  28 372 public 2D structures are published as a browsable table.
+  28 372 public 2D structures are published as a browsable table, and an MCP server
+  exposes the tool, verdict first, to language models.
 type: software
 authors:
   - given-names: Danil
@@ -29,7 +33,7 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.22863468
     description: DOI of release v1.0.0
-version: 1.0.0
+version: 1.1.0
 repository-code: https://github.com/ac1esan/nanomat-ai
 url: https://ac1esan.github.io/nanomat-ai/
 license: MIT
@@ -51,6 +55,13 @@ references:
     notes: Work function and gap data, accessed through JARVIS-Tools.
     authors:
       - name: Computational 2D Materials Database
+  - type: data
+    title: "2DMatPedia: an open computational database of two-dimensional materials"
+    notes: >-
+      Non-magnetic monolayers Alexandria does not contain, added to training after a
+      structure-by-structure audit. Accessed through JARVIS-Tools.
+    authors:
+      - name: 2DMatPedia
   - type: data
     title: JARVIS-DFT two-dimensional materials dataset
     notes: >-

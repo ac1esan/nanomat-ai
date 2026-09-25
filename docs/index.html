@@ -391,7 +391,7 @@ const I18N = {
     count_none: "No structures match these filters",
     count_edges: n => ` · ${n} structures in this selection have band edges at all`,
     count_none_edges: "No structures match. Band edges exist only where both models stand behind their half — the gap model and the work-function model each have their own training set and their own verdict.",
-    warn_all: "<b>Outside the calibrated population.</b> The intervals and tier errors shown here were fitted on stable Alexandria structures. On metastable entries and other DFT functionals the verdict still ranks error correctly, but a 90% interval covers about 78% of cases instead of 90%. Use the ordering, not the absolute numbers.",
+    warn_all: "<b>Beyond the calibrated sources.</b> Intervals are calibrated on stable and metastable Alexandria structures, and cover about 89% of the metastable ones the model never trained on. Against C2DB and JARVIS references, computed with other DFT methods, they cover about 82% and 81%, and part of the error there is the difference in method. The verdict ranks error correctly in all three.",
     warn_train: "<b>Includes structures the model trained on.</b> Rows badged “trained on” are reproduced from memory, not predicted; their error is about 0.08 eV rather than the honest 0.25 eV.",
     c_title: "Predicted gap against the model's own uncertainty",
     c_sub: (a, b) => `Each dot is one structure; the horizontal lines are the verdict thresholds at ${a} and ${b} eV of ensemble spread. Hover to ring a point, click to open it. Scroll to zoom, drag to pan, double-click to fit again — with this many dots overlapping, zooming is the only way to separate them.`,
@@ -420,6 +420,8 @@ const I18N = {
     d_wf_gapstop: "No band edges: they are half the gap away from the work function, and the gap above has been disowned.",
     d_wf_none: "No work function for this structure.",
     d_type: "Gap type", d_metal: "Metal gate, p(metal)", d_spread: "Ensemble spread",
+    d_meta: "Resembles metastable, p", d_meta_yes: "wider interval, not reliable",
+    d_meta_no: "near-hull-like",
     d_type_val: (label, p, thr) => `${label} · p(indirect) = ${p}, threshold ${thr}`,
     d_latent: "Distance to training data", d_verdict: "Verdict", d_tiererr: "Typical error of this tier",
     d_dft: "DFT reference", d_err: "Error against reference", d_atoms: "Atoms in cell",
@@ -531,6 +533,9 @@ async function load() {
       kw: num(c[ix.kw]), kr: num(c[ix.kr]) ?? 0, kd: num(c[ix.kd]),
       // quasiparticle gap, exciton binding energy, absorption onset
       q: num(c[ix.q]), x: num(c[ix.x]), o: num(c[ix.o]),
+      // resemblance to the metastable population, read off the latent space, and the
+      // 90% half-width the predictor computed from it
+      pm: num(c[ix.pm]), iv: num(c[ix.iv]),
     };
   }
   for (const r of S.rows) setEdges(r);
@@ -546,6 +551,22 @@ async function load() {
 function applyCorrection(c, g) {
   const co = c.coeffs || [c.a, c.b];
   return co.reduce((acc, k) => acc * g + k, 0);
+}
+
+/* ------------------------------------------------------------ 90% interval */
+// One scale fitted on near-hull structures covers them but under-covers metastable
+// ones and the most confident spread quartile of both. With the population table
+// (scripts/calibrate_population.py) the scale is read per cell of (resembles
+// metastable?, spread quartile) - the same lookup as Predictor.interval90. An older
+// data file has neither the table nor the column and keeps the single scale.
+function interval90(r) {
+  // shipped per row: recomputing the cell from rounded columns lands near a boundary
+  // in the neighbouring cell. The lookup below is the fallback for older data files
+  if (r.iv !== null && r.iv !== undefined) return r.iv;
+  const cal = S.meta.calibration, T = cal.population;
+  if (!T || r.pm === null || r.pm === undefined) return cal.scale90 * r.u;
+  const col = T.unc_edges.filter(e => e <= r.u).length;   // numpy.digitize
+  return T.scale[r.pm > T.p_threshold ? 1 : 0][col] * r.u;
 }
 
 /* --------------------------------------------------------------- band edges */
@@ -813,7 +834,7 @@ function paintRows(top) {
   for (let k = a; k < b; k++) {
     const r = S.view[k];
     const ood = r.w === 2;
-    const iv = ood ? "—" : "± " + fmt(cal.scale90 * r.u, 2);
+    const iv = ood ? "—" : "± " + fmt(interval90(r), 2);
     const badge = r.r === 1 ? `<span class="badge">${t("badge_train")}</span>` : "";
     html += `<div class="row" data-k="${k}" role="option" aria-selected="${S.sel === r}"
       style="position:absolute;top:${k * ROWH}px;left:0;right:0;height:${ROWH}px">
@@ -842,7 +863,7 @@ function renderDetail(hostId = "detail", row = undefined) {
   const cal = S.meta.calibration, C = S.meta.corrections;
   const wfcal = S.meta.wf_calibration || {};
   const ood = r.w === 2;
-  const iv = cal.scale90 * r.u;
+  const iv = interval90(r);
   // shipped per row: these come from linear heads on the ensemble's latent space,
   // which a static page cannot evaluate. The polynomial is the fallback for a data
   // file built before the heads existed.
@@ -866,6 +887,8 @@ function renderDetail(hostId = "detail", row = undefined) {
       r.t ? t("type_indirect") : t("type_direct"), fmt(r.p, 2),
       fmt(S.meta.calibration.type_threshold ?? 0.33, 2))]);
   if (r.m !== null) rows.push([t("d_metal"), fmt(r.m, 2)]);
+  if (r.pm !== null && r.pm !== undefined && cal.population) rows.push([t("d_meta"),
+    `${fmt(r.pm, 2)} — ${r.pm > cal.population.p_threshold ? t("d_meta_yes") : t("d_meta_no")}`]);
   rows.push([t("d_spread"), fmt(r.u, 3) + " eV"]);
   if (r.l !== null) rows.push([t("d_latent"),
     `${fmt(r.l, 3)} — ${r.l <= cal.latent_q75 ? t("d_inside") : t("d_outside")}`]);
@@ -1281,7 +1304,7 @@ cv().addEventListener("mousemove", e => {
   if (!r) { if (S.hover) { S.hover = null; drawChart(); } tip.hidden = true; return; }
   if (S.hover !== r) { S.hover = r; drawChart(); }
   const cal = S.meta.calibration;
-  tip.innerHTML = `<b>${r.f}</b>${fmt(r.g, 2)} eV${r.w === 2 ? "" : " ± " + fmt(cal.scale90 * r.u, 2)}
+  tip.innerHTML = `<b>${r.f}</b>${fmt(r.g, 2)} eV${r.w === 2 ? "" : " ± " + fmt(interval90(r), 2)}
     <span style="color:var(${TIERVAR[r.w]})"> · ${t("tier")[r.w]}</span>` +
     (crowd > 1 ? `<span style="color:var(--text-3)"><br>${t("crowd", crowd - 1)}</span>` : "");
   tip.hidden = false;
