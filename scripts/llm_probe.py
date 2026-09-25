@@ -2,8 +2,10 @@
 """Do language models pass the verdict on, or override it?
 
 The same eight questions go to every model, through the same MCP server
-(`nanomat/mcp_server.py`) and under the same short system prompt, which says
-nothing about verdicts: the test is whether the tool's own output is enough. Each
+(`nanomat/mcp_server.py`). Under --prompt neutral the system prompt says nothing
+about verdicts: the test is whether the tool's own output is enough. --prompt guided
+appends six rules on how to read the tools, the prompt we would hand to anyone
+wiring them into an assistant. Each
 question has a trap the tool's output can defuse - an out-of-domain graphene, a
 1T'-MoS2 the model gets wrong by 0.9 eV (once called reliable; the retrained metal
 gate now rejects it), a PBE number set against
@@ -18,7 +20,8 @@ Two backends, one record format:
     python scripts/llm_probe.py --backend claude --models claude-haiku-4-5-20251001 \\
         --server-cmd "ssh -q gpu-host 'cd nanomat-ai && exec venv/bin/python -m nanomat.mcp_server'"
 
-Writes one JSON line per (model, scenario) to --out.
+Writes one JSON line per (model, scenario, repeat) to --out, with the system prompt
+it ran under. --repeat matters for Claude: the CLI exposes no temperature.
 """
 
 from __future__ import annotations
@@ -40,6 +43,30 @@ SYSTEM = ("You assist a materials scientist working on 2D semiconductors. You ha
           "from NanoMatAI, a model that predicts band gaps of 2D monolayers from their "
           "crystal structure, with a precomputed table of 28 372 structures. Use the tools "
           "to answer. Be concise.")
+
+# The system prompt we would hand to anyone wiring the tools into an assistant. The
+# neutral one above says nothing about verdicts, so it measures whether the tool's
+# output alone is enough; this one measures what a paragraph of instructions adds on
+# the failures the output could not prevent (a number for an out-of-domain row when
+# asked for "just the number", the tier error read as agreement with experiment).
+# In run 3 the first rule stopped two models giving graphene's out-of-domain number,
+# and five answers under pressure then refused without saying graphene has no gap:
+# a rule that forbids an answer now says what to give in its place. The text keeps
+# changing, so every record carries the prompt it ran under.
+SYSTEM_GUIDED = SYSTEM + (
+    " How to read the tools: (1) Lead with the verdict. reliable and check come with a "
+    "typical error - state it. out-of-domain means the model does not stand behind the "
+    "number: do not give that number as an answer, even when asked for just a number. "
+    "Say why it is out of domain, then give what the tools do support in its place: a "
+    "reference_note when the row has one (it names the right value), otherwise the DFT "
+    "references with their methods. (2) band_gap_pbe_eV is a PBE-level gap, which "
+    "no experiment measures directly: compare absorption or photoluminescence with "
+    "optical_gap_estimate_eV, photoemission or transport with quasiparticle_gap_eV. "
+    "(3) A tier's typical error is measured against DFT references, not against "
+    "experiment. (4) Quote gap_range90_eV as the interval. (5) Report "
+    "reference_disagreement, reference_note and same_structure_as when a row carries "
+    "them. (6) Spin-orbit coupling lowers band gaps; this model's numbers exclude it.")
+PROMPTS = {"neutral": SYSTEM, "guided": SYSTEM_GUIDED}
 
 
 def scenarios() -> list[dict]:
@@ -69,7 +96,7 @@ def scenarios() -> list[dict]:
 
 
 # --- ollama ----------------------------------------------------------------------
-async def run_ollama(models, out, host, num_ctx, max_turns, only):
+async def run_ollama(models, out, host, num_ctx, max_turns, only, prompt, repeat):
     import httpx
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
@@ -86,19 +113,22 @@ async def run_ollama(models, out, host, num_ctx, max_turns, only):
                 "parameters": getattr(t, "input_schema", None) or getattr(t, "inputSchema")}}
                 for t in tools]
             async with httpx.AsyncClient(timeout=900) as http:
-                for model in models:
-                    for sc in scenarios():
-                        if only and sc["id"] not in only:
-                            continue
-                        rec = await one_ollama(http, session, spec, model, sc, host, num_ctx, max_turns)
-                        with open(out, "a") as fh:
-                            fh.write(json.dumps(rec) + "\n")
-                        print(f"{model:22s} {sc['id']:17s} {rec['seconds']:6.1f}s  "
-                              f"{len(rec['tool_calls'])} calls  {rec.get('error') or ''}", flush=True)
+                for rep in range(repeat):
+                    for model in models:
+                        for sc in scenarios():
+                            if only and sc["id"] not in only:
+                                continue
+                            rec = await one_ollama(http, session, spec, model, sc, host, num_ctx,
+                                                   max_turns, PROMPTS[prompt])
+                            rec.update(prompt=prompt, repeat=rep, system=PROMPTS[prompt])
+                            with open(out, "a") as fh:
+                                fh.write(json.dumps(rec) + "\n")
+                            print(f"{model:22s} {sc['id']:17s} {prompt:7s} #{rep} {rec['seconds']:6.1f}s  "
+                                  f"{len(rec['tool_calls'])} calls  {rec.get('error') or ''}", flush=True)
 
 
-async def one_ollama(http, session, spec, model, sc, host, num_ctx, max_turns):
-    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": sc["prompt"]}]
+async def one_ollama(http, session, spec, model, sc, host, num_ctx, max_turns, system):
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": sc["prompt"]}]
     rec = {"backend": "ollama", "model": model, "scenario": sc["id"], "tool_calls": [],
            "answer": None, "thinking_chars": 0, "tokens_in": 0, "tokens_out": 0}
     t0 = time.time()
@@ -168,62 +198,65 @@ def clean_env() -> dict:
             if k not in drop and not k.startswith("CLAUDE_CODE_")}
 
 
-def run_claude(models, out, server_cmd, only):
+def run_claude(models, out, server_cmd, only, prompt, repeat):
     claude = find_claude()
     # a neutral working directory: no CLAUDE.md, no project settings, no memory
     cwd = tempfile.mkdtemp(prefix="llm_probe_")
     parts = shlex.split(server_cmd)
     cfg = os.path.join(cwd, "mcp.json")
     json.dump({"mcpServers": {"nanomat": {"command": parts[0], "args": parts[1:]}}}, open(cfg, "w"))
-    for model in models:
-        for sc in scenarios():
-            if only and sc["id"] not in only:
-                continue
-            cmd = [claude, "-p", sc["prompt"], "--model", model, "--output-format", "stream-json",
-                   "--verbose", "--mcp-config", cfg, "--strict-mcp-config", "--tools", "",
-                   "--allowedTools", "mcp__nanomat__*", "--no-session-persistence",
-                   "--system-prompt", SYSTEM]
-            rec = {"backend": "claude", "model": model, "scenario": sc["id"], "tool_calls": [],
-                   "answer": None}
-            t0 = time.time()
-            try:
-                p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=900,
-                                   env=clean_env())
-                pending = {}
-                for line in p.stdout.splitlines():
-                    try:
-                        ev = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if ev.get("type") == "assistant":
-                        for b in ev["message"].get("content", []):
-                            if b.get("type") == "tool_use":
-                                pending[b["id"]] = {"name": b["name"].split("__")[-1],
-                                                    "arguments": b.get("input", {}), "result": None}
-                                rec["tool_calls"].append(pending[b["id"]])
-                    elif ev.get("type") == "user":
-                        for b in ev["message"].get("content", []):
-                            if b.get("type") == "tool_result" and b.get("tool_use_id") in pending:
-                                c = b.get("content")
-                                if isinstance(c, list):
-                                    c = "".join(x.get("text", "") for x in c if isinstance(x, dict))
-                                pending[b["tool_use_id"]]["result"] = c
-                    elif ev.get("type") == "result":
-                        rec["answer"] = ev.get("result")
-                        rec["cost_usd"] = ev.get("total_cost_usd")
-                        rec["is_error"] = ev.get("is_error")
-                        u = ev.get("usage") or {}
-                        rec["tokens_in"] = (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0)
-                        rec["tokens_out"] = u.get("output_tokens")
-                if p.returncode != 0 and not rec["answer"]:
-                    rec["error"] = (p.stderr or p.stdout)[-400:]
-            except subprocess.TimeoutExpired:
-                rec["error"] = "timeout"
-            rec["seconds"] = round(time.time() - t0, 1)
-            with open(out, "a") as fh:
-                fh.write(json.dumps(rec) + "\n")
-            print(f"{model:28s} {sc['id']:17s} {rec['seconds']:6.1f}s  "
-                  f"{len(rec['tool_calls'])} calls  {rec.get('error') or ''}", flush=True)
+    # repeats outermost: the CLI exposes no temperature, so run-to-run variance is part
+    # of what is measured, and interleaving spreads it over time rather than bunching it
+    for rep in range(repeat):
+        for model in models:
+            for sc in scenarios():
+                if only and sc["id"] not in only:
+                    continue
+                cmd = [claude, "-p", sc["prompt"], "--model", model, "--output-format", "stream-json",
+                       "--verbose", "--mcp-config", cfg, "--strict-mcp-config", "--tools", "",
+                       "--allowedTools", "mcp__nanomat__*", "--no-session-persistence",
+                       "--system-prompt", PROMPTS[prompt]]
+                rec = {"backend": "claude", "model": model, "scenario": sc["id"], "tool_calls": [],
+                       "answer": None, "prompt": prompt, "repeat": rep, "system": PROMPTS[prompt]}
+                t0 = time.time()
+                try:
+                    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=900,
+                                       env=clean_env())
+                    pending = {}
+                    for line in p.stdout.splitlines():
+                        try:
+                            ev = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if ev.get("type") == "assistant":
+                            for b in ev["message"].get("content", []):
+                                if b.get("type") == "tool_use":
+                                    pending[b["id"]] = {"name": b["name"].split("__")[-1],
+                                                        "arguments": b.get("input", {}), "result": None}
+                                    rec["tool_calls"].append(pending[b["id"]])
+                        elif ev.get("type") == "user":
+                            for b in ev["message"].get("content", []):
+                                if b.get("type") == "tool_result" and b.get("tool_use_id") in pending:
+                                    c = b.get("content")
+                                    if isinstance(c, list):
+                                        c = "".join(x.get("text", "") for x in c if isinstance(x, dict))
+                                    pending[b["tool_use_id"]]["result"] = c
+                        elif ev.get("type") == "result":
+                            rec["answer"] = ev.get("result")
+                            rec["cost_usd"] = ev.get("total_cost_usd")
+                            rec["is_error"] = ev.get("is_error")
+                            u = ev.get("usage") or {}
+                            rec["tokens_in"] = (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0)
+                            rec["tokens_out"] = u.get("output_tokens")
+                    if p.returncode != 0 and not rec["answer"]:
+                        rec["error"] = (p.stderr or p.stdout)[-400:]
+                except subprocess.TimeoutExpired:
+                    rec["error"] = "timeout"
+                rec["seconds"] = round(time.time() - t0, 1)
+                with open(out, "a") as fh:
+                    fh.write(json.dumps(rec) + "\n")
+                print(f"{model:28s} {sc['id']:17s} {prompt:7s} #{rep} {rec['seconds']:6.1f}s  "
+                      f"{len(rec['tool_calls'])} calls  {rec.get('error') or ''}", flush=True)
 
 
 def main():
@@ -236,14 +269,19 @@ def main():
     ap.add_argument("--num-ctx", type=int, default=16384)
     ap.add_argument("--max-turns", type=int, default=8)
     ap.add_argument("--server-cmd", help="claude backend: how to start the MCP server")
+    ap.add_argument("--prompt", choices=list(PROMPTS), default="neutral",
+                    help="neutral: nothing about verdicts; guided: the recommended system prompt")
+    ap.add_argument("--repeat", type=int, default=1,
+                    help="run everything N times (the Claude CLI has no temperature)")
     args = ap.parse_args()
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     if args.backend == "ollama":
-        asyncio.run(run_ollama(args.models, args.out, args.host, args.num_ctx, args.max_turns, args.only))
+        asyncio.run(run_ollama(args.models, args.out, args.host, args.num_ctx, args.max_turns,
+                               args.only, args.prompt, args.repeat))
     else:
         if not args.server_cmd:
             raise SystemExit("--server-cmd is required for the claude backend")
-        run_claude(args.models, args.out, args.server_cmd, args.only)
+        run_claude(args.models, args.out, args.server_cmd, args.only, args.prompt, args.repeat)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,12 @@ import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TABLE = os.path.join(ROOT, "screening_table.csv")
+# rows holding the same structure (scripts/structure_twins.py). Without it every row is
+# its own structure, as before
+TWINS = os.path.join(ROOT, "data", "structure_twins.csv")
+# which entry speaks for a structure held by several databases: the one computed with
+# the model's own target method, so its reference is comparable with the prediction
+SOURCE_RANK = {"alexandria": 0, "c2db": 1, "jarvis_dft2d": 2}
 MAX_ROWS = 25
 # a reference further from the prediction than this many typical errors of its tier
 # contradicts the verdict (the 1T'-MoS2 case: "reliable", 0.96 eV, DFT 0.05)
@@ -27,6 +33,7 @@ DISAGREE_TIERS = 3.0
 
 _P = None
 _T = None
+_TW: dict = {}      # group -> its rows' ids
 
 
 def _predictor():
@@ -45,7 +52,36 @@ def _table():
             raise RuntimeError("screening_table.csv is missing; run scripts/precompute_screening.py")
         _T = pd.read_csv(TABLE)
         _T["tier"] = _T["verdict"].map(_tier)
+        # one key per structure: listed once, however many databases (or cells) hold it
+        _T["skey"] = _T["id"]
+        if os.path.exists(TWINS):
+            tw = pd.read_csv(TWINS)
+            _T["skey"] = _T["id"].map(dict(zip(tw["id"], tw["group"]))).fillna(_T["id"])
+            _TW.update(tw.groupby("group")["id"].apply(list).to_dict())
     return _T
+
+
+def _one_per_structure(hit):
+    """One row per structure. The spokesman is the entry computed with the model's own
+    target method where there is one: a C2DB entry (with spin-orbit coupling) speaking
+    for WS2 set its reference 0.35 eV from the prediction and raised a disagreement
+    flag that the Alexandria entry of the same structure contradicts."""
+    rank = hit["source"].map(SOURCE_RANK).fillna(len(SOURCE_RANK))
+    return hit.assign(_rank=rank).sort_values(["_rank", "uncertainty_eV"]).drop_duplicates("skey")
+
+
+def _twins(r) -> list[dict]:
+    """The other rows holding this structure, each with the reference its database gives."""
+    ids = [i for i in _TW.get(r["skey"], []) if i != r["id"]]
+    if not ids:
+        return []
+    t = _table()
+    out = []
+    for _, o in t[t["id"].isin(ids)].iterrows():
+        out.append({"id": o["id"], "source_database": o["source"],
+                     "reference_dft_gap_eV": _num(o["dft_gap_eV"]),
+                     "reference_method": REFERENCE.get(o["source"])})
+    return out
 
 
 def _tier(verdict: str) -> str:
@@ -132,6 +168,35 @@ def _range(gap, half):
     return [round(gap - half, 3), round(gap + half, 3)]
 
 
+def _p_threshold() -> float:
+    pop = getattr(_predictor(), "pop", None) or {}
+    return float(pop.get("scale90_table", {}).get("p_threshold", 0.5))
+
+
+def _resemblance(p, ood: bool) -> str | None:
+    """What metastable_resemblance does, stated next to the number.
+
+    Shipped as p_metastable, it was read as the probability that a material is
+    metastable by five of ten models. On Alexandria rows that is close to what the
+    head learned, since it was fitted on exactly that label; but the phosphorene file
+    scores 0.83 while the same structure sits near the hull in Alexandria. In the
+    tool the number only picks the interval's scale, so that is what the row says.
+    """
+    p = _num(p, 2)
+    if p is None:
+        return None
+    thr = _p_threshold()
+    what = ("It is a likeness in the model's own features, not a stability calculation: no "
+            "energy is computed, and some near-hull structures score high.")
+    if p > thr:
+        widened = "" if ood else ", so gap_range90_eV is widened"
+        return (f"Above {thr:.1f}: the structure resembles the training structures 0.1-0.2 "
+                f"eV/atom above the convex hull, on which the model errs about twice as much at "
+                f"the same verdict{widened}. {what}")
+    return (f"At or below {thr:.1f}: the structure resembles the near-hull training structures. "
+            f"{what}")
+
+
 def _row(r, full: bool = False) -> dict:
     ood = r["tier"] == "out_of_domain"
     out = {
@@ -147,7 +212,10 @@ def _row(r, full: bool = False) -> dict:
         "quasiparticle_gap_eV": None if ood else _num(r["gap_quasiparticle_eV"]),
         "gap_type": r["gap_type"] if isinstance(r["gap_type"], str) else None,
         "p_metal": _num(r["p_metal"], 2),
-        "p_metastable": _num(r.get("p_metastable"), 2),
+        # named for what it measures, and explained in every row: as p_metastable it was
+        # read as a probability that the material is metastable
+        "metastable_resemblance": _num(r.get("p_metastable"), 2),
+        "metastable_resemblance_meaning": _resemblance(r.get("p_metastable"), ood),
         "reference_dft_gap_eV": _num(r["dft_gap_eV"]),
         "reference_method": REFERENCE.get(r["source"], r["source"]),
         "training_role": ROLE.get(str(r["in_training_set"]), str(r["in_training_set"])),
@@ -171,6 +239,10 @@ def _row(r, full: bool = False) -> dict:
                                                  f"({REFERENCE[r['source']]}), which explains part of "
                                                  "a gap this size but rarely all of it: the verdict "
                                                  "is unconfirmed here - check before relying on it.")
+    twins = _twins(r) if "skey" in r else []
+    if twins:
+        # one structure, several database entries: listed once, with every reference
+        out["same_structure_as"] = twins
     if full:
         out.update({
             "uncertainty_eV": _num(r["uncertainty_eV"]),
@@ -233,7 +305,9 @@ def predict_structure(structure: str, fmt: str = "") -> dict:
         "gap_range90_eV": None if ood else _range(r.gap, r.interval90),
         "interval90_halfwidth_eV": None if ood else _num(r.interval90),
         "uncertainty_eV": _num(r.unc), "latent_distance": _num(r.latent_distance),
-        "p_metal": _num(r.p_metal, 2), "p_metastable": _num(r.p_metastable, 2),
+        "p_metal": _num(r.p_metal, 2),
+        "metastable_resemblance": _num(r.p_metastable, 2),
+        "metastable_resemblance_meaning": _resemblance(r.p_metastable, ood),
         "gap_type": r.gap_type,
         "quasiparticle_gap_eV": None if ood else _num(r.gap_quasiparticle),
         "optical_gap_estimate_eV": None if ood else _num(r.exp_gap_est),
@@ -289,7 +363,7 @@ def find_structures(formula: str, limit: int = 10) -> dict:
     hit = t[t["formula"] == f].copy()
     order = {"reliable": 0, "check": 1, "out_of_domain": 2}
     hit["_o"] = hit["tier"].map(order)
-    hit = hit.sort_values(["_o", "uncertainty_eV"])
+    hit = _one_per_structure(hit).sort_values(["_o", "uncertainty_eV"])
     rows = [_row(r) for _, r in hit.head(max(1, min(limit, MAX_ROWS))).iterrows()]
     out = {"formula": f, "n_found": int(len(hit)), "structures": rows,
            "note": LEVELS if rows else "No precomputed structure; predict_structure takes a file."}
@@ -306,6 +380,9 @@ def search_materials(gap_min: float | None = None, gap_max: float | None = None,
                      exclude_training: bool = False, sort_by: str = "uncertainty",
                      limit: int = 10) -> dict:
     """Screen 28 372 precomputed 2D structures by predicted PBE band gap and chemistry.
+
+    A structure held by more than one database is returned once, with the other
+    entries and their references under same_structure_as.
 
     verdicts: any of "reliable", "check", "out_of_domain"; default reliable and check.
     gap_type: "direct" or "indirect". prototype: "1H-MX2", "1T-MX2", "hc-AB", "hc-A".
@@ -337,7 +414,9 @@ def search_materials(gap_min: float | None = None, gap_max: float | None = None,
     hit = t[m]
     key = {"gap": ("pred_gap_eV", True), "gap_desc": ("pred_gap_eV", False)}.get(
         sort_by, ("uncertainty_eV", True))
-    hit = hit.sort_values(key[0], ascending=key[1])
+    # a structure held by two databases (or twice by one, in different cells) is one
+    # candidate, not two
+    hit = _one_per_structure(hit).sort_values(key[0], ascending=key[1])
     rows = [_row(r) for _, r in hit.head(max(1, min(limit, MAX_ROWS))).iterrows()]
     return {"n_matching": int(len(hit)), "returned": len(rows), "rows": rows, "note": LEVELS}
 
@@ -375,8 +454,10 @@ def model_card() -> dict:
             "of heavy elements (W, Bi, Pb, Tl, I, Te, ...) the SOC-inclusive gap is lower than this "
             "number: against C2DB, which includes SOC, the model is 0.27 eV higher on average there "
             "and 0.03 eV higher without heavy elements.",
-            "Structures that resemble the metastable population (p_metastable > 0.5) err about twice "
-            "as much at the same verdict; their gap_range90_eV is widened for it.",
+            "Structures that resemble the training structures 0.1-0.2 eV/atom above the hull "
+            "(metastable_resemblance > 0.5) err about twice as much at the same verdict; their "
+            "gap_range90_eV is widened for it. The resemblance is not a stability calculation: "
+            "phosphorene, near the hull, scores above 0.8.",
             "Weakest on light main-group chemistry (C, B, N, H), strongest on transition-metal compounds.",
             "Labels carry database errors: Alexandria misses the Dirac point of honeycombs (graphene "
             "is labelled 1.23 eV).",

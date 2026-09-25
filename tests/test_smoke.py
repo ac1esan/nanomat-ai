@@ -457,3 +457,44 @@ def test_llm_tools_flag_what_the_verdict_misses():
     r = rows["Mo2S4-b06001f565b8"]
     assert r["verdict"].startswith("out-of-domain") or "reference_disagreement" in r
     assert all("optical_gap_estimate_eV" in s for s in rows.values())
+
+
+def test_llm_tools_list_one_structure_once():
+    """A structure held by two databases, or twice by one in different cells, is one
+    candidate: SbTeCl was offered twice in five of ten answers to one question.
+
+    Needs screening_table.csv and data/structure_twins.csv (scripts/structure_twins.py).
+    """
+    from nanomat import llm_tools as L
+    if not (os.path.exists(L.TABLE) and os.path.exists(L.TWINS)):
+        pytest.skip("screening table or twin list not built")
+    rows = L.find_structures("SbTeCl", limit=25)["structures"]
+    listed = {s["id"] for s in rows}
+    named = {t["id"] for s in rows for t in s.get("same_structure_as", [])}
+    assert named, "SbTeCl's three entries of one structure should be folded into one row"
+    assert not listed & named, "a structure is listed as a row and as another row's twin"
+    hits = L.search_materials(gap_min=1.4, gap_max=1.6, include_elements=["Sb", "Te", "Cl"],
+                              limit=25)["rows"]
+    assert len({r["id"] for r in hits}) == len(hits)
+
+
+def test_llm_tools_say_what_metastable_resemblance_means():
+    """Shipped as p_metastable, the number was read as the probability that a material
+    is metastable, by five of ten models. The phosphorene file scores above 0.8 while
+    the same structure sits near the hull in Alexandria, so the field is named for what
+    it measures and every row says what it does: it widens the interval, and it is not
+    a stability calculation. The old name must not come back."""
+    from nanomat import llm_tools as L
+    high = L.predict_structure(open(os.path.join(EX, "phosphorene.vasp")).read())
+    low = L.predict_structure(open(os.path.join(EX, "MoS2.vasp")).read())
+    for r in (high, low):
+        assert "p_metastable" not in r
+        assert "not a stability calculation" in r["metastable_resemblance_meaning"]
+    assert high["metastable_resemblance"] > 0.5 and high["gap_range90_eV"] is not None
+    assert "widened" in high["metastable_resemblance_meaning"]
+    assert low["metastable_resemblance"] < 0.5
+    assert "widened" not in low["metastable_resemblance_meaning"]
+    assert any("metastable_resemblance" in x for x in L.model_card()["limits"])
+    if os.path.exists(L.TABLE):
+        row = L.find_structures("TbGaSe3")["structures"][0]
+        assert "p_metastable" not in row and row["metastable_resemblance_meaning"]
