@@ -367,3 +367,42 @@ def test_angles_are_off_by_default_and_do_not_touch_the_contract():
     shipped = set(ck["state_dicts"][0])
     assert ck["n_ang"] > 0 and shipped == set(CGCNN(ang_dim=ck["n_ang"]).state_dict())
     assert shipped - plain == {"ang.weight", "ang.bias"}
+
+
+def test_llm_tools_forgive_what_models_get_wrong():
+    """The language-model tools, called directly: no MCP needed.
+
+    Two failures from scripts/llm_probe.py are pinned here. A model that dropped the
+    POSCAR comment line got three parse errors and then invented a "reliable"
+    answer, so the parser forgives it. Two models read the bare 90% half-width as a
+    full width, so the range is now explicit.
+    """
+    from nanomat import llm_tools as L
+    text = open(os.path.join(EX, "phosphorene.vasp")).read()
+    r = L.predict_structure(text.split("\n", 1)[1])          # comment line dropped
+    assert r.get("formula") == "P" and "input_note" in r, r
+    lo, hi = r["gap_range90_eV"]
+    half = r["interval90_halfwidth_eV"]
+    assert abs((hi - lo) - 2 * half) < 2e-3 and lo < r["band_gap_pbe_eV"] < hi
+    assert "error" in L.predict_structure("not a structure")
+    assert "mcp" not in L.__dict__, "the tools must not depend on the protocol"
+
+
+def test_llm_tools_flag_what_the_verdict_misses():
+    """The rows a model needs to be warned about carry the warning themselves.
+
+    Needs screening_table.csv (not in git; scripts/precompute_screening.py writes it).
+    """
+    from nanomat import llm_tools as L
+    if not os.path.exists(L.TABLE):
+        pytest.skip("screening_table.csv not built")
+    g = L.find_structures("graphene")
+    assert g["formula"] == "C" and "input_note" in g
+    assert any("reference_note" in s for s in g["structures"]), "graphene's 1.23 eV label is wrong"
+    rows = {s["id"]: s for s in L.find_structures("1T-MoS2", limit=25)["structures"]}
+    # 1T'-MoS2, 0.96 eV against a DFT 0.05, was the model's own "reliable" miss and
+    # the reference flag had to catch it. The retrained metal gate rejects it
+    # outright; either way the row must not reach a reader unwarned
+    r = rows["Mo2S4-b06001f565b8"]
+    assert r["verdict"].startswith("out-of-domain") or "reference_disagreement" in r
+    assert all("optical_gap_estimate_eV" in s for s in rows.values())

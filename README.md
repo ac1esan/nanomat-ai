@@ -47,8 +47,24 @@ python screen_bandgap.py --app                                # web UI at http:/
 ```
 
 ```bash
-pytest -q                                                     # 20 smoke and contract tests
+pytest -q                                                     # 22 smoke and contract tests
 ```
+
+From a language model, over the Model Context Protocol
+([nanomat/mcp_server.py](nanomat/mcp_server.py)), with any client that spawns a
+server over stdio:
+
+```bash
+pip install -r requirements-llm.txt
+claude mcp add nanomat -- "$(pwd)/venv/bin/python" -m nanomat.mcp_server
+```
+
+Five tools: predict a pasted CIF or POSCAR; find precomputed structures by formula or
+common name; search the screening table by gap window, elements, verdict, gap type or
+prototype; fetch one material; read the model card. Every row leads with the verdict
+and its typical error, gives the 90% interval as an explicit range, and says when the
+model disagrees with a reference by more than its tier's typical error. The search
+tools read `screening_table.csv`, which `scripts/precompute_screening.py` writes.
 
 Output for the bundled examples ([examples/expected_results.csv](examples/expected_results.csv)):
 
@@ -593,9 +609,8 @@ figures/                  README figures and the scripts that regenerate them
 
 ## Roadmap
 
-1. **Use it from a language model.** An MCP server exposing prediction, the
-   screening table and the model's own limits — and a test of whether models of
-   different sizes pass the verdict on or override it.
+1. **Language models.** The MCP server ships (Quick start). Still to publish: the
+   test of whether models of different sizes pass the verdict on or override it.
 2. **A 2D band-gap benchmark for JARVIS-Leaderboard.** Of its 322 benchmarks, 67 are
    about band gaps and none about 2D materials.
 3. **Scope the calibration to the population**: a second calibration fitted on held-out
