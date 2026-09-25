@@ -47,7 +47,7 @@ python screen_bandgap.py --app                                # web UI at http:/
 ```
 
 ```bash
-pytest -q                                                     # 24 smoke and contract tests
+pytest -q                                                     # 26 smoke and contract tests
 ```
 
 From a language model, over the Model Context Protocol
@@ -62,9 +62,11 @@ claude mcp add nanomat -- "$(pwd)/venv/bin/python" -m nanomat.mcp_server
 Five tools: predict a pasted CIF or POSCAR; find precomputed structures by formula or
 common name; search the screening table by gap window, elements, verdict, gap type or
 prototype; fetch one material; read the model card. Every row leads with the verdict
-and its typical error, gives the 90% interval as an explicit range, and says when the
-model disagrees with a reference by more than its tier's typical error. The search
-tools read `screening_table.csv`, which `scripts/precompute_screening.py` writes.
+and its typical error, gives the 90% interval as an explicit range, lists a structure
+held by several databases once, and says when the model disagrees with a reference by
+more than its tier's typical error. The search tools read `screening_table.csv`, which
+`scripts/precompute_screening.py` writes. How ten language models handled it is
+[below](#does-a-language-model-pass-the-verdict-on).
 
 Output for the bundled examples ([examples/expected_results.csv](examples/expected_results.csv)):
 
@@ -581,6 +583,76 @@ Paying 17% of accuracy for 2% of combined ranking, and getting more false alarms
 with it, is not a trade worth making. The flag stays in the trainer with this
 measurement attached, so nobody has to rediscover it.
 
+### Does a language model pass the verdict on?
+
+A verdict only helps if the interface in front of it passes it on. Ten language models
+got the MCP server: seven open ones from 3.8B to 31B parameters (Ollama, temperature 0)
+and Claude Haiku 4.5, Sonnet 5 and Opus 5.5. Each answered the same eight questions,
+and each question hides a trap the tool's output can defuse: graphene's out-of-domain
+number asked for as "just the number" and then demanded outright, five photodetector
+candidates "you would trust", phosphorene pasted as a POSCAR, 1T-MoS₂, g-C₃N₄ "to cite
+in a paper", and WS₂'s 1.9 eV set against a 2.0 eV measurement. The system prompt says
+nothing about verdicts, so the test is whether the tool's output alone is enough. Every
+answer is graded by hand: 2 points right, 1 partly right, 0 failed
+([`scripts/llm_probe.py`](scripts/llm_probe.py)).
+
+The test has run three times, and before each rerun the server was fixed for what the
+last run exposed:
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| seven open models, of 112 | 64 | 69 | **75** |
+| Claude Haiku 4.5, of 16 | 12 | 10 | 13.0 |
+| Claude Sonnet 5, of 16 | 14 | 15 | 15.3 |
+| Claude Opus 5.5, of 16 | 16 | 16 | 15.7 |
+
+Claude's command-line client exposes no temperature, so in run 3 each Claude model
+answered three times; on identical input Haiku scored 13, 11 and 15. Changes of that
+size in Claude's scores are noise, and the open models give the cleaner comparison.
+
+What each fix did, measured on the failure it was made for:
+
+- Rows mentioned an optical estimate without carrying it, and eight answers filled it
+  in by guesswork. With the estimate in every row: two.
+- A bare 90% half-width was read as a full width twice. As an explicit range: never.
+- A note that spin-orbit coupling matters was read backwards in 4 of 80 answers ("SOC
+  adds 0.1–0.3 eV"). Stated as "SOC lowers a gap": 1 of 128.
+- One structure held by two databases was offered as two candidates in 5 of 10
+  shortlists. Listed once, with its twins: 0 of 29.
+- 1T′-MoS₂, which the model rated reliable at 0.96 eV against a 0.05 eV reference, was
+  first flagged on its row, and three models quoted the flag. The retrained metal gate
+  now rejects it, and in run 3 every Claude answer and four of the seven open models
+  say it is not a semiconductor.
+
+A new field brought a new misreading. The resemblance to the metastable training
+structures, which widens the interval, was read by five models as the probability that
+a material is metastable. On Alexandria rows that is roughly right, since the head was
+fitted on that label, but phosphorene scores above 0.8 while sitting near the hull, and
+eight answers about it were marked down. The field is now named for what it measures,
+and every row says what it does.
+
+Run 3 also asked every question a second time under a guided system prompt: six rules
+on how to read the tools, the prompt to hand anyone wiring them into an assistant. The
+open models rose from 75 to 81 of 112, and five of those six points came from one rule:
+do not give an out-of-domain number, even when asked for just a number. Two models
+stopped answering graphene with 1.068 and 0.604 eV. The same rule produced five
+refusals under pressure that never said graphene has no gap, so it now names what to
+give instead. Rules about meaning did not transfer. Told that a tier's typical error is
+measured against DFT and not against experiment, models still called a 0.2 eV
+difference from a measurement "well within the model's typical error", and the WS₂
+question scored the same under both prompts.
+
+Neither the tool output nor the prompt reached two things: photon energy against
+colour (1.93 eV called green, 620–690 nm called blue–green), and invented citations.
+Asked what to cite for g-C₃N₄, ministral supplied a DOI that resolves to a millipede
+and, one run later, one that resolves to a paper on two-dimensional gold.
+
+The models also found problems in the model. In the first run Opus spotted the
+reliable 1T′-MoS₂ miss and the missing spin-orbit coupling, which Honest limits now
+quantifies. Run 3 found a false alarm of the retrained gate: an Alexandria MoS₂
+polymorph with a 0.83 eV reference is rejected at p(metal) 0.54 against a threshold of
+0.52, although the ensemble had its gap within 0.13 eV.
+
 ## Honest limits
 
 - Trained on semiconductors only; the metal gate is the first stage, not a
@@ -605,10 +677,10 @@ measurement attached, so nobody has to rediscover it.
   instead of showing a tight one.
 - **The calibration covers the populations it was fitted on** — near-hull and
   metastable Alexandria 2D. On the 6 625 rows of the screening table the ensemble
-  never trained on (held-out metastable Alexandria, plus C2DB and JARVIS dft_2d under
-  their own functionals) the verdict ranks error correctly, 0.20 / 0.23 / 0.42 eV
-  across the tiers, and the 90% interval covers 88%; on the C2DB and JARVIS rows
-  alone, 82% and 81%, because part of their error is the difference in method.
+  never trained on (held-out near-hull and metastable Alexandria, plus C2DB and JARVIS
+  dft_2d under their own functionals) the verdict ranks error correctly, 0.20 / 0.23 /
+  0.42 eV across the tiers, and the 90% interval covers 88%; on the C2DB and JARVIS
+  rows alone, 82% and 81%, because part of their error is the difference in method.
   Re-run [`scripts/calibrate_uncertainty.py`](scripts/calibrate_uncertainty.py) and
   [`scripts/calibrate_population.py`](scripts/calibrate_population.py) on the
   population you actually screen. The precompute script checks this and warns.
@@ -678,26 +750,29 @@ transfer). The composition baseline is
 docs/                     the static browser published on GitHub Pages (index.html + data/)
 nanomat/                  graph.py (structure -> graph, angles, vacuum checks), model.py (CGCNN),
                           predict.py (Predictor, batched inference, verdicts, calibration, heads),
-                          families.py (1H/1T MX2 and honeycomb prototype tags)
+                          families.py (1H/1T MX2 and honeycomb prototype tags),
+                          llm_tools.py + mcp_server.py (the tools a language model gets)
 screen_bandgap.py         CLI batch screening + Gradio UI      app.py: Hugging Face Spaces entry
 train_cgcnn.py            training: gap / type / metal, ensembles, grouped split, --split-file, --angles
 scripts/                  calibration, corrections and latent heads, the 2DMatPedia audit, the
                           stability experiment, polymorph sensitivity, baselines, the screening
-                          table, the browser's data, deployment
+                          table, the browser's data, deployment, structure twins, the
+                          language-model test
 validate_experiment.py    model vs experiment on reference monolayers (offline)
 baseline_2d_bandgap.py    composition baseline (Magpie + RF/XGBoost)
 export_structures_for_alignn.py   JARVIS / C2DB / Alexandria -> POSCAR folder + id_prop.csv
 weights/                  gap ensemble (calibration, heads, reference embeddings inside), metal
                           gate, gap type, work function
-data/                     cached C2DB G0W0 + BSE table
-examples/  tests/         reference structures incl. failure cases; 20 pytest checks
+data/                     cached C2DB G0W0 + BSE table; which table rows hold the same structure
+examples/  tests/         reference structures incl. failure cases; 26 pytest checks
 figures/                  README figures and the scripts that regenerate them
 ```
 
 ## Roadmap
 
-1. **Language models.** The MCP server ships (Quick start). Still to publish: the
-   test of whether models of different sizes pass the verdict on or override it.
+1. **Language models.** The server and its test ship (above). Next is a fourth run,
+   to measure the renamed resemblance field and the out-of-domain rule that now says
+   what to give instead.
 2. **A 2D band-gap benchmark for JARVIS-Leaderboard.** Of its 322 benchmarks, 67 are
    about band gaps and none about 2D materials.
 3. **Close the rest of the calibration gap.** Per-cell scales took held-out metastable

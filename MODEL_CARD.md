@@ -371,15 +371,26 @@ under `out-of-domain`.
   than the 8 Å cutoff is padded automatically; cells with no gap ≥ 5 Å are rejected
   as not 2D. Under biaxial strain the model is usable in tension and unreliable
   below −2% compression.
-- **Calibration is population-scoped.** Fitted on stable (`e_above_hull ≤ 0.1`)
-  Alexandria 2D semiconductors. On the 6 625 rows of the screening table this
-  ensemble never trained on — held-out stable and metastable Alexandria, plus C2DB
-  and JARVIS dft_2d under their own functionals — tier ordering survives (MAE 0.199 /
-  0.236 / 0.416 eV for reliable / check / out-of-domain), but 90% intervals cover 83%
-  and per-tier errors are optimistic. The previous ensemble covered 78% on its own
-  unseen rows; the two populations differ, since the metastable rows it had not seen
-  are now training data, so the two figures are not a like-for-like comparison.
-  Re-calibrate before trusting absolute intervals on a different population.
+- **Calibration is population-scoped.** The 90% interval is scaled per cell of
+  resemblance to the metastable training structures × spread quartile, fitted on
+  held-out near-hull and metastable Alexandria 2D semiconductors. On the 6 625 rows of
+  the screening table this ensemble never trained on — held-out near-hull and
+  metastable Alexandria, plus C2DB and JARVIS dft_2d under their own functionals — the
+  tiers keep their order (MAE 0.196 / 0.232 / 0.418 eV for reliable / check /
+  out-of-domain) and the interval covers 87.7% (83.4% under a single scale); on the
+  C2DB and JARVIS rows alone 82% and 81%, because part of their error is the difference
+  in method. The typical errors the tool quotes per tier (0.10 / 0.19 / 0.40 eV) are
+  measured on the near-hull test split and are optimistic elsewhere. Re-calibrate before
+  trusting absolute intervals on a different population.
+- **Through a language model.** `nanomat/mcp_server.py` serves the tool over MCP,
+  verdict first, and it was tested on ten models over three runs
+  ([README](README.md#does-a-language-model-pass-the-verdict-on)). The verdict reaches
+  most answers. Under a neutral system prompt two of seven open models still gave
+  graphene's out-of-domain number when asked for "just the number", and several models
+  read a tier's typical error, which is measured against DFT, as agreement with
+  experiment. The guided prompt in `scripts/llm_probe.py` fixed the first and not the
+  second. Check the verdict in the tool's own output before relying on a number an
+  assistant quotes.
 - **Licence.** MIT for code and weights. Data: Alexandria (CC-BY 4.0), C2DB,
   JARVIS-DFT and 2DMatPedia (Zhou et al., *Sci. Data* **6**, 86 (2019)) through
   JARVIS-Tools.
