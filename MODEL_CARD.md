@@ -85,8 +85,12 @@ vacuum and accepted as MoS₂ a structure 1 eV/atom higher in energy.
   the databases was polymorphs, not labels.
 - Where they disagree by more than 0.3 eV (about 4% of pairs), C2DB and JARVIS
   dft_2d as arbiters side with neither database overall. Alexandria is wrong on
-  Dirac-like honeycombs — graphene 1.23 eV, silicene 0.86, GaAs 1.11, where C2DB has
-  zero — and **that graphene entry sits in this model's test split**. 2DMatPedia is
+  planar honeycombs with band edges at K — graphene 1.23 eV and planar silicene 0.86,
+  where the other databases have zero, planar BP 1.31 against 0.90 — and its value
+  depends on the cell (the same BP layer in three larger cells gives 0.906), which
+  points at k-point sampling. **Both graphene entries sit in this model's test split.**
+  GaAs and AlAs, listed here before, were different structures (planar in one
+  database, buckled in the other) that the audit's matcher let through. 2DMatPedia is
   wrong on the ZrNCl family by about 1 eV and, more often, lands in a different
   magnetic state. Hence the rule: non-magnetic 2DMatPedia entries only.
 

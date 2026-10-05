@@ -134,14 +134,19 @@ REFERENCE = {
                     "the model's target (median -0.02 eV) but a wider scatter",
 }
 
-# reference labels the 2DMatPedia audit (scripts/audit_2dmatpedia.py) found wrong, with
-# C2DB or JARVIS dft_2d as arbiter: Alexandria's k-mesh misses these Dirac points
+# Alexandria reference labels known to be wrong. Each was checked against the same layer
+# (same lattice within 1%, same buckling within 0.05 A) in another database; planar
+# honeycombs with their band edges at K, whose gap Alexandria reports too high and, for
+# BP, differently in different cells of one structure. GaAs and AlAs, once listed here,
+# were dropped: Alexandria's layers are buckled and the others' planar, so they are
+# different structures, not label errors.
 KNOWN_BAD_REFERENCE = {
-    "agm2000000082": "graphene: semimetal, 0.00 eV in C2DB and JARVIS dft_2d",
-    "agm2000000375": "silicene: 0.00 eV in C2DB",
-    "agm2000044138": "GaAs honeycomb: 0.00 eV in C2DB and 2DMatPedia",
-    "agm2000002555": "AlAs honeycomb: 1.24 eV in C2DB and 2DMatPedia",
-    "agm2000002852": "BP honeycomb: 0.90 eV in C2DB, 0.87 in 2DMatPedia",
+    "agm2000000082": "graphene: semimetal, 0.00 eV in C2DB, 2DMatPedia and JARVIS dft_2d",
+    "agm2000000079": "graphene (4-atom cell): semimetal, 0.00 eV in C2DB, 2DMatPedia and "
+                     "JARVIS dft_2d",
+    "agm2000000375": "planar silicene: semimetal, 0.00 eV in 2DMatPedia for the same planar layer",
+    "agm2000002852": "planar BP: 0.90 eV in C2DB, 0.87 in 2DMatPedia, and 0.906 in Alexandria's "
+                     "own entries of the same layer in larger cells",
 }
 
 # names people use for 2D materials that are not chemical formulas

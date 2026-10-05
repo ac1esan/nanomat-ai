@@ -153,6 +153,10 @@ def _init_matcher():
     # vacuum, so the default 0.3 with volume scaling accepted as MoS2 a structure
     # 1 eV/atom higher in energy (measured). Two PBE relaxations of one structure
     # differ by ~1% in lattice and hundredths of an angstrom in positions.
+    # Still loose in absolute terms: with 10 A of vacuum on each side, stol 0.1 is about
+    # 0.5 A, enough to pass a planar and a buckled layer as one structure (silicene, AlAs,
+    # GaAs were). Pairs with rms above ~0.03 (80 of 1178) are not reliable twins; their
+    # metal/semiconductor agreement drops from 96% to 74%.
     _SM = StructureMatcher(**MATCHER)
 
 
@@ -600,7 +604,7 @@ def main():
                "new_structures": {"n": len(new), "semiconductors": len(new_sc),
                                   "light_element_counts": dict(counts)},
                "settings": {"match_vacuum": MATCH_VACUUM, "metal_gap": METAL_GAP,
-                            "magnetic": MAGNETIC, "ltol": 0.2, "stol": 0.3, "angle_tol": 5}}
+                            "magnetic": MAGNETIC, **{k: MATCHER[k] for k in ("ltol", "stol", "angle_tol")}}}
     json.dump(summary, open(args.out + ".json", "w"), indent=1)
     keys = sorted({k for r in rows for k in r})
     with open(args.out + "_entries.csv", "w", newline="") as fh:

@@ -372,9 +372,14 @@ vacuum, and accepted as MoS₂ a structure 1 eV/atom higher in energy.
   Paired by formula, the same entries disagree by 0.304: most of the apparent
   disagreement was polymorphs, not labels.
 - Where they differ by more than 0.3 eV, C2DB and JARVIS dft_2d as arbiters side with
-  neither database overall. Alexandria misses the Dirac point of honeycomb layers —
-  graphene 1.23 eV, silicene 0.86, GaAs 1.11, where C2DB has zero — and that graphene
-  entry sits in this model's test split. 2DMatPedia is about 1 eV high on the ZrNCl
+  neither database overall. Alexandria reports planar honeycombs with their band
+  edges at K too high: graphene 1.23 eV and planar silicene 0.86, where the other
+  databases have zero, and planar BP 1.31 against 0.90. The same BP layer stored in
+  Alexandria in three larger cells gives 0.906, so the number depends on the cell,
+  which points at k-point sampling that misses K. Both graphene entries sit in this
+  model's test split. (GaAs and AlAs, listed here before, were planar in one database
+  and buckled in the other: different structures that the matcher let through, not
+  label errors.) 2DMatPedia is about 1 eV high on the ZrNCl
   family and, more often, lands in a different magnetic state; only its non-magnetic
   entries are used.
 
@@ -778,8 +783,9 @@ figures/                  README figures and the scripts that regenerate them
 3. **Close the rest of the calibration gap.** Per-cell scales took held-out metastable
    coverage from 84% to 88%; the remainder is metastable structures the latent head
    mistakes for near-hull ones.
-4. **Repair the known label errors** — Alexandria's missed Dirac points (graphene,
-   silicene, GaAs) — using the arbiter agreement already measured.
+4. **Repair the known label errors** — Alexandria's planar honeycombs with band edges
+   at K (graphene, planar silicene, BP) — and tighten the audit's matcher: in a slab
+   its tolerance is about 0.5 A, enough to pass a planar and a buckled layer as one.
 5. **More light-element data.** Full C2DB (16 789 entries against 3 520 mirrored in
    JARVIS) and Materials Cloud MC2D; carbon is still the sparsest element in training.
 6. Host the uploader somewhere free. Gradio Spaces now require a paid tier, so
