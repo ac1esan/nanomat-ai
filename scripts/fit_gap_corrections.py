@@ -193,16 +193,26 @@ def fit_optical(P: Predictor) -> tuple[dict, list[dict]]:
 
     # choose the shape by cross-validation, not by eye: a line is biased high through
     # the middle of the range, and the extra curvature has to earn its parameter
+    # A shape is admissible only if it stays above the raw gap over the whole range a
+    # prediction can take: PBE underestimates every measurement, and a cubic with a
+    # negative leading term (picked once by cross-validation alone) fell below the raw
+    # gap past 7 eV, where the fit has almost no data to object.
+    grid = np.linspace(0.0, 12.0, 241)
     print(f"  {'degree':>6s} {'in-sample':>10s} {'10-fold':>9s} {'sd':>7s}")
     scores = {}
     for d in range(1, MAX_DEGREE + 1):
         p = np.polyfit(x, y, d)
         m, sd = cv_mae(x, y, d)
-        scores[d] = (m, sd, p)
-        print(f"  {d:6d} {np.mean(np.abs(np.polyval(p, x) - y)):10.3f} {m:9.3f} {sd:7.4f}")
+        ok = bool(np.all(np.polyval(p, grid) > grid))
+        if ok:
+            scores[d] = (m, sd, p)
+        print(f"  {d:6d} {np.mean(np.abs(np.polyval(p, x) - y)):10.3f} {m:9.3f} {sd:7.4f}"
+              + ("" if ok else "   rejected: drops below the raw gap within 0-12 eV"))
+    if not scores:
+        raise SystemExit("no polynomial degree stays above the raw gap; refusing to write one")
     degree = min(scores, key=lambda d: scores[d][0])
     mae_cv, sd_cv, coeffs = scores[degree]
-    print(f"  -> degree {degree} wins on cross-validation")
+    print(f"  -> degree {degree} wins on cross-validation among the admissible shapes")
 
     out = {
         "coeffs": [float(c) for c in coeffs], "degree": int(degree),

@@ -33,6 +33,14 @@ re-measured with the full verdict (spread and latent distance) on the test split
 
     python scripts/calibrate_population.py --weights weights/cgcnn_2d_ensemble.pt --data alignn_data_exp
 
+For an ensemble trained further up the hull (hull_experiment.py: 0.1-0.5 eV/atom), the
+metastable training population is every Alexandria training structure outside the
+near-hull split, and the held-out metastable sets are T_meta and T_far:
+
+    python scripts/calibrate_population.py --weights weights/cgcnn_2d_ensemble.pt \
+        --data alignn_data_hull --near-hull-split alignn_data_exp/splits/A0.json \
+        --meta-tests T_meta,T_far
+
 --dry-run prints everything without writing. Re-run after calibrate_uncertainty.py
 whenever the ensemble is retrained: the head reads that ensemble's latent space.
 """
@@ -99,7 +107,11 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--weights", required=True, help="calibrated ensemble checkpoint (.pt)")
-    ap.add_argument("--data", required=True, help="alignn_data_exp: splits/A0.json, A2.json, experiment.json")
+    ap.add_argument("--data", required=True, help="experiment folder: structures, id_prop.csv, experiment.json")
+    ap.add_argument("--near-hull-split", help="split whose training part is the near-hull "
+                    "population (default: <data>/splits/A0.json)")
+    ap.add_argument("--meta-tests", default="T_meta",
+                    help="comma-separated held-out metastable test sets from experiment.json")
     ap.add_argument("--batch", type=int, default=512)
     ap.add_argument("--repeats", type=int, default=20)
     ap.add_argument("--device", default="auto")
@@ -107,17 +119,21 @@ def main():
     args = ap.parse_args()
     device = ("cuda" if torch.cuda.is_available() else "cpu") if args.device == "auto" else args.device
 
-    a0 = json.load(open(os.path.join(args.data, "splits", "A0.json")))
-    a2 = json.load(open(os.path.join(args.data, "splits", "A2.json")))
+    a0 = json.load(open(args.near_hull_split or os.path.join(args.data, "splits", "A0.json")))
     exp = json.load(open(os.path.join(args.data, "experiment.json")))
-    stable_tr, meta_tr = list(a0["train"]), sorted(set(a2["train"]) - set(a0["train"]))
-    t_meta = exp["tests"]["T_meta"]
     ens_split = os.path.splitext(args.weights)[0] + ".split.json"
-    if os.path.exists(ens_split):
-        trained = set(json.load(open(ens_split))["train"])
-        if not set(stable_tr + meta_tr) <= trained:
-            raise SystemExit("these weights were not trained on both populations; the head "
-                             "would be fitted on structures the ensemble never saw")
+    if not os.path.exists(ens_split):
+        raise SystemExit(f"{ens_split} missing: the metastable population is read from it")
+    trained = set(json.load(open(ens_split))["train"])
+    stable_tr = list(a0["train"])
+    if not set(stable_tr) <= trained:
+        raise SystemExit("these weights were not trained on the near-hull split; the head "
+                         "would be fitted on structures the ensemble never saw")
+    # every Alexandria training structure off the near-hull split; 2DMatPedia records no
+    # hull distance, so its entries belong to neither side
+    meta_tr = sorted(f for f in trained - set(stable_tr) if not f.startswith("2dm"))
+    meta_tests = args.meta_tests.split(",")
+    t_meta = [f for k in meta_tests for f in exp["tests"][k]]
     truth = {}
     for line in open(os.path.join(args.data, "id_prop.csv")):
         f, y = line.strip().split(",")[:2]
@@ -218,13 +234,18 @@ def main():
 
     print("\n3. verdict tiers, MAE (share), without and with a demotion rule (the rule is NOT written)")
     tier_rep = {}
-    for name, idx in (("test", it), ("T_meta", im), ("T_2dmp", i2)):
+    # each held-out metastable set on its own as well: the tier order has to hold per
+    # population, not only pooled (a pooled check once hid an inversion)
+    per_set = [(k, np.array([i for i in im if files[i] in set(exp["tests"][k])]))
+               for k in meta_tests] if len(meta_tests) > 1 else []
+    pooled = "T_meta" if not per_set else "meta_all"
+    for name, idx in [("test", it), (pooled, im), *per_set, ("T_2dmp", i2)]:
         for rule in (False, True):
             t = tiers(unc[idx], lat[idx], pm[idx], cal, rule)
             cells = {k: (float(err[idx][t == j].mean()) if (t == j).any() else None, float(np.mean(t == j)))
                      for j, k in enumerate(("reliable", "check", "out_of_domain"))}
             tier_rep[f"{name}_{'rule' if rule else 'before'}"] = cells
-            print(f"   {name:7s} {'rule  ' if rule else 'before'}  " + "  ".join(
+            print(f"   {name:8s} {'rule  ' if rule else 'before'}  " + "  ".join(
                 f"{k} {v[0]:.3f} ({100 * v[1]:.0f}%)" for k, v in cells.items() if v[0] is not None))
 
     # the typical error of each tier as the full verdict assigns it, on the test split
@@ -232,10 +253,11 @@ def main():
     population = {
         "w": torch.tensor(w, dtype=torch.float32), "b": b, "threshold": P_THRESHOLD,
         "fitted_on": f"logistic regression on the concatenated member embeddings, "
-                     f"{len(stable_tr)} near-hull against {len(meta_tr)} metastable training structures",
+                     f"{len(stable_tr)} near-hull (<= 0.1 eV/atom) against {len(meta_tr)} "
+                     f"metastable training structures",
         "auc_heldout": auc, "auc_spread": auc_unc, "auc_latent": auc_lat,
         "scale90_table": {"p_threshold": P_THRESHOLD, "unc_edges": [float(e) for e in edges], "scale": table,
-                          "fitted_on": "validation split + T_meta (held-out metastable)"},
+                          "fitted_on": f"validation split + {' + '.join(meta_tests)} (held-out metastable)"},
         "report": {"repeats": args.repeats, **{k: ms(k) for k in rec}, "tiers": tier_rep,
                    "test_coverage_by_spread_quartile": {k: [float(x) for x in np.mean(v, axis=0)]
                                                         for k, v in quart.items()},

@@ -4,9 +4,10 @@ title: "NanoMatAI: band gaps of 2D semiconductors from crystal structure, with a
 abstract: >-
   A CGCNN ensemble that predicts the band gap of a two-dimensional monolayer from
   its crystal structure on CPU, together with a calibrated uncertainty interval and
-  an explicit verdict on whether the prediction is usable. Trained on 22 103 PBE
-  monolayers - stable and metastable Alexandria entries and non-magnetic 2DMatPedia
-  ones - and evaluated on a composition-disjoint split (MAE 0.225 eV, against 0.430
+  an explicit verdict on whether the prediction is usable. Trained on 40 548 PBE
+  monolayers - stable and metastable (up to 0.5 eV/atom) Alexandria entries and
+  non-magnetic 2DMatPedia ones - and evaluated on a composition-disjoint split (MAE
+  0.197 eV, against 0.430
   for composition alone on the same test set). The graph reads bond angles as well as
   bond lengths, which is what lets it separate polymorphs of one composition. Three
   independent out-of-domain checks decide the verdict: a metal/semiconductor gate, the
@@ -36,7 +37,7 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.22968154
     description: DOI of release v1.1.0
-version: 1.1.0
+version: 1.2.0
 repository-code: https://github.com/ac1esan/nanomat-ai
 url: https://ac1esan.github.io/nanomat-ai/
 license: MIT

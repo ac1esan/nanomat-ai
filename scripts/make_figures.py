@@ -35,15 +35,16 @@ plt.rcParams.update({
 # The composition-disjoint ("grouped") re-measurement of the 13 349 point is marked
 # separately: same code, same data, only the split differs.
 GROUPED_13K = (13349, 0.2614)
-# The shipped ensemble: angles, plus metastable Alexandria and 2DMatPedia in training,
-# scored on the same composition-disjoint stable test set as the diamond above.
-SHIPPED = (22103, 0.2246)
+# The shipped ensemble: angles, plus Alexandria up to 0.5 eV/atom above the hull and
+# non-magnetic 2DMatPedia in training (hull_experiment.py, arm B2), scored on the same
+# composition-disjoint near-hull test set as the diamond above.
+SHIPPED = (40548, 0.1972)
 # (dataset, N, composition CV MAE, CGCNN MAE)
 SCALING = [
-    ("JARVIS dft_2d", 696, 0.583, 0.585),
+    ("JARVIS\ndft_2d", 696, 0.583, 0.585),
     ("C2DB", 1115, 0.445, 0.42),
-    ("Alexandria 2D\nehull ≤ 0.1", 13349, 0.360, 0.215),
-    ("Alexandria 2D\nehull ≤ 0.2", 26561, 0.419, 0.262),
+    ("Alexandria\nehull ≤ 0.1", 13349, 0.360, 0.215),
+    ("Alexandria\nehull ≤ 0.2", 26561, 0.419, 0.262),
 ]
 
 
@@ -63,7 +64,7 @@ def fig_scaling():
                 arrowprops=dict(arrowstyle="-", color=C_MUTED, lw=0.8, ls=":"))
     sx, sy = SHIPPED
     ax.plot([sx], [sy], marker="D", ms=8, color=C_GNN, ls="none",
-            label="Shipped: + metastable + 2DMatPedia, same test")
+            label="Shipped: + metastable to 0.5 eV/atom + 2DMatPedia, same test")
     ax.annotate(f"{sy:.3f}", (sx, sy), textcoords="offset points", xytext=(0, -16),
                 ha="center", color=C_TEXT, fontsize=9.5)
     for x, yc, yg in zip(n, comp, gnn):
@@ -76,7 +77,7 @@ def fig_scaling():
     ax.set_xticklabels([f"{v:,}".replace(",", " ") + "\n" + r[0] for v, r in zip(n, SCALING)],
                        fontsize=8.5)
     ax.minorticks_off()
-    ax.set_xlim(520, 40000)
+    ax.set_xlim(520, 60000)
     ax.set_ylim(0.15, 0.70)
     ax.set_xlabel("training structures, N (2D semiconductors)", color=C_MUTED)
     ax.set_ylabel("MAE of band gap, eV  (lower is better)", color=C_MUTED)
@@ -84,8 +85,8 @@ def fig_scaling():
     ax.set_title("Structure beats composition only once there is enough data",
                  loc="left", color=C_TEXT, fontsize=12.5, pad=26)
     ax.text(0, 1.005, "Solid lines: random split. Diamonds: no composition shared between "
-            "train and test, one fixed stable test set -\nhollow for the first ensemble, "
-            "filled for the shipped one, which also trains on metastable and 2DMatPedia data",
+            "train and test, one fixed near-hull test set -\nhollow for the first ensemble, "
+            "filled for the shipped one (metastable to 0.5 eV/atom and 2DMatPedia in training)",
             transform=ax.transAxes, color=C_MUTED, fontsize=8.5, va="bottom")
     ax.legend(frameon=False, loc="upper right", fontsize=9.5)
     fig.tight_layout()

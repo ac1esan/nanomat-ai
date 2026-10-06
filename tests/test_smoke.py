@@ -41,14 +41,14 @@ def test_mos2_reference_prediction(P):
     """Pinned regression values for the shipped ensemble (MoS2 from JARVIS dft_2d)."""
     r = P.run(read_structure(os.path.join(EX, "MoS2.vasp")))
     assert r.formula == "MoS2"
-    # The ensemble trained with metastable Alexandria and 2DMatPedia monolayers:
-    # 1.676 against a PBE literature value near 1.67. Its spread on MoS2 doubled
-    # (0.034 -> 0.063) and is still well inside the reliable tier.
-    assert abs(r.gap - 1.676) < 0.02
-    assert abs(r.unc - 0.063) < 0.015
+    # The ensemble trained up to 0.5 eV/atom above the hull (hull_experiment.py):
+    # 1.744, against Alexandria's own PBE label of this structure near 1.74 and a
+    # literature PBE value of 1.67-1.75. The spread is back down to 0.027.
+    assert abs(r.gap - 1.744) < 0.02
+    assert abs(r.unc - 0.027) < 0.015
     assert r.verdict == "reliable"
     assert r.gap_type == "direct"
-    # experiment says 1.88 eV; the latent optical head gives 2.03
+    # experiment says 1.88 eV; the latent optical head gives 2.05
     assert 1.8 < r.exp_gap_est < 2.3
     assert r.interval90 is not None and 0.1 < r.interval90 < 0.4
     assert r.latent_distance is not None and r.latent_distance < P.cal["latent_q75"]
@@ -63,25 +63,23 @@ def test_checkpoint_carries_calibration(P):
     assert 3.0 < P.cal["scale90"] < 8.0
 
 
-def test_phosphorene_caught_by_latent_distance(P):
-    """A sparse neighbourhood, which the ensemble spread alone does not see.
+def test_latent_distance_mechanism_and_phosphorene(P):
+    """A sparse neighbourhood the ensemble spread alone does not see, and phosphorene.
 
-    Phosphorene is the only elemental-phosphorus layer in training (it is itself a
-    training structure, agm2000000335), so every member learns it identically and
-    the first ensembles agreed on it with a spread of 0.035 eV. This project once
-    called that a confident failure; it was not - the PBE gap is 0.85-0.90 eV in
-    all four databases and the prediction matched it. The 2.0 eV it was compared
-    with is an optical measurement. What is real is the sparse coverage, and that is
-    what the latent distance measures. The current ensemble shows some doubt of its
-    own (0.096 against a median of 0.092), a knife edge, so the test pins the
-    outcome - not endorsed, and noticed by the latent distance - and the mechanism
-    separately, on the verdict function.
+    Phosphorene is a training structure (agm2000000335). The first ensembles agreed on
+    it with a spread of 0.035 eV and this project once called that a confident failure;
+    it was not - the PBE gap is 0.85-0.90 eV in all four databases and the prediction
+    matched it, while the 2.0 eV it was compared with is an optical measurement. The
+    latent distance used to flag it because it was the only elemental-phosphorus
+    layer near the hull. With metastable phosphorus layers in training the
+    neighbourhood is no longer sparse and the flag is gone, which is what it should do
+    for a structure the model has seen. So the test pins the prediction against its
+    own PBE label, and the mechanism separately, on the verdict function.
     """
     from nanomat.predict import verdict
 
     r = P.run(read_structure(os.path.join(EX, "phosphorene.vasp")))
-    assert not r.verdict.startswith("reliable"), "phosphorene must not be endorsed"
-    assert r.latent_distance > P.cal["latent_q75"], "latent distance must notice it"
+    assert abs(r.gap - 0.90) < 0.15, "phosphorene must stay near its PBE label (0.85-0.90)"
 
     # the mechanism: a spread the tiers would endorse, far from the training set
     confident = 0.5 * P.cal["unc_median"]

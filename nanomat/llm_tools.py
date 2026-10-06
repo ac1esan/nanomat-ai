@@ -131,7 +131,10 @@ REFERENCE = {
     "c2db": "PBE with spin-orbit coupling (C2DB); for compounds of heavy elements this sits "
             "0.2-0.3 eV below the model's target on average",
     "jarvis_dft2d": "OptB88vdW (JARVIS dft_2d), a different functional: no systematic offset from "
-                    "the model's target (median -0.02 eV) but a wider scatter",
+                    "the model's target (median -0.02 eV) but a wider scatter, enough that the "
+                    "verdict tiers do not rank error against these references (reliable 0.39 eV, "
+                    "check 0.29); where the same structure is in Alexandria the model matches its "
+                    "PBE label to 0.07 eV",
 }
 
 # Alexandria reference labels known to be wrong. Each was checked against the same layer
@@ -195,9 +198,9 @@ def _resemblance(p, ood: bool) -> str | None:
             "energy is computed, and some near-hull structures score high.")
     if p > thr:
         widened = "" if ood else ", so gap_range90_eV is widened"
-        return (f"Above {thr:.1f}: the structure resembles the training structures 0.1-0.2 "
-                f"eV/atom above the convex hull, on which the model errs about twice as much at "
-                f"the same verdict{widened}. {what}")
+        return (f"Above {thr:.1f}: the structure resembles the training structures 0.1-0.5 "
+                f"eV/atom above the convex hull, on which the model errs about one and a half "
+                f"times as much at the same verdict{widened}. {what}")
     return (f"At or below {thr:.1f}: the structure resembles the near-hull training structures. "
             f"{what}")
 
@@ -442,16 +445,16 @@ def model_card() -> dict:
         "predicts": "PBE band gap (without spin-orbit coupling) of an isolated 2D monolayer from "
                     "its crystal structure, plus quasiparticle and optical estimates, gap type "
                     "and work function",
-        "accuracy": f"MAE {cal.get('test_mae', 0.225):.3f} eV on 1 326 held-out stable monolayers "
+        "accuracy": f"MAE {cal.get('test_mae', 0.197):.3f} eV on 1 326 held-out stable monolayers "
                     "whose compositions never appear in training; 0.43 for composition alone",
         "verdict_tiers": {k: f"typical error {v:.2f} eV" for k, v in _tier_mae().items()},
         "interval": "gap_range90_eV is the prediction plus or minus the ensemble spread times a "
                     "calibrated scale, read per cell of (does the structure resemble the metastable "
                     "population?, spread quartile). It covers about 92% of held-out near-hull "
-                    "monolayers and 88% of held-out metastable ones; against references computed "
+                    "monolayers and 90% of held-out metastable ones; against references computed "
                     "with other methods (C2DB, JARVIS) it covers less",
-        "training_data": "22 103 PBE monolayers: Alexandria 2D (stable and metastable) and "
-                         "non-magnetic 2DMatPedia",
+        "training_data": "40 548 PBE monolayers: Alexandria 2D (stable, and metastable up to "
+                         "0.5 eV/atom above the hull) and non-magnetic 2DMatPedia",
         "limits": [
             "Semiconductors only: a metal gate rejects metals first; its gap number means nothing.",
             "PBE underestimates measured gaps; use the optical or quasiparticle estimate for experiment.",
@@ -459,13 +462,14 @@ def model_card() -> dict:
             "of heavy elements (W, Bi, Pb, Tl, I, Te, ...) the SOC-inclusive gap is lower than this "
             "number: against C2DB, which includes SOC, the model is 0.27 eV higher on average there "
             "and 0.03 eV higher without heavy elements.",
-            "Structures that resemble the training structures 0.1-0.2 eV/atom above the hull "
-            "(metastable_resemblance > 0.5) err about twice as much at the same verdict; their "
+            "Structures that resemble the training structures 0.1-0.5 eV/atom above the hull "
+            "(metastable_resemblance > 0.5) err about one and a half times as much at the same "
+            "verdict; their "
             "gap_range90_eV is widened for it. The resemblance is not a stability calculation: "
             "phosphorene, near the hull, scores above 0.8.",
             "Weakest on light main-group chemistry (C, B, N, H), strongest on transition-metal compounds.",
-            "Labels carry database errors: Alexandria misses the Dirac point of honeycombs (graphene "
-            "is labelled 1.23 eV).",
+            "Labels carry database errors: Alexandria reports planar honeycombs with band edges "
+            "at K too high (graphene is labelled 1.23 eV).",
             "A row whose DFT reference contradicts the prediction carries reference_disagreement; "
             "trust the reference there, not the verdict.",
             "Out-of-domain results carry no range and no optical estimate on purpose.",

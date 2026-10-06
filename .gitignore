@@ -12,6 +12,7 @@ alignn_data_c2db/
 alignn_data_alex_2d/
 alignn_data_alex_2d_eh02/
 alignn_data_exp/
+alignn_data_hull/
 *.zip
 graphs_cache_*.pt
 

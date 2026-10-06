@@ -313,7 +313,7 @@ class Prediction:
     gap_type: str | None = None      # "direct" / "indirect"
     p_indirect: float | None = None
     p_metal: float | None = None     # from the metal gate, if available
-    # how much the structure resembles the metastable population (0.1-0.2 eV/atom
+    # how much the structure resembles the metastable population (0.1-0.5 eV/atom
     # above the hull) in the ensemble's latent space; sets the interval's scale. A
     # resemblance, not a stability calculation
     p_metastable: float | None = None
