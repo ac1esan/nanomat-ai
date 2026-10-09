@@ -35,10 +35,10 @@ plt.rcParams.update({
 # The composition-disjoint ("grouped") re-measurement of the 13 349 point is marked
 # separately: same code, same data, only the split differs.
 GROUPED_13K = (13349, 0.2614)
-# The shipped ensemble: angles, plus Alexandria up to 0.5 eV/atom above the hull and
-# non-magnetic 2DMatPedia in training (hull_experiment.py, arm B2), scored on the same
-# composition-disjoint near-hull test set as the diamond above.
-SHIPPED = (40548, 0.1972)
+# The shipped ensemble: angles, plus Alexandria up to 1.0 eV/atom above the hull and
+# non-magnetic 2DMatPedia in training (hull_1ev_experiment.py, arm C1), scored on the
+# same composition-disjoint near-hull test set as the diamond above.
+SHIPPED = (45115, 0.1864)
 # (dataset, N, composition CV MAE, CGCNN MAE)
 SCALING = [
     ("JARVIS\ndft_2d", 696, 0.583, 0.585),
@@ -64,7 +64,7 @@ def fig_scaling():
                 arrowprops=dict(arrowstyle="-", color=C_MUTED, lw=0.8, ls=":"))
     sx, sy = SHIPPED
     ax.plot([sx], [sy], marker="D", ms=8, color=C_GNN, ls="none",
-            label="Shipped: + metastable to 0.5 eV/atom + 2DMatPedia, same test")
+            label="Shipped: + metastable to 1.0 eV/atom + 2DMatPedia, same test")
     ax.annotate(f"{sy:.3f}", (sx, sy), textcoords="offset points", xytext=(0, -16),
                 ha="center", color=C_TEXT, fontsize=9.5)
     for x, yc, yg in zip(n, comp, gnn):

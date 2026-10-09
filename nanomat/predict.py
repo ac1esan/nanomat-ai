@@ -56,6 +56,25 @@ DEFAULT_CAL = {
 }
 MED_UNC = DEFAULT_CAL["unc_median"]  # kept for backwards compatibility
 
+class ClsEnsemble(nn.Module):
+    """Several classifiers read as one.
+
+    The probability is the members' mean, returned as a logit in the second slot of
+    the output so that every caller written for a single CGCNNcls - which applies a
+    sigmoid to `model(batch)[1]` - keeps working unchanged. The decision threshold
+    stored with the checkpoint was fitted on that same mean.
+    """
+
+    def __init__(self, members):
+        super().__init__()
+        self.members = nn.ModuleList(members)
+
+    def forward(self, batch):
+        p = torch.stack([torch.sigmoid(m(batch)[1]) for m in self.members]).mean(0)
+        p = p.clamp(1e-7, 1 - 1e-7)
+        return None, torch.log(p / (1 - p))
+
+
 WEIGHT_FILES = {
     "ensemble": "cgcnn_2d_ensemble.pt",
     "workfunction": "cgcnn_2d_workfunction.pt",
@@ -372,8 +391,8 @@ class Predictor:
         self.pop: dict | None = None
         self.models: list[nn.Module] = []
         self.mean = self.std = 0.0
-        self.type_model: CGCNNcls | None = None
-        self.metal_model: CGCNNcls | None = None
+        self.type_model: nn.Module | None = None
+        self.metal_model: nn.Module | None = None
         # decision thresholds: chosen on validation at training time, because
         # pos_weight on the rare class shifts probabilities away from 0.5
         self.type_thr = 0.5
@@ -439,7 +458,7 @@ class Predictor:
             "Set NANOMAT_WEIGHTS to point at the directory with the .pt files."
         )
 
-    def _load_cls(self, key: str) -> tuple[CGCNNcls | None, float]:
+    def _load_cls(self, key: str) -> tuple[nn.Module | None, float]:
         p = self._path(key)
         if not os.path.exists(p):
             return None, 0.5
@@ -451,14 +470,18 @@ class Predictor:
         if n_ang not in (0, self.n_ang):
             raise ValueError(f"{WEIGHT_FILES[key]} was trained with {n_ang} angular bins, "
                              f"the gap ensemble with {self.n_ang}")
-        m = CGCNNcls(cutoff=float(ck.get("cutoff", self.cutoff)),
-                     n_rbf=int(ck.get("n_rbf", self.n_rbf)),
-                     ang_dim=n_ang)
-        m.load_state_dict(ck["state_dict"])
-        m.eval()
+        members = []
+        for sd in ck.get("state_dicts") or [ck["state_dict"]]:
+            m = CGCNNcls(cutoff=float(ck.get("cutoff", self.cutoff)),
+                         n_rbf=int(ck.get("n_rbf", self.n_rbf)),
+                         ang_dim=n_ang)
+            m.load_state_dict(sd)
+            members.append(m.eval())
+        model = members[0] if len(members) == 1 else ClsEnsemble(members).eval()
         thr = float(ck.get("threshold", 0.5))
-        self._log(f"Loaded {key} classifier (threshold {thr:.2f}).")
-        return m, thr
+        self._log(f"Loaded {key} classifier ({len(members)} member"
+                  f"{'s' if len(members) > 1 else ''}, threshold {thr:.2f}).")
+        return model, thr
 
     # --- inference -----------------------------------------------------------
     def graph(self, st: Structure, pad_vacuum: bool = True):
@@ -545,7 +568,7 @@ class Predictor:
         return float(t["scale"][row][col]) * unc
 
     @torch.no_grad()
-    def _cls_prob(self, model: CGCNNcls | None, st: Structure) -> float | None:
+    def _cls_prob(self, model: nn.Module | None, st: Structure) -> float | None:
         if model is None:
             return None
         g = to_graph(st, self.cutoff, n_ang=self.n_ang)

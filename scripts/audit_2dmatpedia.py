@@ -74,6 +74,15 @@ U_ANIONS = {"O", "F"}
 LIGHT = {"H", "B", "C", "N", "O"}
 MATCHER = dict(ltol=0.1, stol=0.1, angle_tol=5, primitive_cell=False, scale=False,
                attempt_supercell=False)
+# The matcher cannot tell a planar layer from a buckled one (see _init_matcher), so a
+# match must also agree on the layer's thickness. Measured on the 1178 pairs the
+# matcher alone accepted: the thickness difference is 0.02 A at the median and 0.17 at
+# the 95th percentile, and the gap disagreement is flat up to 0.2 A (MAE 0.06-0.07,
+# metal/semiconductor agreement ~96%); past 0.2 it jumps to 0.17 and 70%. Planar
+# against buckled silicene, germanene, GaAs and AlAs differ by 0.45-0.88 A, and ZrX3 /
+# HfX3 by 0.35-0.57. Area per atom is not a criterion: soft halide layers relaxed by two
+# setups differ by 5-6% in area with gaps that agree to a few hundredths.
+THICK_TOL = 0.2      # angstrom
 TM = set("Sc Ti V Cr Mn Fe Co Ni Cu Zn Y Zr Nb Mo Tc Ru Rh Pd Ag Cd "
          "Hf Ta W Re Os Ir Pt Au Hg".split())
 
@@ -160,13 +169,18 @@ def _init_matcher():
     _SM = StructureMatcher(**MATCHER)
 
 
+def same_structure(sm, s, t) -> bool:
+    """Two standardize() results describe one structure: matcher AND thickness."""
+    return abs(s[2] - t[2]) <= THICK_TOL and sm.fit(s[0], t[0])
+
+
 def _match(task):
     key, s, cands = task
     hits = []
     for other, t in cands:
         try:
-            if _SM.fit(s, t):
-                rms = _SM.get_rms_dist(s, t)
+            if same_structure(_SM, s, t):
+                rms = _SM.get_rms_dist(s[0], t[0])
                 hits.append((other, float(rms[0]) if rms else 0.0))
         except Exception:
             pass
@@ -229,11 +243,13 @@ def show(label: str, s: dict):
               f" / lower {100 * s['alexandria_lower']:.0f}%")
 
 
-def validate(m, rows, part_f) -> dict:
+def validate(m, rows, part_f, role) -> dict:
     """The shipped model on a database it never saw.
 
-    Excluded: entries whose Alexandria twin is in the training split (a memory, not
-    a prediction). Kept and tagged: whether the composition itself was trained on,
+    Excluded: entries that are in the training split themselves (non-magnetic
+    2DMatPedia semiconductors are, since v1.1.0) or whose Alexandria twin is - a
+    memory, not a prediction. For the shipped model this leaves a much smaller and
+    easier population than the one the pre-merge validation in the README measured. Kept and tagged: whether the composition itself was trained on,
     since a new polymorph of a known formula is an easier question than a formula
     the model never met. Labels carry the inter-database noise measured above
     (~0.08 eV MAE on non-magnetic structures), so these errors are an upper bound.
@@ -253,7 +269,8 @@ def validate(m, rows, part_f) -> dict:
     print(f"\nExternal validation: shipped model on {len(items)} entries  [{time.time() - t:.0f}s]")
 
     seen_f = part_f["train"]
-    base = [r for r in rows if "pred_gap" in r and r.get("alex_role") != "train"]
+    base = [r for r in rows if "pred_gap" in r and r.get("alex_role") != "train"
+            and role.get(r["id"]) != "train"]
     sc = [r for r in base if r["gap"] > METAL_GAP and r["mag"] <= MAGNETIC]
     out = {"note": "2DMatPedia labels; non-magnetic semiconductors; twins of training "
                    "structures excluded"}
@@ -322,6 +339,10 @@ def main():
         by_f_a[x["_f"]].append(j)
         if x["mat_id"] in role:
             part_f[role[x["mat_id"]]].add(x["_f"])
+    # since v1.1.0 non-magnetic 2DMatPedia entries are in the training set themselves
+    for x in m:
+        if x["material_id"] in role:
+            part_f[role[x["material_id"]]].add(x["_f"])
     print(f"2DMatPedia {len(m)}, Alexandria {len(a)}; {len(role)} Alexandria ids in the "
           f"training split  [{time.time() - t0:.0f}s]")
 
@@ -348,10 +369,10 @@ def main():
         s = std[("m", i)]
         if s is None:
             continue
-        cands = [(j, std[("a", j)][0]) for j in by_f_a.get(x["_f"], [])
+        cands = [(j, std[("a", j)]) for j in by_f_a.get(x["_f"], [])
                  if std[("a", j)] is not None and len(std[("a", j)][0]) == len(s[0])]
         if cands:
-            tasks.append((i, s[0], cands))
+            tasks.append((i, s, cands))
             n_pairs += len(cands)
     print(f"  {n_pairs} candidate pairs over {len(tasks)} 2DMatPedia entries")
     hits = {}
@@ -496,10 +517,10 @@ def main():
             if std[(key, q)] is not None and num(x.get(gap_key)) is not None:
                 by_f[x["_f"]].append(q)
         for r in M:
-            s0 = std[("m", index_m[r["id"]])][0]
+            s0 = std[("m", index_m[r["id"]])]
             for q in by_f.get(r["formula"], []):
-                t = std[(key, q)][0]
-                if len(t) == len(s0) and sm.fit(s0, t):
+                t = std[(key, q)]
+                if len(t[0]) == len(s0[0]) and same_structure(sm, s0, t):
                     r[tag + "_gap"], r[tag + "_id"] = num(db[q][gap_key]), db[q][id_key]
                     break
         T = [r for r in M if r.get(tag + "_gap") is not None]
@@ -591,7 +612,7 @@ def main():
     # --- 8) external validation --------------------------------------------------
     external = None
     if args.predict:
-        external = validate(m, rows, part_f)
+        external = validate(m, rows, part_f, role)
 
     # --- 9) write ----------------------------------------------------------------
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
@@ -604,7 +625,8 @@ def main():
                "new_structures": {"n": len(new), "semiconductors": len(new_sc),
                                   "light_element_counts": dict(counts)},
                "settings": {"match_vacuum": MATCH_VACUUM, "metal_gap": METAL_GAP,
-                            "magnetic": MAGNETIC, **{k: MATCHER[k] for k in ("ltol", "stol", "angle_tol")}}}
+                            "magnetic": MAGNETIC, **{k: MATCHER[k] for k in ("ltol", "stol", "angle_tol")},
+                            "thick_tol": THICK_TOL}}
     json.dump(summary, open(args.out + ".json", "w"), indent=1)
     keys = sorted({k for r in rows for k in r})
     with open(args.out + "_entries.csv", "w", newline="") as fh:

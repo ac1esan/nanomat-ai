@@ -193,21 +193,26 @@ def cache(args):
     print(f"cache ready: {len(files)} graphs in {time.time() - t:.0f}s")
 
 
-def evaluate(args):
+def evaluate(args, arms_def=None, control="B0", gain_tests=("T_meta", "T_2dmp", "T_far"),
+             seen_key="seen_in_B0", prefix="hull"):
+    """Paired comparison of every trained arm against the control, then the rule.
+
+    The defaults are this experiment's; hull_1ev_experiment.py calls it with its own."""
     from scipy.stats import wilcoxon
     from nanomat import Predictor
     from nanomat.predict import read_structure
 
     exp = json.load(open(os.path.join(args.data, "experiment.json")))
     truth = id_prop(args.data)
-    arms = [a for a in ARMS if os.path.exists(os.path.join(args.runs, f"{a}.pt"))]
-    if "B0" not in arms:
-        raise SystemExit("the control B0 is required: every comparison is paired against it")
+    arms_def = arms_def or ARMS
+    arms = [a for a in arms_def if os.path.exists(os.path.join(args.runs, f"{a}.pt"))]
+    if control not in arms:
+        raise SystemExit(f"the control {control} is required: every comparison is paired against it")
     structures = {k: [(f, read_structure(os.path.join(args.data, f))) for f in v]
                   for k, v in exp["tests"].items()}
     pred = {}
     for arm in arms:
-        stage = os.path.join(ROOT, f".hull_{arm}")
+        stage = os.path.join(ROOT, f".{prefix}_{arm}")
         os.makedirs(stage, exist_ok=True)
         shutil.copy(os.path.join(args.runs, f"{arm}.pt"), os.path.join(stage, "cgcnn_2d_ensemble.pt"))
         P = Predictor(stage, verbose=False)
@@ -223,24 +228,25 @@ def evaluate(args):
         files = [f for f in files if all(f in pred[a][k] for a in arms)]
         y = np.array([truth[f] for f in files])
         subsets = {"all": np.ones(len(files), bool)}
-        if k == "T_far":
-            for b in BANDS:
-                subsets[b] = np.array([exp["band"][f] == b for f in files])
-        subsets["formula unseen"] = np.array([not exp["seen_in_B0"][f] for f in files])
+        bands = sorted({exp["band"][f] for f in files if f in exp["band"]})
+        if len(bands) > 1:
+            for b in bands:
+                subsets[b] = np.array([exp["band"].get(f) == b for f in files])
+        subsets["formula unseen"] = np.array([not exp[seen_key][f] for f in files])
         for el in LIGHT:
             subsets[f"has {el}"] = np.array([el in exp["elements"][f] for f in files])
         report[k] = {}
-        print(f"\n{k} (n={len(files)})   MAE, and the paired difference to B0 "
+        print(f"\n{k} (n={len(files)})   MAE, and the paired difference to {control} "
               f"(negative = better than the control)")
         for name, sel in subsets.items():
             if sel.sum() < 10:
                 continue
-            e0 = np.abs(np.array([pred["B0"][k][f] for f in files]) - y)[sel]
+            e0 = np.abs(np.array([pred[control][k][f] for f in files]) - y)[sel]
             cells, row = [], {"n": int(sel.sum())}
             for a in arms:
                 e = np.abs(np.array([pred[a][k][f] for f in files]) - y)[sel]
-                if a == "B0":
-                    cells.append(f"B0 {e.mean():.3f}")
+                if a == control:
+                    cells.append(f"{a} {e.mean():.3f}")
                     row[a] = {"mae": float(e.mean())}
                     continue
                 d = e - e0
@@ -257,11 +263,11 @@ def evaluate(args):
     print("\ndecision rule:")
     passed = {}
     for a in arms:
-        if a == "B0":
+        if a == control:
             continue
         t = report["T_alex"]["all"][a]
         ok1 = t["diff"] <= 0.005 and t["ci95"][1] < 0.015
-        gains = {k: report[k]["all"][a] for k in ("T_meta", "T_2dmp", "T_far")}
+        gains = {k: report[k]["all"][a] for k in gain_tests}
         ok2 = any(g["diff"] < 0 and g["ci95"][1] < 0 for g in gains.values())
         total = -sum(g["diff"] for g in gains.values())
         print(f"  {a}: near-hull not worse {ok1}, some population better {ok2}, "
@@ -269,11 +275,11 @@ def evaluate(args):
         if ok1 and ok2:
             passed[a] = total
     if not passed:
-        choice = "B0 (no arm passed)"
+        choice = f"{control} (no arm passed)"
     else:
         best = max(passed, key=passed.get)
         within = [a for a in passed if passed[best] - passed[a] <= 0.01]
-        choice = min(within, key=lambda a: len(ARMS[a]))
+        choice = min(within, key=lambda a: len(arms_def[a]))
     print(f"  -> {choice}")
     report["decision"] = choice
     json.dump(report, open(os.path.join(args.runs, "evaluation.json"), "w"), indent=1)

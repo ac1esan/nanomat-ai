@@ -198,7 +198,7 @@ def _resemblance(p, ood: bool) -> str | None:
             "energy is computed, and some near-hull structures score high.")
     if p > thr:
         widened = "" if ood else ", so gap_range90_eV is widened"
-        return (f"Above {thr:.1f}: the structure resembles the training structures 0.1-0.5 "
+        return (f"Above {thr:.1f}: the structure resembles the training structures 0.1-1.0 "
                 f"eV/atom above the convex hull, on which the model errs about one and a half "
                 f"times as much at the same verdict{widened}. {what}")
     return (f"At or below {thr:.1f}: the structure resembles the near-hull training structures. "
@@ -445,7 +445,7 @@ def model_card() -> dict:
         "predicts": "PBE band gap (without spin-orbit coupling) of an isolated 2D monolayer from "
                     "its crystal structure, plus quasiparticle and optical estimates, gap type "
                     "and work function",
-        "accuracy": f"MAE {cal.get('test_mae', 0.197):.3f} eV on 1 326 held-out stable monolayers "
+        "accuracy": f"MAE {cal.get('test_mae', 0.186):.3f} eV on 1 326 held-out stable monolayers "
                     "whose compositions never appear in training; 0.43 for composition alone",
         "verdict_tiers": {k: f"typical error {v:.2f} eV" for k, v in _tier_mae().items()},
         "interval": "gap_range90_eV is the prediction plus or minus the ensemble spread times a "
@@ -453,8 +453,8 @@ def model_card() -> dict:
                     "population?, spread quartile). It covers about 92% of held-out near-hull "
                     "monolayers and 90% of held-out metastable ones; against references computed "
                     "with other methods (C2DB, JARVIS) it covers less",
-        "training_data": "40 548 PBE monolayers: Alexandria 2D (stable, and metastable up to "
-                         "0.5 eV/atom above the hull) and non-magnetic 2DMatPedia",
+        "training_data": "45 115 PBE monolayers: Alexandria 2D (stable, and metastable up to "
+                         "1.0 eV/atom above the hull) and non-magnetic 2DMatPedia",
         "limits": [
             "Semiconductors only: a metal gate rejects metals first; its gap number means nothing.",
             "PBE underestimates measured gaps; use the optical or quasiparticle estimate for experiment.",
@@ -462,7 +462,7 @@ def model_card() -> dict:
             "of heavy elements (W, Bi, Pb, Tl, I, Te, ...) the SOC-inclusive gap is lower than this "
             "number: against C2DB, which includes SOC, the model is 0.27 eV higher on average there "
             "and 0.03 eV higher without heavy elements.",
-            "Structures that resemble the training structures 0.1-0.5 eV/atom above the hull "
+            "Structures that resemble the training structures 0.1-1.0 eV/atom above the hull "
             "(metastable_resemblance > 0.5) err about one and a half times as much at the same "
             "verdict; their "
             "gap_range90_eV is widened for it. The resemblance is not a stability calculation: "

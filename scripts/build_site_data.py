@@ -57,13 +57,16 @@ def main():
     print(f"read {len(df)} rows from {os.path.basename(TABLE)}")
 
     # --- stability flag: which Alexandria ids passed e_above_hull <= 0.1 -------
+    # Without it every row is marked non-stable and the browser's default view, the
+    # population the calibration holds on, comes up empty - a broken page, not a
+    # degraded one. So it is required.
+    if not os.path.exists(STABLE_INDEX):
+        raise SystemExit(f"missing {STABLE_INDEX} (the e_above_hull <= 0.1 export); the "
+                         "browser's default view would be empty without it")
     stable = set()
-    if os.path.exists(STABLE_INDEX):
-        for line in open(STABLE_INDEX):
-            stable.add(os.path.splitext(line.split(",")[0])[0])
-        print(f"stable (ehull<=0.1) reference ids: {len(stable)}")
-    else:
-        print("WARNING: stable index missing; every row will be marked non-stable")
+    for line in open(STABLE_INDEX):
+        stable.add(os.path.splitext(line.split(",")[0])[0])
+    print(f"stable (ehull<=0.1) reference ids: {len(stable)}")
     df["b"] = [1 if (s == "alexandria" and i in stable) else 0
                for s, i in zip(df["source"], df["id"])]
 

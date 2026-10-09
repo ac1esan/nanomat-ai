@@ -5,25 +5,65 @@
     {
       "n": 2440,
       "positive_rate": 0.3987704813480377,
-      "threshold": 0.5169046372175217,
-      "roc_auc": 0.9686774681919671,
-      "balanced_accuracy": 0.9154576426501218,
-      "f1_positive": 0.8948412698412699,
+      "threshold": 0.498457868397236,
+      "roc_auc": 0.9710902618833942,
+      "balanced_accuracy": 0.9197101565023178,
+      "f1_positive": 0.9008016032064128,
+      "accuracy": 0.9188524590163935,
+      "precision_positive": 0.8787878751754761
+    },
+    {
+      "n": 2440,
+      "positive_rate": 0.3987704813480377,
+      "threshold": 0.38248180598020554,
+      "roc_auc": 0.9777110826676082,
+      "balanced_accuracy": 0.924219782806533,
+      "f1_positive": 0.902818270165209,
+      "accuracy": 0.9180327868852459,
+      "precision_positive": 0.8562211990356445
+    },
+    {
+      "n": 2440,
+      "positive_rate": 0.3987704813480377,
+      "threshold": 0.20089600533246998,
+      "roc_auc": 0.9768686365543849,
+      "balanced_accuracy": 0.9204443631772934,
+      "f1_positive": 0.8992172211350293,
+      "accuracy": 0.9155737704918033,
+      "precision_positive": 0.8580765724182129
+    },
+    {
+      "n": 2440,
+      "positive_rate": 0.3987704813480377,
+      "threshold": 0.25953595638275156,
+      "roc_auc": 0.9745339574090072,
+      "balanced_accuracy": 0.9185724163876612,
+      "f1_positive": 0.8966861598440545,
       "accuracy": 0.9131147540983606,
-      "precision_positive": 0.8648130297660828
+      "precision_positive": 0.8526413440704346
+    },
+    {
+      "n": 2440,
+      "positive_rate": 0.3987704813480377,
+      "threshold": 0.17973522692918778,
+      "roc_auc": 0.9751585234879582,
+      "balanced_accuracy": 0.9255988723482214,
+      "f1_positive": 0.903818269695505,
+      "accuracy": 0.9184426229508197,
+      "precision_positive": 0.8531022071838379
     }
   ],
-  "n_train": 41611,
+  "n_train": 93238,
   "n_val": 2396,
   "n_test": 2440,
   "ensemble": {
     "n": 2440,
     "positive_rate": 0.3987704813480377,
-    "threshold": 0.5169046372175217,
-    "roc_auc": 0.9686774681919671,
-    "balanced_accuracy": 0.9154576426501218,
-    "f1_positive": 0.8948412698412699,
-    "accuracy": 0.9131147540983606,
-    "precision_positive": 0.8648130297660828
+    "threshold": 0.4726149350404743,
+    "roc_auc": 0.9838257352049998,
+    "balanced_accuracy": 0.9342191452797446,
+    "f1_positive": 0.9190283400809717,
+    "accuracy": 0.9344262295081968,
+    "precision_positive": 0.9052841663360596
   }
 }

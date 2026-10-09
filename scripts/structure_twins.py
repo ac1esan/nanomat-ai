@@ -9,8 +9,9 @@ in C2DB, predicted 1.51 eV each time, and offered as separate candidates in five
 ten answers to one question.
 
 Every structure is put in one frame - layer normal along c, fixed vacuum, primitive
-cell - and compared with the tight matcher of scripts/audit_2dmatpedia.py, within its
-formula and primitive size only. A match also has to predict within MAX_PRED_DIFF of
+cell - and compared with the tight matcher of scripts/audit_2dmatpedia.py (which also
+requires the layer thickness to agree within 0.2 A: the matcher alone passes a planar
+and a buckled layer as one), within its formula and primitive size only. A match also has to predict within MAX_PRED_DIFF of
 its partner. The matcher alone joined 130 groups whose predictions differ by more
 than 0.05 eV, up to 0.8: SbI3 and BiI3 cells whose own Alexandria references differ
 by a factor of two to four (the primitive reduction smooths a distortion away), and
@@ -51,7 +52,7 @@ def main():
     import pandas as pd
     from pymatgen.analysis.structure_matcher import StructureMatcher
     from pymatgen.core import Structure
-    from audit_2dmatpedia import MATCHER, standardize
+    from audit_2dmatpedia import MATCHER, same_structure, standardize
 
     t = pd.read_csv(TABLE, usecols=["id", "source", "formula", "pred_gap_eV"])
     multi = t.groupby("formula")["id"].transform("size") > 1
@@ -66,7 +67,7 @@ def main():
         if s is None:
             skipped += 1
             continue
-        prim[r.id] = s[0]
+        prim[r.id] = s
     print(f"standardised {len(prim)} in {time.time() - t0:.0f}s ({skipped} without a file or a vacuum gap)")
 
     parent = {i: i for i in prim}
@@ -83,14 +84,14 @@ def main():
     bucket = defaultdict(list)
     for r in rows.itertuples():
         if r.id in prim:
-            bucket[(r.formula, len(prim[r.id]))].append(r.id)
+            bucket[(r.formula, len(prim[r.id][0]))].append(r.id)
     for ids in bucket.values():
         for a in range(len(ids)):
             for b in range(a + 1, len(ids)):
                 if find(ids[a]) == find(ids[b]):
                     continue
                 pairs += 1
-                if sm.fit(prim[ids[a]], prim[ids[b]]):
+                if same_structure(sm, prim[ids[a]], prim[ids[b]]):
                     if abs(pred[ids[a]] - pred[ids[b]]) > MAX_PRED_DIFF:
                         vetoed += 1
                         continue

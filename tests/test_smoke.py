@@ -41,11 +41,11 @@ def test_mos2_reference_prediction(P):
     """Pinned regression values for the shipped ensemble (MoS2 from JARVIS dft_2d)."""
     r = P.run(read_structure(os.path.join(EX, "MoS2.vasp")))
     assert r.formula == "MoS2"
-    # The ensemble trained up to 0.5 eV/atom above the hull (hull_experiment.py):
-    # 1.744, against Alexandria's own PBE label of this structure near 1.74 and a
-    # literature PBE value of 1.67-1.75. The spread is back down to 0.027.
-    assert abs(r.gap - 1.744) < 0.02
-    assert abs(r.unc - 0.027) < 0.015
+    # The ensemble trained up to 1.0 eV/atom above the hull (hull_1ev_experiment.py):
+    # 1.673, inside the literature PBE range of 1.67-1.75 (Alexandria's own label of
+    # this structure is near 1.74; the previous ensemble gave 1.744).
+    assert abs(r.gap - 1.673) < 0.02
+    assert abs(r.unc - 0.045) < 0.015
     assert r.verdict == "reliable"
     assert r.gap_type == "direct"
     # experiment says 1.88 eV; the latent optical head gives 2.05
@@ -225,6 +225,46 @@ def test_metal_gate_rejects_graphene_and_spares_the_reference_semiconductors(P):
         for name in ("MoS2", "MoSe2", "WS2", "WSe2", "hBN", "phosphorene"):
             p = gate(name, eps)
             assert p < P.metal_thr, (name, eps, p, P.metal_thr)
+
+
+def test_classifier_ensemble_is_read_as_its_mean(P, tmp_path):
+    """A classifier checkpoint with several members must be read as all of them.
+
+    Training used to save a classifier ensemble as its first member alone, next to a
+    threshold fitted on the mean of all members: a silent mismatch. Two identical
+    members must give exactly the single member's probability, and the threshold
+    must come through unchanged.
+    """
+    import shutil
+    from nanomat.predict import WEIGHT_FILES, ClsEnsemble
+    if P.metal_model is None:
+        pytest.skip("no metal gate in weights/")
+    src = os.path.join(ROOT, "weights")
+    ck = torch.load(os.path.join(src, WEIGHT_FILES["metal"]), map_location="cpu")
+    shipped = ck.get("state_dicts") or [ck["state_dict"]]
+    if isinstance(P.metal_model, ClsEnsemble):
+        assert len(P.metal_model.members) == len(shipped)
+    ck.pop("state_dicts", None)
+    sd = shipped[0]
+    probs = {}
+    for name, members in (("one", None), ("two", [sd, sd])):
+        d = tmp_path / name
+        d.mkdir()
+        c = dict(ck)
+        if members is None:
+            c["state_dict"] = sd
+        else:
+            c.pop("state_dict", None)
+            c["state_dicts"] = members
+        torch.save(c, d / WEIGHT_FILES["metal"])
+        shutil.copy(os.path.join(src, WEIGHT_FILES["ensemble"]), d / WEIGHT_FILES["ensemble"])
+        Q = Predictor(str(d), verbose=False)
+        assert Q.metal_thr == P.metal_thr
+        if members is not None:
+            assert isinstance(Q.metal_model, ClsEnsemble) and len(Q.metal_model.members) == 2
+        probs[name] = [Q.predict_metal(read_structure(os.path.join(EX, f"{n}.vasp")))
+                       for n in ("MoS2", "graphene")]
+    assert all(abs(a - b) < 1e-5 for a, b in zip(probs["one"], probs["two"]))
 
 
 def test_prototype_classification():

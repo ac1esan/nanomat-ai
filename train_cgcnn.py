@@ -31,6 +31,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -395,17 +396,31 @@ def main():
         pos_weight = torch.tensor([(1 - p) / max(p, 1e-6)], device=device)
         print(f"pos_weight = {pos_weight.item():.2f}")
 
+    # every finished member is kept on disk until the whole run is saved, so a
+    # restarted machine resumes at the member it lost instead of from scratch
+    partial = os.path.splitext(args.out)[0] + ".members"
+    fingerprint = {k_: v for k_, v in vars(args).items()
+                   if k_ not in ("out", "workers", "device", "ensemble")}
+    fingerprint.update(n_train=len(tr), n_val=len(va), n_test=len(te))
     states, tests, vals, member_metrics = [], [], [], []
     for k in range(args.ensemble):
         seed = args.seed + k
         print(f"\n=== model {k + 1}/{args.ensemble}  seed {seed} ===")
-        tr_k = tr
-        if args.bootstrap:
-            rng = np.random.default_rng(seed)
-            tr_k = rng.choice(tr, size=len(tr), replace=True)
-            print(f"  bootstrap resample: {len(np.unique(tr_k))} unique of {len(tr)} "
-                  f"({100 * len(np.unique(tr_k)) / len(tr):.0f}%)")
-        state, test, val = train_one(args, graphs, tr_k, va, te, mean, std, pos_weight, device, seed)
+        done = os.path.join(partial, f"{k}.pt")
+        saved = torch.load(done, map_location="cpu", weights_only=False) if os.path.exists(done) else None
+        if saved is not None and saved["fingerprint"] == fingerprint:
+            state, test, val = saved["state"], saved["test"], saved["val"]
+            print(f"  resumed from {done}")
+        else:
+            tr_k = tr
+            if args.bootstrap:
+                rng = np.random.default_rng(seed)
+                tr_k = rng.choice(tr, size=len(tr), replace=True)
+                print(f"  bootstrap resample: {len(np.unique(tr_k))} unique of {len(tr)} "
+                      f"({100 * len(np.unique(tr_k)) / len(tr):.0f}%)")
+            state, test, val = train_one(args, graphs, tr_k, va, te, mean, std, pos_weight, device, seed)
+            os.makedirs(partial, exist_ok=True)
+            torch.save({"fingerprint": fingerprint, "state": state, "test": test, "val": val}, done)
         states.append(state)
         tests.append(test)
         vals.append(val)
@@ -441,16 +456,20 @@ def main():
             "bagged": bool(args.bootstrap)}
     ck = {"mean": mean, "std": std, "cutoff": args.cutoff, "n_rbf": args.n_rbf,
           "h": args.h, "n_conv": args.n_conv, "n_ang": args.angles, "meta": meta}
-    if args.task == "gap" and args.ensemble > 1:
+    if args.ensemble > 1:
+        # every member, for the gap and for the classifiers alike; a classifier
+        # ensemble used to be saved as its first member alone, with a threshold
+        # fitted on the mean of all five
         ck["state_dicts"] = states
         ck["seeds"] = list(range(args.seed, args.seed + args.ensemble))
     else:
         ck["state_dict"] = states[0]
-        if args.task != "gap":
-            ck["cls"] = args.task
-            ck["threshold"] = threshold
+    if args.task != "gap":
+        ck["cls"] = args.task
+        ck["threshold"] = threshold
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     torch.save(ck, args.out)
+    shutil.rmtree(partial, ignore_errors=True)
     base = os.path.splitext(args.out)[0]
     with open(base + ".metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
