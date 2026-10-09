@@ -40,6 +40,9 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.23197813
     description: DOI of release v1.2.0
+  - type: doi
+    value: 10.5281/zenodo.23269671
+    description: DOI of release v1.3.0
 version: 1.3.0
 repository-code: https://github.com/ac1esan/nanomat-ai
 url: https://ac1esan.github.io/nanomat-ai/
