@@ -392,6 +392,12 @@ const I18N = {
     count: (n, total) => `<b>${n}</b> of ${total} structures match`,
     count_hidden: n => ` · ${n} more are hidden because the model disowns them`,
     count_none: "No structures match these filters",
+    // an empty result that is not really empty: a beginner typing "graphene" met a
+    // blank page, because graphene is disowned and the disowned tier is off by default
+    count_only_disowned: n => `${n === 1 ? "One structure matches" : `${n} structures match`}, but the model disowns ${n === 1 ? "it" : "them"} — out of its domain, so the number should not be used. `,
+    show_disowned: "Show them anyway",
+    count_elsewhere: n => `${n === 1 ? "One structure matches" : `${n} structures match`} outside the current population. `,
+    show_all: "Show everything",
     count_edges: n => ` · ${n} structures in this selection have band edges at all`,
     count_none_edges: "No structures match. Band edges exist only where both models stand behind their half — the gap model and the work-function model each have their own training set and their own verdict.",
     warn_all: "<b>Beyond the calibrated sources.</b> Intervals are calibrated on stable and metastable Alexandria structures, and cover about 90% of the Alexandria ones the model never trained on. Against C2DB and JARVIS references, computed with other DFT methods, they cover about 82% and 79%, and part of the error there is the difference in method: on C2DB the shortfall is all compounds of heavy elements, whose reference includes spin-orbit coupling, which lowers a gap. The verdict ranks error correctly on Alexandria and C2DB; on JARVIS the reliable tier errs more than check, mostly because its labels use another functional.",
@@ -671,10 +677,11 @@ function apply() {
   const edgeFilterOn = [f.eamin, f.eamax, f.ipmin, f.ipmax].some(v => v !== null);
   const out = [], outFam = [];
   let hidden = 0, eligible = 0;   // eligible: passes everything except the edge range
+  let elsewhere = 0;              // passes every filter except population and tier
   for (const row of S.rows) {
     const inPopulation = passPopulation(row) && !(f.notrain && row.r === 1);
     if (!inPopulation && S.fam.scope === 1) continue;
-    if (!f.tiers[row.w]) { if (inPopulation) hidden++; continue; }
+    const tierOff = !f.tiers[row.w];
     if (f.gmin !== null && row.g < f.gmin) continue;
     if (f.gmax !== null && row.g > f.gmax) continue;
     if (f.type >= 0 && row.t !== f.type) continue;
@@ -683,7 +690,7 @@ function apply() {
     if (use.test && !use.test(row)) continue;
     if (f.has.length && !f.has.every(el => row.e.includes(el))) continue;
     if (f.not.length && f.not.some(el => row.e.includes(el))) continue;
-    if (inPopulation && row.ea !== null) eligible++;
+    if (inPopulation && !tierOff && row.ea !== null) eligible++;
     if (edgeFilterOn) {
       // a row with no band edges cannot satisfy a band-edge range, and dropping it
       // is better than quietly letting it through
@@ -693,8 +700,9 @@ function apply() {
       if (f.ipmin !== null && row.ip < f.ipmin) continue;
       if (f.ipmax !== null && row.ip > f.ipmax) continue;
     }
+    if (tierOff) { if (inPopulation) hidden++; else elsewhere++; continue; }
     if (row.fm >= 0) outFam.push(row);   // chemistry and gap filters, any population
-    if (inPopulation) out.push(row);
+    if (inPopulation) out.push(row); else elsewhere++;
   }
   const { key, dir } = S.sort;
   out.sort((a, b) => {
@@ -705,6 +713,7 @@ function apply() {
   });
   S.viewFam = outFam;
   S.hiddenByTier = hidden;
+  S.elsewhere = elsewhere;
   S.edgeEligible = eligible;
   S.edgeFilterOn = edgeFilterOn;
   S.view = out;
@@ -718,9 +727,13 @@ function apply() {
 /* --------------------------------------------------------------------- render */
 function renderCount() {
   const el = document.getElementById("count");
-  const base = S.view.length ? t("count", int(S.view.length), int(S.meta.n_rows))
+  let base = S.view.length ? t("count", int(S.view.length), int(S.meta.n_rows))
              : (S.edgeFilterOn ? t("count_none_edges") : t("count_none"));
-  const extra = S.hiddenByTier ? t("count_hidden", int(S.hiddenByTier)) : "";
+  if (!S.view.length && S.hiddenByTier)
+    base = t("count_only_disowned", S.hiddenByTier) + `<button class="preset" id="show-ood">${t("show_disowned")}</button>`;
+  else if (!S.view.length && S.elsewhere)
+    base = t("count_elsewhere", S.elsewhere) + `<button class="preset" id="tm-widen">${t("show_all")}</button>`;
+  const extra = S.hiddenByTier && S.view.length ? t("count_hidden", int(S.hiddenByTier)) : "";
   // with a band-edge range set, the honest denominator is not the whole selection
   // but the part of it that has edges at all
   const edges = S.edgeFilterOn ? t("count_edges", int(S.edgeEligible)) : "";
@@ -1268,6 +1281,12 @@ document.addEventListener("click", e => {
     const k = sortBtn.dataset.sort;
     S.sort = { key: k, dir: S.sort.key === k ? -S.sort.dir : (k === "f" ? 1 : 1) };
     renderTHead(); apply(); return;
+  }
+  if (e.target.id === "show-ood") {
+    S.f.tiers[2] = true;
+    document.querySelectorAll(".chip[data-tier]").forEach(c =>
+      c.setAttribute("aria-pressed", String(S.f.tiers[+c.dataset.tier])));
+    apply(); return;
   }
   if (e.target.id === "fam-widen" || e.target.id === "tm-widen") {
     // "everything" has to mean everything, or the count will not reach the total
