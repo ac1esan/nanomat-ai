@@ -103,9 +103,12 @@ def format_markdown(r, cal: dict | None = None) -> str:
         headline += " &nbsp; — **do not use this number**"
     elif r.interval90 is not None:
         headline += f" &nbsp; (90% interval ±{r.interval90:.2f})"
+    from nanomat.plain import describe
     lines = [
         f"### {r.formula} &nbsp;·&nbsp; {r.natoms} atoms &nbsp;·&nbsp; "
         f"vacuum {r.layer.get('vacuum', float('nan')):.1f} Å",
+        "",
+        f"**In plain words.** {describe(r)}",
         "",
         "| | |",
         "|---|---|",
@@ -169,8 +172,7 @@ def format_markdown(r, cal: dict | None = None) -> str:
     if ood:
         lines += ["", "> **Out of the model's domain.** The prediction above is reported for "
                   "transparency, not for use: the calibrated interval assumes the ensemble "
-                  "spread is meaningful, and on out-of-domain inputs it is not. Phosphorene is "
-                  "the documented example — spread 0.03 eV, actual error 1.2 eV."]
+                  "spread is meaningful, and on out-of-domain inputs it is not."]
     if r.warnings:
         lines += ["", "⚠️ " + "  \n⚠️ ".join(r.warnings)]
     if not ood and r.exciton_binding is not None:
@@ -183,8 +185,8 @@ def format_markdown(r, cal: dict | None = None) -> str:
     mae = cal.get("test_mae")
     lines += [
         "",
-        "<sub>CGCNN ensemble (5 models) on 40 548 2D semiconductors (Alexandria, stable and "
-        "metastable up to 0.5 eV/atom, and non-magnetic 2DMatPedia; PBE), "
+        "<sub>CGCNN ensemble (5 models) on 45 115 2D semiconductors (Alexandria, stable and "
+        "metastable up to 1.0 eV/atom, and non-magnetic 2DMatPedia; PBE), "
         f"evaluated on a composition-disjoint split: test MAE {mae:.2f} eV. "
         "Two independent out-of-domain signals are used, because neither alone is enough: "
         "the spread between ensemble members, and the distance to the training set in the "

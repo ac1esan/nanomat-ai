@@ -140,6 +140,7 @@ canvas{display:block;width:100%;height:320px;cursor:crosshair}
 .detail .note{margin-top:12px;padding:9px 10px;border-radius:6px;background:var(--surface-3);
   font-size:12px;color:var(--text-2);line-height:1.45}
 .detail .stop{background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--text-1)}
+.detail .plain{margin:0 0 10px;font-size:13px;color:var(--text-1)}
 
 /* families */
 .famgrid{overflow-x:auto;margin:14px 0 6px}
@@ -218,8 +219,8 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
       </div>
     </div>
     <div class="field">
-      <label id="t-f-preset">Quick range</label>
-      <div class="presets" id="f-presets"></div>
+      <label id="t-f-preset">Looking for</label>
+      <select id="f-use"></select>
     </div>
     <div class="field edges">
       <label id="t-f-edge">Band edges vs vacuum, eV</label>
@@ -251,8 +252,8 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
       <input type="text" id="f-not" placeholder="Pb Cd" size="10">
     </div>
     <div class="field">
-      <label id="t-f-search">Formula</label>
-      <input type="text" id="f-q" placeholder="MoS2" size="8">
+      <label id="t-f-search">Formula or name</label>
+      <input type="text" id="f-q" placeholder="MoS2, graphene" size="12">
     </div>
     <label class="check"><input type="checkbox" id="f-notrain"> <span id="t-f-notrain">Exclude training rows</span></label>
     <button class="preset" id="f-reset">Reset</button>
@@ -376,10 +377,12 @@ const I18N = {
     fam_empty: "No structure in the table matches this prototype.",
     fam_multi: n => `${n} entries for this pair; the one with the smallest ensemble spread is shown`,
     fam_prose: `<h2>How to read it</h2><p>Each cell is one element pair in the chosen prototype, coloured by predicted band gap. A dashed border means the tool does not place that prediction in its reliable tier. A dot in the corner means the model trained on that structure, so the number is reproduced from memory rather than predicted — its error is about 0.08 eV instead of the honest 0.26.</p><p>The chemistry and band-gap filters above govern this grid, but the population does not: this tab has its own, and it starts from the whole prototype. Sharing the Browse tab's honest default left one pair of ninety-eight visible, and a grid of blanks is not an honest answer, it is an unreadable one. The per-cell marks carry the same information instead. Switch the population to <i>only what the filters above keep</i> to see exactly which cells that default endorses; what falls outside is greyed rather than deleted, because the shape of a family is a fact about the data and not about the current filter.</p><p>Where a pair has several entries, the one with the smallest ensemble spread is shown. Nothing is generated: every cell is a structure somebody computed, which is why a family still has holes.</p>`,
-    f_pop: "Population", f_gap: "Band gap, eV", f_preset: "Quick range",
+    f_pop: "Population", f_gap: "Band gap, eV", f_preset: "Looking for",
     f_edge: "Band edges vs vacuum, eV",
     f_tier: "Trust", f_type: "Gap type", f_has: "Must contain",
-    f_not: "Must not contain", f_search: "Formula",
+    f_not: "Must not contain", f_search: "Formula or name",
+    use_hint: (what, hint) => `Looking for ${what}: ${hint}`,
+    alias_hint: (name, f) => `“${name}” read as the formula ${f}.`,
     f_notrain: "Exclude training rows", reset: "Reset",
     pop_calibrated: n => `Held out from training (${n})`,
     pop_stable: n => `All stable structures (${n})`,
@@ -424,6 +427,8 @@ const I18N = {
     d_meta_no: "near-hull-like",
     d_type_val: (label, p, thr) => `${label} · p(indirect) = ${p}, threshold ${thr}`,
     d_latent: "Distance to training data", d_verdict: "Verdict", d_tiererr: "Typical error of this tier",
+    d_plain: "In plain words.",
+    d_ref_wrong: "known to be wrong", d_ref_disputed: "disputed",
     d_dft: "DFT reference", d_err: "Error against reference", d_atoms: "Atoms in cell",
     d_source: "Source", d_role: "Role in training",
     d_inside: "inside the familiar region", d_outside: "OUTSIDE the familiar region",
@@ -465,14 +470,78 @@ const S = {
   zoom: null,
   hover: null,
   f: { pop: 0, gmin: null, gmax: null, tiers: [true, true, false], type: -1,
-       has: [], not: [], q: "", notrain: false,
+       has: [], not: [], q: "", notrain: false, use: 0,
        eamin: null, eamax: null, ipmin: null, ipmax: null },
   hiddenByTier: 0,
 };
 const BLANK_FILTERS = () => ({ pop: 0, gmin: null, gmax: null, tiers: [true, true, false],
-  type: -1, has: [], not: [], q: "", notrain: false,
+  type: -1, has: [], not: [], q: "", notrain: false, use: 0,
   eamin: null, eamax: null, ipmin: null, ipmax: null });
 const TIERVAR = ["--tier-0", "--tier-1", "--tier-2"];
+
+/* ------------------------------------------------------- plain language */
+// The same bands as nanomat/plain.py; keep the two in step. Computed from the
+// absorption-onset estimate, because that is the number a measurement sees, and
+// done here once because language models turned gaps into the wrong colours.
+const HC_EV_NM = 1239.84;
+const LIGHT = [[280, "deep ultraviolet"], [400, "ultraviolet"], [450, "violet"], [495, "blue"],
+               [570, "green"], [590, "yellow"], [620, "orange"], [750, "red"],
+               [1400, "near infrared"], [Infinity, "infrared"]];
+const GAP_USES = [[0.5, "a very narrow gap — close to a metal, it conducts readily when warm"],
+                  [1.1, "a narrow, infrared gap, like germanium's (0.7 eV): infrared detectors"],
+                  [1.8, "in the range solar cells use, like silicon (1.1 eV) or GaAs (1.4 eV)"],
+                  [3.1, "a gap that absorbs visible light: LEDs, lasers, visible-light detectors"],
+                  [4.5, "a wide gap in the ultraviolet, like GaN (3.4 eV): UV emitters and detectors"],
+                  [Infinity, "an insulator: the gap of dielectric and encapsulation layers, of which hexagonal boron nitride is the classic one"]];
+const lightName = nm => LIGHT.find(([edge]) => nm < edge)[1];
+const gapUse = ev => GAP_USES.find(([edge]) => ev < edge)[1];
+// common names for 2D materials that are not formulas (as nanomat/llm_tools.py NAMES)
+const NAMES = { graphene: "C", phosphorene: "P", "black phosphorus": "P", "blue phosphorene": "P",
+  silicene: "Si", germanene: "Ge", stanene: "Sn", borophene: "B", arsenene: "As",
+  antimonene: "Sb", bismuthene: "Bi", tellurene: "Te", hbn: "BN", "h-bn": "BN",
+  "hexagonal boron nitride": "BN", "g-c3n4": "C3N4", "graphitic carbon nitride": "C3N4",
+  "molybdenum disulfide": "MoS2", "molybdenite": "MoS2", "tungsten disulfide": "WS2",
+  "molybdenum diselenide": "MoSe2", "tungsten diselenide": "WSe2" };
+// "What are you looking for?" Each sets a test on top of the other filters; the
+// optical ones read the absorption-onset estimate, the electronic ones the PBE gap.
+const USES = [
+  { label: "anything" },
+  { label: "a solar-cell absorber", test: r => r.o !== null && r.o >= 1.1 && r.o <= 1.8,
+    hint: "absorbs most of sunlight: an absorption onset of 1.1–1.8 eV (about 690–1130 nm)." },
+  { label: "an LED or laser (visible light)", test: r => r.o !== null && r.o >= 1.8 && r.o <= 3.1 && r.t === 0,
+    hint: "emits visible light: an onset of 1.8–3.1 eV (400–690 nm) and a direct gap, which emits efficiently." },
+  { label: "an infrared photodetector", test: r => r.o !== null && r.o >= 0.4 && r.o < 1.1,
+    hint: "absorbs infrared: an onset of 0.4–1.1 eV (about 1130–3100 nm)." },
+  { label: "an ultraviolet photodetector", test: r => r.o !== null && r.o > 3.1 && r.o <= 5,
+    hint: "absorbs ultraviolet and ignores visible light: an onset of 3.1–5 eV (250–400 nm)." },
+  { label: "a transistor channel", test: r => r.g >= 1 && r.g <= 2.5,
+    hint: "a PBE gap of 1–2.5 eV: wide enough to switch off, narrow enough to conduct when on. MoS₂ sits at 1.7." },
+  { label: "an insulating or dielectric layer", test: r => r.g >= 4,
+    hint: "a PBE gap above 4 eV, like hexagonal boron nitride, used to insulate and protect other layers." },
+];
+function plainWords(r) {
+  const cal = S.meta.calibration;
+  if (r.w === 2) {
+    const why = (r.m !== null && cal.metal_threshold !== undefined && r.m >= cal.metal_threshold)
+      ? "The structure looks metallic, and the gap model was only ever trained on semiconductors."
+      : (r.l !== null && r.l > cal.latent_q90)
+        ? "Its chemistry is unlike anything the model was trained on."
+        : "The five models disagree too much to trust any of them; the structure may be metallic or unusual.";
+    return "Do not use the number. " + why;
+  }
+  const parts = [];
+  if (r.g < S.meta.metal_gap_eV) parts.push("The model sees this as a metal or very nearly one.");
+  else if (r.o !== null && r.o > 0) {
+    const nm = HC_EV_NM / r.o;
+    parts.push(`It should start absorbing light at roughly ${Math.round(nm)} nm (${lightName(nm)}); light of longer wavelength passes through.`);
+    parts.push(`That is ${gapUse(r.o)}.`);
+  }
+  const err = cal.tier_mae ? Object.values(cal.tier_mae)[r.w] : null;
+  parts.push(r.w === 0
+    ? `The model is confident here${err ? `; predictions like this are typically off by about ${fmt(err, 2)} eV` : ""}.`
+    : `Worth confirming with a DFT calculation before relying on it${err ? `; predictions like this are typically off by about ${fmt(err, 2)} eV` : ""}.`);
+  return parts.join(" ");
+}
 
 /* --------------------------------------------------------------------- theme */
 // Three states rather than two, so "follow the system" stays reachable once a
@@ -536,6 +605,8 @@ async function load() {
       // resemblance to the metastable population, read off the latent space, and the
       // 90% half-width the predictor computed from it
       pm: num(c[ix.pm]), iv: num(c[ix.iv]),
+      // 1: the reference is disputed, 2: known to be wrong (scripts/reference_flags.py)
+      rf: num(c[ix.rf]) ?? 0,
     };
   }
   for (const r of S.rows) setEdges(r);
@@ -592,7 +663,11 @@ function passPopulation(row) {
 }
 function apply() {
   const f = S.f;
-  const q = f.q.trim().toLowerCase();
+  const q0 = f.q.trim().toLowerCase();
+  // a common name ("graphene", "hBN") means one exact formula, not a substring of many
+  const alias = NAMES[q0] || null;
+  const q = alias ? "" : q0;
+  const use = USES[f.use];
   const edgeFilterOn = [f.eamin, f.eamax, f.ipmin, f.ipmax].some(v => v !== null);
   const out = [], outFam = [];
   let hidden = 0, eligible = 0;   // eligible: passes everything except the edge range
@@ -604,6 +679,8 @@ function apply() {
     if (f.gmax !== null && row.g > f.gmax) continue;
     if (f.type >= 0 && row.t !== f.type) continue;
     if (q && !row.f.toLowerCase().includes(q)) continue;
+    if (alias && row.f !== alias) continue;
+    if (use.test && !use.test(row)) continue;
     if (f.has.length && !f.has.every(el => row.e.includes(el))) continue;
     if (f.not.length && f.not.some(el => row.e.includes(el))) continue;
     if (inPopulation && row.ea !== null) eligible++;
@@ -647,7 +724,12 @@ function renderCount() {
   // with a band-edge range set, the honest denominator is not the whole selection
   // but the part of it that has edges at all
   const edges = S.edgeFilterOn ? t("count_edges", int(S.edgeEligible)) : "";
-  el.innerHTML = base + `<span style="color:var(--text-3)">${extra}${edges}</span>`;
+  const u = USES[S.f.use];
+  const q = S.f.q.trim().toLowerCase();
+  const hints = [u.hint ? t("use_hint", u.label, u.hint) : "",
+                 NAMES[q] ? t("alias_hint", S.f.q.trim(), NAMES[q]) : ""].filter(Boolean);
+  el.innerHTML = base + `<span style="color:var(--text-3)">${extra}${edges}</span>`
+    + hints.map(h => `<br><span style="color:var(--text-2)">${h}</span>`).join("");
 }
 function renderWarning() {
   const box = document.getElementById("pop-warning");
@@ -896,8 +978,9 @@ function renderDetail(hostId = "detail", row = undefined) {
      <i class="tierdot" style="background:var(${TIERVAR[r.w]})"></i>${t("tier")[r.w]}</span>`]);
   if (tierErr) rows.push([t("d_tiererr"), fmt(tierErr, 2) + " eV"]);
   if (r.d !== null) {
-    rows.push([t("d_dft"), fmt(r.d, 2) + " eV"]);
-    rows.push([t("d_err"), fmt(Math.abs(r.g - r.d), 2) + " eV"]);
+    rows.push([t("d_dft"), fmt(r.d, 2) + " eV" + (r.rf ? ` <span style="color:var(--tier-2)">— ${t(r.rf === 2 ? "d_ref_wrong" : "d_ref_disputed")}</span>` : "")]);
+    // an error measured against a label known to be bad would say nothing about the model
+    if (!r.rf) rows.push([t("d_err"), fmt(Math.abs(r.g - r.d), 2) + " eV"]);
   }
   // the second property keeps its own block: its own spread, its own verdict, and
   // its own training role, because it was trained on a different set entirely
@@ -921,6 +1004,8 @@ function renderDetail(hostId = "detail", row = undefined) {
   el.innerHTML = `<h3>${r.f}</h3>
     <p class="sub">${r.i} · ${r.e.join(" ")}</p>
     <div class="big">${fmt(r.g, 2)} eV${ood ? ` <span style="font-size:13px;color:var(--tier-2)">— do not use</span>` : ""}</div>
+    <div class="note plain"><b>${t("d_plain")}</b> ${plainWords(r)}</div>
+    ${r.rf ? `<div class="note stop"><b>${t(r.rf === 2 ? "d_ref_wrong" : "d_ref_disputed")}.</b> ${(S.meta.ref_notes || {})[r.i] || ""}</div>` : ""}
     <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
     ${ood ? `<div class="note stop">${t("d_stop")}</div>` : ""}
     ${(!ood && r.g >= S.meta.metal_gap_eV) ? `<div class="note">
@@ -1042,7 +1127,7 @@ function trustFromView() {
   const per = new Map();
   let used = 0;
   for (const r of S.view) {
-    if (r.s !== 0 || r.r === 1 || r.d === null) continue;
+    if (r.s !== 0 || r.r === 1 || r.d === null || r.rf) continue;
     used++;
     const err = Math.abs(r.g - r.d);
     for (const el of r.e) {
@@ -1132,9 +1217,8 @@ function buildUI() {
     `<button class="chip t${i}" data-tier="${i}" aria-pressed="${S.f.tiers[i]}"><i class="dot"></i>${l}</button>`).join("");
   document.getElementById("legend").innerHTML = t("tier").map((l, i) =>
     `<span><i style="background:var(${TIERVAR[i]})"></i>${l}</span>`).join("");
-  document.getElementById("f-presets").innerHTML =
-    [["IR", 0.3, 1.6], ["visible", 1.6, 3.2], ["wide", 3.2, null]]
-      .map(([l, a, b]) => `<button class="preset" data-a="${a}" data-b="${b === null ? "" : b}">${l}</button>`).join("");
+  document.getElementById("f-use").innerHTML =
+    USES.map((u, i) => `<option value="${i}">${u.label}</option>`).join("");
   document.getElementById("t-tab3").textContent = t("tab_fam");
   document.getElementById("t-fam-lede").textContent = t("fam_lede");
   document.getElementById("t-fam-pick").textContent = t("fam_pick");
@@ -1170,14 +1254,6 @@ document.addEventListener("click", e => {
     const i = +chip.dataset.tier;
     S.f.tiers[i] = !S.f.tiers[i];
     chip.setAttribute("aria-pressed", S.f.tiers[i]);
-    apply(); return;
-  }
-  const pre = e.target.closest(".preset[data-a]");
-  if (pre) {
-    S.f.gmin = pre.dataset.a === "" ? null : +pre.dataset.a;
-    S.f.gmax = pre.dataset.b === "" ? null : +pre.dataset.b;
-    document.getElementById("f-gmin").value = pre.dataset.a;
-    document.getElementById("f-gmax").value = pre.dataset.b;
     apply(); return;
   }
   if (e.target.id === "theme-btn") {
@@ -1219,6 +1295,7 @@ document.getElementById("f-reset").addEventListener("click", () => {
   S.sel = null;
   document.getElementById("f-pop").value = "0";
   document.getElementById("f-type").value = "-1";
+  document.getElementById("f-use").value = "0";
   for (const id of ["f-gmin", "f-gmax", "f-has", "f-not", "f-q",
                     "f-eamin", "f-eamax", "f-ipmin", "f-ipmax"])
     document.getElementById(id).value = "";
@@ -1231,6 +1308,7 @@ const syms = s => s.trim().split(/[\s,]+/).filter(Boolean)
   .map(x => x[0].toUpperCase() + x.slice(1).toLowerCase());
 document.getElementById("f-pop").addEventListener("change", e => { S.f.pop = +e.target.value; apply(); });
 document.getElementById("f-type").addEventListener("change", e => { S.f.type = +e.target.value; apply(); });
+document.getElementById("f-use").addEventListener("change", e => { S.f.use = +e.target.value; apply(); });
 document.getElementById("f-notrain").addEventListener("change", e => { S.f.notrain = e.target.checked; apply(); });
 for (const [id, key, cast] of [["f-gmin", "gmin", 1], ["f-gmax", "gmax", 1],
                                ["f-eamin", "eamin", 1], ["f-eamax", "eamax", 1],

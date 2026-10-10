@@ -573,7 +573,7 @@ def test_screening_table_and_site_data_end_to_end(tmp_path):
     assert r.returncode == 0, r.stderr[-2000:]
     site = pd.read_csv(out / "screening.csv")
     assert len(site) == 3
-    for col in ("i", "g", "u", "w", "iv", "b", "q", "o"):
+    for col in ("i", "g", "u", "w", "iv", "b", "q", "o", "rf"):
         assert col in site.columns, col
     assert dict(zip(site["i"], site["b"])) == {"MoS2": 1, "hBN": 0, "graphene": 0}
     meta = json.load(open(out / "meta.json"))
@@ -599,3 +599,31 @@ def test_c2db_table_parser():
     headers, rows = cells(html)
     assert headers == ["Formula", "Old uid", "E_B"]
     assert rows == [["Tl2Br2", "Tl2Br2-abc", "0.41"], ["MoS2", "MoS2-xyz", "0.55"]]
+
+
+def test_plain_words(P):
+    """The plain-language summary: wavelength, use and verdict, and a refusal out of domain.
+
+    Models in the language-model test turned gaps into the wrong colours on their own, so
+    the conversion lives in one place (nanomat/plain.py) and is checked here.
+    """
+    from nanomat.plain import describe, light_name, wavelength_nm
+    assert light_name(wavelength_nm(1.88)) == "red"          # MoS2's measured A exciton
+    assert light_name(wavelength_nm(2.4)) == "green"
+    assert light_name(wavelength_nm(1.0)) == "near infrared"
+    mos2 = describe(P.run(read_structure(os.path.join(EX, "MoS2.vasp"))))
+    assert "nm" in mos2 and "confident" in mos2
+    gr = describe(P.run(read_structure(os.path.join(EX, "graphene.vasp"))))
+    assert gr.startswith("Do not use the number") and "nm" not in gr
+
+
+def test_reference_flags():
+    """Labels the tool must not judge the model by: every known-bad one is flagged wrong."""
+    import csv
+    from nanomat.llm_tools import KNOWN_BAD_REFERENCE
+    path = os.path.join(ROOT, "data", "reference_flags.csv")
+    flags = {r["id"]: r for r in csv.DictReader(open(path))}
+    for i in KNOWN_BAD_REFERENCE:
+        assert flags[i]["flag"] == "wrong", i
+    disputed = [r for r in flags.values() if r["flag"] == "disputed"]
+    assert disputed and all("other Alexandria cells" in r["note"] for r in disputed)

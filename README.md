@@ -31,6 +31,12 @@ near-hull test as well ([below](#what-the-stability-filter-was-costing)). The st
 
 ## Quick start
 
+**Without installing anything:**
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ac1esan/nanomat-ai/blob/main/notebooks/predict.ipynb)
+— upload a CIF or POSCAR, or paste one, and get the gap with its verdict and a summary
+in plain words: where the material starts absorbing light, what a gap like that is used
+for, how far off such a prediction typically is.
+
 ```bash
 git clone https://github.com/ac1esan/nanomat-ai && cd nanomat-ai
 pip install -r requirements.txt          # CPU torch + PyTorch Geometric + pymatgen + gradio
@@ -42,14 +48,17 @@ python screen_bandgap.py --in examples/ --out results.csv    # batch: folder of 
 
 If you have no structure file to hand, the
 [browser](https://ac1esan.github.io/nanomat-ai/) covers the common case: filter
-28 372 precomputed predictions by element, gap range and trust verdict.
+28 372 precomputed predictions by element, gap range and trust verdict, or say what the
+material is for — a solar-cell absorber, a visible LED, an infrared or ultraviolet
+detector, a transistor channel, an insulating layer — and search by name ("graphene",
+"hBN"). Every card opens with the same plain-language summary.
 
 ```bash
 python screen_bandgap.py --app                                # web UI at http://127.0.0.1:7860
 ```
 
 ```bash
-pytest -q                                                     # 29 smoke and contract tests
+pytest -q                                                     # 31 smoke and contract tests
 ```
 
 From a language model, over the Model Context Protocol
@@ -815,6 +824,14 @@ rejects it (0.68 against 0.47).
 - The labels carry the errors of their databases. Alexandria reports planar
   honeycombs with their band edges at K too high (graphene is labelled 1.23 and 1.13
   eV in two cells, and both entries sit in the test split);
+  [`scripts/reference_flags.py`](scripts/reference_flags.py) flags those as wrong and
+  145 more as disputed — one structure, several Alexandria cells, labels more than 0.1
+  eV apart (the model gives all of them the same number). In 37 of 62 such structures
+  the smallest cell carries the highest label, which a k-point mesh that misses K would
+  do, so that mechanism explains some of them and not all. The browser and the
+  language-model tools say so on the row and compute no error from those labels; without
+  them the test MAE is 0.185 rather than 0.186 eV. The labels stay in training: removing
+  them means retraining.
   2DMatPedia is about 1 eV high on the ZrNCl family and less reliable on magnetic
   materials, which is why only its non-magnetic entries are used.
 - **No spin-orbit coupling in the target** (Alexandria's PBE), and spin-orbit coupling
@@ -824,7 +841,12 @@ rejects it (0.68 against 0.47).
   offset (−0.02 and −0.04). C2DB's web table has no SOC-free gap to train a
   correction on, so the offset is documented, not corrected. The structures that sit
   in both Alexandria and C2DB (about 700, `data/structure_twins.csv`) carry exactly
-  that difference, and are the obvious training set for one.
+  that difference. A head trained on them ([`scripts/fit_soc.py`](scripts/fit_soc.py))
+  failed its pre-written rule: on heavy-element compounds it cut the error against
+  C2DB from 0.23 to 0.18 eV on structures it never saw, and it got the four TMDs to
+  within 0.02 eV of the literature shift, but on light compounds it invented a shift
+  (0.13 → 0.18). Applying it only to heavy elements is the obvious fix, and it needs
+  data none of this has touched to be tested honestly.
 - The quasiparticle and optical outputs are linear heads fitted on 214 C2DB materials
   (G₀W₀ and BSE), cross-validated at 0.13–0.27 eV and checked against five measured
   monolayers. Treat them as estimates.
@@ -932,7 +954,9 @@ docs/                     the static browser published on GitHub Pages (index.ht
 nanomat/                  graph.py (structure -> graph, angles, vacuum checks), model.py (CGCNN),
                           predict.py (Predictor, batched inference, verdicts, calibration, heads),
                           families.py (1H/1T MX2 and honeycomb prototype tags),
-                          llm_tools.py + mcp_server.py (the tools a language model gets)
+                          llm_tools.py + mcp_server.py (the tools a language model gets),
+                          plain.py (the prediction in plain words: wavelength, use, verdict)
+notebooks/predict.ipynb   the Colab notebook: upload a structure, read the answer
 screen_bandgap.py         CLI batch screening + Gradio UI      app.py: Hugging Face Spaces entry
 train_cgcnn.py            training: gap / type / metal, ensembles, grouped split, --split-file, --angles
 scripts/                  calibration, corrections and latent heads, the 2DMatPedia audit, the
@@ -962,8 +986,8 @@ figures/                  README figures and the scripts that regenerate them
    open piece of the trust layer: the C2DB coverage gap is all spin-orbit coupling.
 4. **The next gain is not more metastable data.** The step to 1.0 eV/atom passed its
    rule with 0.004 eV on the stable test, against 0.032 for the step before.
-5. **Repair the known label errors** — Alexandria's planar honeycombs with band edges
-   at K (graphene, planar silicene, BP).
+5. **Retrain without the flagged labels** (149, `data/reference_flags.csv`); they are
+   flagged everywhere they are shown, but 108 of them are still in the training set.
 6. **More light-element data.** Full C2DB (16 789 entries against 3 520 mirrored in
    JARVIS) and Materials Cloud MC2D; carbon is still the sparsest element in training.
 7. Host the uploader somewhere free. Gradio Spaces now require a paid tier, so

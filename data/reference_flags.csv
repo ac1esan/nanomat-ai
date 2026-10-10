@@ -1,0 +1,150 @@
+id,flag,note
+agm2000000079,wrong,"graphene (4-atom cell): semimetal, 0.00 eV in C2DB, 2DMatPedia and JARVIS dft_2d"
+agm2000000082,wrong,"graphene: semimetal, 0.00 eV in C2DB, 2DMatPedia and JARVIS dft_2d"
+agm2000000375,wrong,"planar silicene: semimetal, 0.00 eV in 2DMatPedia for the same planar layer"
+agm2000000647,disputed,the same structure is labelled 4.98 eV (9 atoms) in other Alexandria cells; this cell reads 4.81 eV
+agm2000000660,disputed,the same structure is labelled 4.81 eV (6 atoms) in other Alexandria cells; this cell reads 4.98 eV
+agm2000000695,disputed,the same structure is labelled 1.25 eV (3 atoms) in other Alexandria cells; this cell reads 0.45 eV
+agm2000000699,disputed,the same structure is labelled 0.45 eV (6 atoms) in other Alexandria cells; this cell reads 1.25 eV
+agm2000001102,disputed,the same structure is labelled 2.33 eV (4 atoms) in other Alexandria cells; this cell reads 2.54 eV
+agm2000001110,disputed,the same structure is labelled 2.54 eV (8 atoms) in other Alexandria cells; this cell reads 2.33 eV
+agm2000001935,disputed,the same structure is labelled 1.89 eV (8 atoms) in other Alexandria cells; this cell reads 2.01 eV
+agm2000001946,disputed,the same structure is labelled 2.01 eV (4 atoms) in other Alexandria cells; this cell reads 1.89 eV
+agm2000002595,disputed,"the same structure is labelled 2.61 eV (4 atoms), 2.51 eV (16 atoms) in other Alexandria cells; this cell reads 2.64 eV"
+agm2000002613,disputed,"the same structure is labelled 0.72 eV (4 atoms), 0.55 eV (8 atoms), 0.61 eV (16 atoms) in other Alexandria cells; this cell reads 0.62 eV"
+agm2000002617,disputed,"the same structure is labelled 1.78 eV (4 atoms), 1.75 eV (6 atoms) in other Alexandria cells; this cell reads 1.92 eV"
+agm2000002852,wrong,"planar BP: 0.90 eV in C2DB, 0.87 in 2DMatPedia, and 0.906 in Alexandria's own entries of the same layer in larger cells"
+agm2000002877,disputed,"the same structure is labelled 2.48 eV (6 atoms), 2.59 eV (6 atoms) in other Alexandria cells; this cell reads 2.55 eV"
+agm2000002902,disputed,"the same structure is labelled 2.01 eV (4 atoms), 2.01 eV (8 atoms) in other Alexandria cells; this cell reads 2.24 eV"
+agm2000002906,disputed,"the same structure is labelled 2.76 eV (4 atoms), 2.97 eV (8 atoms), 2.76 eV (16 atoms) in other Alexandria cells; this cell reads 2.95 eV"
+agm2000002981,disputed,"the same structure is labelled 2.79 eV (12 atoms), 2.78 eV (24 atoms) in other Alexandria cells; this cell reads 2.95 eV"
+agm2000003442,disputed,the same structure is labelled 1.15 eV (6 atoms) in other Alexandria cells; this cell reads 1.33 eV
+agm2000003615,disputed,the same structure is labelled 1.83 eV (6 atoms) in other Alexandria cells; this cell reads 1.99 eV
+agm2000003654,disputed,"the same structure is labelled 0.70 eV (6 atoms), 0.92 eV (12 atoms) in other Alexandria cells; this cell reads 0.86 eV"
+agm2000003686,disputed,the same structure is labelled 1.15 eV (6 atoms) in other Alexandria cells; this cell reads 1.28 eV
+agm2000003750,disputed,"the same structure is labelled 2.44 eV (12 atoms), 2.49 eV (8 atoms) in other Alexandria cells; this cell reads 2.55 eV"
+agm2000003853,disputed,the same structure is labelled 2.05 eV (16 atoms) in other Alexandria cells; this cell reads 1.66 eV
+agm2000003876,disputed,"the same structure is labelled 0.23 eV (4 atoms), 0.23 eV (8 atoms) in other Alexandria cells; this cell reads 0.48 eV"
+agm2000004463,disputed,"the same structure is labelled 0.84 eV (4 atoms), 0.73 eV (8 atoms), 0.73 eV (16 atoms) in other Alexandria cells; this cell reads 0.73 eV"
+agm2000004509,disputed,"the same structure is labelled 2.95 eV (2 atoms), 2.97 eV (8 atoms), 2.76 eV (16 atoms) in other Alexandria cells; this cell reads 2.76 eV"
+agm2000004693,disputed,"the same structure is labelled 2.29 eV (8 atoms), 2.21 eV (16 atoms) in other Alexandria cells; this cell reads 2.60 eV"
+agm2000004824,disputed,"the same structure is labelled 1.13 eV (4 atoms), 1.09 eV (8 atoms) in other Alexandria cells; this cell reads 1.02 eV"
+agm2000004826,disputed,"the same structure is labelled 1.02 eV (2 atoms), 1.09 eV (8 atoms) in other Alexandria cells; this cell reads 1.13 eV"
+agm2000005390,disputed,"the same structure is labelled 1.58 eV (8 atoms), 1.40 eV (16 atoms) in other Alexandria cells; this cell reads 1.58 eV"
+agm2000005434,disputed,"the same structure is labelled 0.62 eV (2 atoms), 0.55 eV (8 atoms), 0.61 eV (16 atoms) in other Alexandria cells; this cell reads 0.72 eV"
+agm2000005487,disputed,"the same structure is labelled 3.69 eV (8 atoms), 3.59 eV (16 atoms) in other Alexandria cells; this cell reads 3.59 eV"
+agm2000007999,disputed,"the same structure is labelled 1.10 eV (6 atoms), 0.98 eV (12 atoms) in other Alexandria cells; this cell reads 0.99 eV"
+agm2000008415,disputed,"the same structure is labelled 0.48 eV (2 atoms), 0.23 eV (8 atoms) in other Alexandria cells; this cell reads 0.23 eV"
+agm2000008484,disputed,"the same structure is labelled 2.55 eV (3 atoms), 2.59 eV (6 atoms) in other Alexandria cells; this cell reads 2.48 eV"
+agm2000008506,disputed,"the same structure is labelled 2.24 eV (2 atoms), 2.01 eV (8 atoms) in other Alexandria cells; this cell reads 2.01 eV"
+agm2000008656,disputed,"the same structure is labelled 3.59 eV (4 atoms), 3.59 eV (16 atoms) in other Alexandria cells; this cell reads 3.69 eV"
+agm2000008679,disputed,the same structure is labelled 0.95 eV (3 atoms) in other Alexandria cells; this cell reads 0.82 eV
+agm2000008895,disputed,"the same structure is labelled 1.22 eV (3 atoms), 1.00 eV (12 atoms) in other Alexandria cells; this cell reads 1.01 eV"
+agm2000009026,disputed,the same structure is labelled 1.99 eV (3 atoms) in other Alexandria cells; this cell reads 1.83 eV
+agm2000009088,disputed,the same structure is labelled 1.28 eV (3 atoms) in other Alexandria cells; this cell reads 1.15 eV
+agm2000009609,disputed,"the same structure is labelled 2.64 eV (2 atoms), 2.51 eV (16 atoms) in other Alexandria cells; this cell reads 2.61 eV"
+agm2000010334,disputed,"the same structure is labelled 1.01 eV (6 atoms), 1.00 eV (12 atoms) in other Alexandria cells; this cell reads 1.22 eV"
+agm2000010624,disputed,the same structure is labelled 0.75 eV (12 atoms) in other Alexandria cells; this cell reads 0.93 eV
+agm2000010791,disputed,"the same structure is labelled 0.73 eV (2 atoms), 0.73 eV (8 atoms), 0.73 eV (16 atoms) in other Alexandria cells; this cell reads 0.84 eV"
+agm2000010826,disputed,"the same structure is labelled 1.92 eV (2 atoms), 1.75 eV (6 atoms) in other Alexandria cells; this cell reads 1.78 eV"
+agm2000012521,disputed,the same structure is labelled 1.69 eV (8 atoms) in other Alexandria cells; this cell reads 1.85 eV
+agm2000012705,disputed,the same structure is labelled 2.33 eV (16 atoms) in other Alexandria cells; this cell reads 2.64 eV
+agm2000014832,disputed,"the same structure is labelled 1.29 eV (4 atoms), 1.27 eV (16 atoms) in other Alexandria cells; this cell reads 1.65 eV"
+agm2000014884,disputed,the same structure is labelled 1.25 eV (12 atoms) in other Alexandria cells; this cell reads 1.12 eV
+agm2000015690,disputed,"the same structure is labelled 2.24 eV (2 atoms), 2.01 eV (4 atoms) in other Alexandria cells; this cell reads 2.01 eV"
+agm2000015698,disputed,"the same structure is labelled 2.95 eV (2 atoms), 2.76 eV (4 atoms), 2.76 eV (16 atoms) in other Alexandria cells; this cell reads 2.97 eV"
+agm2000015839,disputed,"the same structure is labelled 2.60 eV (4 atoms), 2.21 eV (16 atoms) in other Alexandria cells; this cell reads 2.29 eV"
+agm2000015980,disputed,"the same structure is labelled 1.02 eV (2 atoms), 1.13 eV (4 atoms) in other Alexandria cells; this cell reads 1.09 eV"
+agm2000017499,disputed,the same structure is labelled 0.83 eV (3 atoms) in other Alexandria cells; this cell reads 0.62 eV
+agm2000017690,disputed,"the same structure is labelled 0.48 eV (2 atoms), 0.23 eV (4 atoms) in other Alexandria cells; this cell reads 0.23 eV"
+agm2000017859,disputed,"the same structure is labelled 0.73 eV (2 atoms), 0.84 eV (4 atoms), 0.73 eV (16 atoms) in other Alexandria cells; this cell reads 0.73 eV"
+agm2000017863,disputed,the same structure is labelled 1.85 eV (4 atoms) in other Alexandria cells; this cell reads 1.69 eV
+agm2000017973,disputed,the same structure is labelled 2.97 eV (4 atoms) in other Alexandria cells; this cell reads 2.83 eV
+agm2000018085,disputed,the same structure is labelled 2.41 eV (9 atoms) in other Alexandria cells; this cell reads 2.75 eV
+agm2000018134,disputed,"the same structure is labelled 1.58 eV (4 atoms), 1.40 eV (16 atoms) in other Alexandria cells; this cell reads 1.58 eV"
+agm2000018909,disputed,"the same structure is labelled 0.99 eV (3 atoms), 0.98 eV (12 atoms) in other Alexandria cells; this cell reads 1.10 eV"
+agm2000019453,disputed,"the same structure is labelled 2.55 eV (4 atoms), 2.49 eV (8 atoms) in other Alexandria cells; this cell reads 2.44 eV"
+agm2000020477,disputed,the same structure is labelled 0.13 eV (8 atoms) in other Alexandria cells; this cell reads 1.05 eV
+agm2000020960,disputed,the same structure is labelled 1.47 eV (12 atoms) in other Alexandria cells; this cell reads 1.33 eV
+agm2000022153,disputed,"the same structure is labelled 2.55 eV (4 atoms), 2.44 eV (12 atoms) in other Alexandria cells; this cell reads 2.49 eV"
+agm2000022912,disputed,"the same structure is labelled 1.65 eV (8 atoms), 1.27 eV (16 atoms) in other Alexandria cells; this cell reads 1.29 eV"
+agm2000023931,disputed,"the same structure is labelled 3.59 eV (4 atoms), 3.69 eV (8 atoms) in other Alexandria cells; this cell reads 3.59 eV"
+agm2000024280,disputed,"the same structure is labelled 1.01 eV (6 atoms), 1.22 eV (3 atoms) in other Alexandria cells; this cell reads 1.00 eV"
+agm2000027970,disputed,the same structure is labelled 2.83 eV (8 atoms) in other Alexandria cells; this cell reads 2.97 eV
+agm2000029356,disputed,the same structure is labelled 1.05 eV (4 atoms) in other Alexandria cells; this cell reads 0.13 eV
+agm2000029840,disputed,"the same structure is labelled 2.55 eV (3 atoms), 2.48 eV (6 atoms) in other Alexandria cells; this cell reads 2.59 eV"
+agm2000029915,disputed,"the same structure is labelled 2.95 eV (6 atoms), 2.78 eV (24 atoms) in other Alexandria cells; this cell reads 2.79 eV"
+agm2000030255,disputed,the same structure is labelled 1.33 eV (3 atoms) in other Alexandria cells; this cell reads 1.15 eV
+agm2000030382,disputed,"the same structure is labelled 0.86 eV (3 atoms), 0.92 eV (12 atoms) in other Alexandria cells; this cell reads 0.70 eV"
+agm2000031224,disputed,"the same structure is labelled 1.58 eV (4 atoms), 1.58 eV (8 atoms) in other Alexandria cells; this cell reads 1.40 eV"
+agm2000032189,disputed,"the same structure is labelled 0.86 eV (3 atoms), 0.70 eV (6 atoms) in other Alexandria cells; this cell reads 0.92 eV"
+agm2000032899,disputed,"the same structure is labelled 0.73 eV (2 atoms), 0.84 eV (4 atoms), 0.73 eV (8 atoms) in other Alexandria cells; this cell reads 0.73 eV"
+agm2000032945,disputed,"the same structure is labelled 2.95 eV (2 atoms), 2.76 eV (4 atoms), 2.97 eV (8 atoms) in other Alexandria cells; this cell reads 2.76 eV"
+agm2000033145,disputed,"the same structure is labelled 2.60 eV (4 atoms), 2.29 eV (8 atoms) in other Alexandria cells; this cell reads 2.21 eV"
+agm2000033148,disputed,the same structure is labelled 2.64 eV (8 atoms) in other Alexandria cells; this cell reads 2.33 eV
+agm2000033388,disputed,"the same structure is labelled 2.95 eV (6 atoms), 2.79 eV (12 atoms) in other Alexandria cells; this cell reads 2.78 eV"
+agm2000033995,disputed,"the same structure is labelled 0.62 eV (2 atoms), 0.72 eV (4 atoms), 0.61 eV (16 atoms) in other Alexandria cells; this cell reads 0.55 eV"
+agm2000034000,disputed,"the same structure is labelled 0.62 eV (2 atoms), 0.72 eV (4 atoms), 0.55 eV (8 atoms) in other Alexandria cells; this cell reads 0.61 eV"
+agm2000035703,disputed,the same structure is labelled 0.88 eV (4 atoms) in other Alexandria cells; this cell reads 1.10 eV
+agm2000035890,disputed,the same structure is labelled 1.66 eV (4 atoms) in other Alexandria cells; this cell reads 2.05 eV
+agm2000035922,disputed,"the same structure is labelled 0.99 eV (3 atoms), 1.10 eV (6 atoms) in other Alexandria cells; this cell reads 0.98 eV"
+agm2000037052,disputed,the same structure is labelled 1.33 eV (6 atoms) in other Alexandria cells; this cell reads 1.47 eV
+agm2000037291,disputed,"the same structure is labelled 1.65 eV (8 atoms), 1.29 eV (4 atoms) in other Alexandria cells; this cell reads 1.27 eV"
+agm2000037319,disputed,the same structure is labelled 1.12 eV (6 atoms) in other Alexandria cells; this cell reads 1.25 eV
+agm2000037358,disputed,the same structure is labelled 0.93 eV (6 atoms) in other Alexandria cells; this cell reads 0.75 eV
+agm2000038299,disputed,the same structure is labelled 4.58 eV (16 atoms) in other Alexandria cells; this cell reads 4.95 eV
+agm2000038300,disputed,the same structure is labelled 4.95 eV (8 atoms) in other Alexandria cells; this cell reads 4.58 eV
+agm2000038558,disputed,"the same structure is labelled 2.64 eV (2 atoms), 2.61 eV (4 atoms) in other Alexandria cells; this cell reads 2.51 eV"
+agm2000043692,disputed,the same structure is labelled 2.75 eV (6 atoms) in other Alexandria cells; this cell reads 2.41 eV
+agm2000044066,disputed,"the same structure is labelled 1.92 eV (2 atoms), 1.78 eV (4 atoms) in other Alexandria cells; this cell reads 1.75 eV"
+agm2000051265,disputed,the same structure is labelled 1.49 eV (10 atoms) in other Alexandria cells; this cell reads 1.38 eV
+agm2000051282,disputed,the same structure is labelled 1.13 eV (10 atoms) in other Alexandria cells; this cell reads 1.01 eV
+agm2000051816,disputed,the same structure is labelled 0.84 eV (10 atoms) in other Alexandria cells; this cell reads 0.62 eV
+agm2000052440,disputed,the same structure is labelled 0.31 eV (12 atoms) in other Alexandria cells; this cell reads 0.94 eV
+agm2000052766,disputed,the same structure is labelled 0.07 eV (8 atoms) in other Alexandria cells; this cell reads 0.25 eV
+agm2000053088,disputed,the same structure is labelled 2.01 eV (8 atoms) in other Alexandria cells; this cell reads 2.24 eV
+agm2000054935,disputed,the same structure is labelled 3.48 eV (10 atoms) in other Alexandria cells; this cell reads 3.34 eV
+agm2000055190,disputed,the same structure is labelled 1.69 eV (8 atoms) in other Alexandria cells; this cell reads 1.80 eV
+agm2000055248,disputed,the same structure is labelled 0.41 eV (8 atoms) in other Alexandria cells; this cell reads 0.59 eV
+agm2000055290,disputed,the same structure is labelled 1.22 eV (10 atoms) in other Alexandria cells; this cell reads 1.09 eV
+agm2000056155,disputed,the same structure is labelled 0.44 eV (8 atoms) in other Alexandria cells; this cell reads 0.58 eV
+agm2000056326,disputed,the same structure is labelled 3.32 eV (10 atoms) in other Alexandria cells; this cell reads 3.46 eV
+agm2000056423,disputed,the same structure is labelled 0.44 eV (8 atoms) in other Alexandria cells; this cell reads 0.62 eV
+agm2000057669,disputed,the same structure is labelled 0.18 eV (12 atoms) in other Alexandria cells; this cell reads 0.07 eV
+agm2000057820,disputed,the same structure is labelled 0.04 eV (12 atoms) in other Alexandria cells; this cell reads 0.36 eV
+agm2000058232,disputed,the same structure is labelled 1.17 eV (12 atoms) in other Alexandria cells; this cell reads 1.32 eV
+agm2000058241,disputed,the same structure is labelled 0.48 eV (10 atoms) in other Alexandria cells; this cell reads 0.69 eV
+agm2000059242,disputed,the same structure is labelled 2.94 eV (12 atoms) in other Alexandria cells; this cell reads 3.05 eV
+agm2000059497,disputed,the same structure is labelled 0.20 eV (8 atoms) in other Alexandria cells; this cell reads 0.40 eV
+agm2000060205,disputed,the same structure is labelled 0.34 eV (10 atoms) in other Alexandria cells; this cell reads 0.24 eV
+agm2000060741,disputed,the same structure is labelled 0.62 eV (10 atoms) in other Alexandria cells; this cell reads 0.12 eV
+agm2000062245,disputed,the same structure is labelled 0.85 eV (12 atoms) in other Alexandria cells; this cell reads 0.75 eV
+agm2000062802,disputed,the same structure is labelled 3.61 eV (12 atoms) in other Alexandria cells; this cell reads 3.31 eV
+agm2000063150,disputed,the same structure is labelled 1.38 eV (5 atoms) in other Alexandria cells; this cell reads 1.49 eV
+agm2000063445,disputed,the same structure is labelled 0.62 eV (5 atoms) in other Alexandria cells; this cell reads 0.84 eV
+agm2000064062,disputed,the same structure is labelled 0.25 eV (4 atoms) in other Alexandria cells; this cell reads 0.07 eV
+agm2000065376,disputed,the same structure is labelled 3.34 eV (5 atoms) in other Alexandria cells; this cell reads 3.48 eV
+agm2000065588,disputed,the same structure is labelled 0.59 eV (4 atoms) in other Alexandria cells; this cell reads 0.41 eV
+agm2000066164,disputed,the same structure is labelled 0.58 eV (4 atoms) in other Alexandria cells; this cell reads 0.44 eV
+agm2000067157,disputed,the same structure is labelled 0.36 eV (6 atoms) in other Alexandria cells; this cell reads 0.04 eV
+agm2000067333,disputed,the same structure is labelled 1.32 eV (6 atoms) in other Alexandria cells; this cell reads 1.17 eV
+agm2000068419,disputed,the same structure is labelled 0.24 eV (5 atoms) in other Alexandria cells; this cell reads 0.34 eV
+agm2000068688,disputed,the same structure is labelled 0.12 eV (5 atoms) in other Alexandria cells; this cell reads 0.62 eV
+agm2000081852,disputed,the same structure is labelled 0.69 eV (3 atoms) in other Alexandria cells; this cell reads 0.58 eV
+agm2000095671,disputed,the same structure is labelled 0.94 eV (6 atoms) in other Alexandria cells; this cell reads 0.31 eV
+agm2000097496,disputed,the same structure is labelled 1.80 eV (4 atoms) in other Alexandria cells; this cell reads 1.69 eV
+agm2000098314,disputed,the same structure is labelled 3.46 eV (5 atoms) in other Alexandria cells; this cell reads 3.32 eV
+agm2000098380,disputed,the same structure is labelled 0.62 eV (4 atoms) in other Alexandria cells; this cell reads 0.44 eV
+agm2000099197,disputed,the same structure is labelled 0.07 eV (6 atoms) in other Alexandria cells; this cell reads 0.18 eV
+agm2000099512,disputed,the same structure is labelled 0.69 eV (5 atoms) in other Alexandria cells; this cell reads 0.48 eV
+agm2000101770,disputed,the same structure is labelled 0.75 eV (6 atoms) in other Alexandria cells; this cell reads 0.85 eV
+agm2000102022,disputed,the same structure is labelled 3.31 eV (6 atoms) in other Alexandria cells; this cell reads 3.61 eV
+agm2000102272,disputed,the same structure is labelled 1.01 eV (5 atoms) in other Alexandria cells; this cell reads 1.13 eV
+agm2000103616,disputed,the same structure is labelled 2.24 eV (4 atoms) in other Alexandria cells; this cell reads 2.01 eV
+agm2000105239,disputed,the same structure is labelled 1.09 eV (5 atoms) in other Alexandria cells; this cell reads 1.22 eV
+agm2000108062,disputed,the same structure is labelled 3.05 eV (6 atoms) in other Alexandria cells; this cell reads 2.94 eV
+agm2000108258,disputed,the same structure is labelled 0.40 eV (4 atoms) in other Alexandria cells; this cell reads 0.20 eV
+agm2000111188,disputed,the same structure is labelled 1.10 eV (16 atoms) in other Alexandria cells; this cell reads 0.88 eV
+agm2000124375,disputed,the same structure is labelled 0.82 eV (6 atoms) in other Alexandria cells; this cell reads 0.95 eV
+agm2000125692,disputed,the same structure is labelled 0.62 eV (6 atoms) in other Alexandria cells; this cell reads 0.83 eV
+agm2000135520,disputed,the same structure is labelled 0.58 eV (6 atoms) in other Alexandria cells; this cell reads 0.69 eV

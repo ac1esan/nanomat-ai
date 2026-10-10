@@ -260,6 +260,155 @@
   }
  },
  "metal_gap_eV": 0.1,
+ "ref_notes": {
+  "agm2000099197": "the same structure is labelled 0.07 eV (6 atoms) in other Alexandria cells; this cell reads 0.18 eV",
+  "agm2000057669": "the same structure is labelled 0.18 eV (12 atoms) in other Alexandria cells; this cell reads 0.07 eV",
+  "agm2000067157": "the same structure is labelled 0.36 eV (6 atoms) in other Alexandria cells; this cell reads 0.04 eV",
+  "agm2000057820": "the same structure is labelled 0.04 eV (12 atoms) in other Alexandria cells; this cell reads 0.36 eV",
+  "agm2000064062": "the same structure is labelled 0.25 eV (4 atoms) in other Alexandria cells; this cell reads 0.07 eV",
+  "agm2000052766": "the same structure is labelled 0.07 eV (8 atoms) in other Alexandria cells; this cell reads 0.25 eV",
+  "agm2000059497": "the same structure is labelled 0.20 eV (8 atoms) in other Alexandria cells; this cell reads 0.40 eV",
+  "agm2000108258": "the same structure is labelled 0.40 eV (4 atoms) in other Alexandria cells; this cell reads 0.20 eV",
+  "agm2000068688": "the same structure is labelled 0.12 eV (5 atoms) in other Alexandria cells; this cell reads 0.62 eV",
+  "agm2000068419": "the same structure is labelled 0.24 eV (5 atoms) in other Alexandria cells; this cell reads 0.34 eV",
+  "agm2000060205": "the same structure is labelled 0.34 eV (10 atoms) in other Alexandria cells; this cell reads 0.24 eV",
+  "agm2000060741": "the same structure is labelled 0.62 eV (10 atoms) in other Alexandria cells; this cell reads 0.12 eV",
+  "agm2000017690": "the same structure is labelled 0.48 eV (2 atoms), 0.23 eV (4 atoms) in other Alexandria cells; this cell reads 0.23 eV",
+  "agm2000008415": "the same structure is labelled 0.48 eV (2 atoms), 0.23 eV (8 atoms) in other Alexandria cells; this cell reads 0.23 eV",
+  "agm2000003876": "the same structure is labelled 0.23 eV (4 atoms), 0.23 eV (8 atoms) in other Alexandria cells; this cell reads 0.48 eV",
+  "agm2000065588": "the same structure is labelled 0.59 eV (4 atoms) in other Alexandria cells; this cell reads 0.41 eV",
+  "agm2000055248": "the same structure is labelled 0.41 eV (8 atoms) in other Alexandria cells; this cell reads 0.59 eV",
+  "agm2000066164": "the same structure is labelled 0.58 eV (4 atoms) in other Alexandria cells; this cell reads 0.44 eV",
+  "agm2000056155": "the same structure is labelled 0.44 eV (8 atoms) in other Alexandria cells; this cell reads 0.58 eV",
+  "agm2000056423": "the same structure is labelled 0.44 eV (8 atoms) in other Alexandria cells; this cell reads 0.62 eV",
+  "agm2000098380": "the same structure is labelled 0.62 eV (4 atoms) in other Alexandria cells; this cell reads 0.44 eV",
+  "agm2000029356": "the same structure is labelled 1.05 eV (4 atoms) in other Alexandria cells; this cell reads 0.13 eV",
+  "agm2000020477": "the same structure is labelled 0.13 eV (8 atoms) in other Alexandria cells; this cell reads 1.05 eV",
+  "agm2000062245": "the same structure is labelled 0.85 eV (12 atoms) in other Alexandria cells; this cell reads 0.75 eV",
+  "agm2000101770": "the same structure is labelled 0.75 eV (6 atoms) in other Alexandria cells; this cell reads 0.85 eV",
+  "agm2000095671": "the same structure is labelled 0.94 eV (6 atoms) in other Alexandria cells; this cell reads 0.31 eV",
+  "agm2000052440": "the same structure is labelled 0.31 eV (12 atoms) in other Alexandria cells; this cell reads 0.94 eV",
+  "agm2000135520": "the same structure is labelled 0.58 eV (6 atoms) in other Alexandria cells; this cell reads 0.69 eV",
+  "agm2000081852": "the same structure is labelled 0.69 eV (3 atoms) in other Alexandria cells; this cell reads 0.58 eV",
+  "agm2000051816": "the same structure is labelled 0.84 eV (10 atoms) in other Alexandria cells; this cell reads 0.62 eV",
+  "agm2000034000": "the same structure is labelled 0.62 eV (2 atoms), 0.72 eV (4 atoms), 0.55 eV (8 atoms) in other Alexandria cells; this cell reads 0.61 eV",
+  "agm2000033995": "the same structure is labelled 0.62 eV (2 atoms), 0.72 eV (4 atoms), 0.61 eV (16 atoms) in other Alexandria cells; this cell reads 0.55 eV",
+  "agm2000063445": "the same structure is labelled 0.62 eV (5 atoms) in other Alexandria cells; this cell reads 0.84 eV",
+  "agm2000002613": "the same structure is labelled 0.72 eV (4 atoms), 0.55 eV (8 atoms), 0.61 eV (16 atoms) in other Alexandria cells; this cell reads 0.62 eV",
+  "agm2000017499": "the same structure is labelled 0.83 eV (3 atoms) in other Alexandria cells; this cell reads 0.62 eV",
+  "agm2000125692": "the same structure is labelled 0.62 eV (6 atoms) in other Alexandria cells; this cell reads 0.83 eV",
+  "agm2000005434": "the same structure is labelled 0.62 eV (2 atoms), 0.55 eV (8 atoms), 0.61 eV (16 atoms) in other Alexandria cells; this cell reads 0.72 eV",
+  "agm2000055290": "the same structure is labelled 1.22 eV (10 atoms) in other Alexandria cells; this cell reads 1.09 eV",
+  "agm2000105239": "the same structure is labelled 1.09 eV (5 atoms) in other Alexandria cells; this cell reads 1.22 eV",
+  "agm2000032899": "the same structure is labelled 0.73 eV (2 atoms), 0.84 eV (4 atoms), 0.73 eV (8 atoms) in other Alexandria cells; this cell reads 0.73 eV",
+  "agm2000004463": "the same structure is labelled 0.84 eV (4 atoms), 0.73 eV (8 atoms), 0.73 eV (16 atoms) in other Alexandria cells; this cell reads 0.73 eV",
+  "agm2000010791": "the same structure is labelled 0.73 eV (2 atoms), 0.73 eV (8 atoms), 0.73 eV (16 atoms) in other Alexandria cells; this cell reads 0.84 eV",
+  "agm2000017859": "the same structure is labelled 0.73 eV (2 atoms), 0.84 eV (4 atoms), 0.73 eV (16 atoms) in other Alexandria cells; this cell reads 0.73 eV",
+  "agm2000032189": "the same structure is labelled 0.86 eV (3 atoms), 0.70 eV (6 atoms) in other Alexandria cells; this cell reads 0.92 eV",
+  "agm2000030382": "the same structure is labelled 0.86 eV (3 atoms), 0.92 eV (12 atoms) in other Alexandria cells; this cell reads 0.70 eV",
+  "agm2000003654": "the same structure is labelled 0.70 eV (6 atoms), 0.92 eV (12 atoms) in other Alexandria cells; this cell reads 0.86 eV",
+  "agm2000037358": "the same structure is labelled 0.93 eV (6 atoms) in other Alexandria cells; this cell reads 0.75 eV",
+  "agm2000010624": "the same structure is labelled 0.75 eV (12 atoms) in other Alexandria cells; this cell reads 0.93 eV",
+  "agm2000058241": "the same structure is labelled 0.48 eV (10 atoms) in other Alexandria cells; this cell reads 0.69 eV",
+  "agm2000099512": "the same structure is labelled 0.69 eV (5 atoms) in other Alexandria cells; this cell reads 0.48 eV",
+  "agm2000124375": "the same structure is labelled 0.82 eV (6 atoms) in other Alexandria cells; this cell reads 0.95 eV",
+  "agm2000008679": "the same structure is labelled 0.95 eV (3 atoms) in other Alexandria cells; this cell reads 0.82 eV",
+  "agm2000035703": "the same structure is labelled 0.88 eV (4 atoms) in other Alexandria cells; this cell reads 1.10 eV",
+  "agm2000111188": "the same structure is labelled 1.10 eV (16 atoms) in other Alexandria cells; this cell reads 0.88 eV",
+  "agm2000018909": "the same structure is labelled 0.99 eV (3 atoms), 0.98 eV (12 atoms) in other Alexandria cells; this cell reads 1.10 eV",
+  "agm2000007999": "the same structure is labelled 1.10 eV (6 atoms), 0.98 eV (12 atoms) in other Alexandria cells; this cell reads 0.99 eV",
+  "agm2000035922": "the same structure is labelled 0.99 eV (3 atoms), 1.10 eV (6 atoms) in other Alexandria cells; this cell reads 0.98 eV",
+  "agm2000010334": "the same structure is labelled 1.01 eV (6 atoms), 1.00 eV (12 atoms) in other Alexandria cells; this cell reads 1.22 eV",
+  "agm2000024280": "the same structure is labelled 1.01 eV (6 atoms), 1.22 eV (3 atoms) in other Alexandria cells; this cell reads 1.00 eV",
+  "agm2000008895": "the same structure is labelled 1.22 eV (3 atoms), 1.00 eV (12 atoms) in other Alexandria cells; this cell reads 1.01 eV",
+  "agm2000000695": "the same structure is labelled 1.25 eV (3 atoms) in other Alexandria cells; this cell reads 0.45 eV",
+  "agm2000000699": "the same structure is labelled 0.45 eV (6 atoms) in other Alexandria cells; this cell reads 1.25 eV",
+  "agm2000051282": "the same structure is labelled 1.13 eV (10 atoms) in other Alexandria cells; this cell reads 1.01 eV",
+  "agm2000102272": "the same structure is labelled 1.01 eV (5 atoms) in other Alexandria cells; this cell reads 1.13 eV",
+  "agm2000003686": "the same structure is labelled 1.15 eV (6 atoms) in other Alexandria cells; this cell reads 1.28 eV",
+  "agm2000009088": "the same structure is labelled 1.28 eV (3 atoms) in other Alexandria cells; this cell reads 1.15 eV",
+  "agm2000015980": "the same structure is labelled 1.02 eV (2 atoms), 1.13 eV (4 atoms) in other Alexandria cells; this cell reads 1.09 eV",
+  "agm2000004824": "the same structure is labelled 1.13 eV (4 atoms), 1.09 eV (8 atoms) in other Alexandria cells; this cell reads 1.02 eV",
+  "agm2000004826": "the same structure is labelled 1.02 eV (2 atoms), 1.09 eV (8 atoms) in other Alexandria cells; this cell reads 1.13 eV",
+  "agm2000003442": "the same structure is labelled 1.15 eV (6 atoms) in other Alexandria cells; this cell reads 1.33 eV",
+  "agm2000030255": "the same structure is labelled 1.33 eV (3 atoms) in other Alexandria cells; this cell reads 1.15 eV",
+  "agm2000014832": "the same structure is labelled 1.29 eV (4 atoms), 1.27 eV (16 atoms) in other Alexandria cells; this cell reads 1.65 eV",
+  "agm2000037291": "the same structure is labelled 1.65 eV (8 atoms), 1.29 eV (4 atoms) in other Alexandria cells; this cell reads 1.27 eV",
+  "agm2000022912": "the same structure is labelled 1.65 eV (8 atoms), 1.27 eV (16 atoms) in other Alexandria cells; this cell reads 1.29 eV",
+  "agm2000005390": "the same structure is labelled 1.58 eV (8 atoms), 1.40 eV (16 atoms) in other Alexandria cells; this cell reads 1.58 eV",
+  "agm2000018134": "the same structure is labelled 1.58 eV (4 atoms), 1.40 eV (16 atoms) in other Alexandria cells; this cell reads 1.58 eV",
+  "agm2000031224": "the same structure is labelled 1.58 eV (4 atoms), 1.58 eV (8 atoms) in other Alexandria cells; this cell reads 1.40 eV",
+  "agm2000037052": "the same structure is labelled 1.33 eV (6 atoms) in other Alexandria cells; this cell reads 1.47 eV",
+  "agm2000020960": "the same structure is labelled 1.47 eV (12 atoms) in other Alexandria cells; this cell reads 1.33 eV",
+  "agm2000014884": "the same structure is labelled 1.25 eV (12 atoms) in other Alexandria cells; this cell reads 1.12 eV",
+  "agm2000037319": "the same structure is labelled 1.12 eV (6 atoms) in other Alexandria cells; this cell reads 1.25 eV",
+  "agm2000063150": "the same structure is labelled 1.38 eV (5 atoms) in other Alexandria cells; this cell reads 1.49 eV",
+  "agm2000051265": "the same structure is labelled 1.49 eV (10 atoms) in other Alexandria cells; this cell reads 1.38 eV",
+  "agm2000058232": "the same structure is labelled 1.17 eV (12 atoms) in other Alexandria cells; this cell reads 1.32 eV",
+  "agm2000067333": "the same structure is labelled 1.32 eV (6 atoms) in other Alexandria cells; this cell reads 1.17 eV",
+  "agm2000001935": "the same structure is labelled 1.89 eV (8 atoms) in other Alexandria cells; this cell reads 2.01 eV",
+  "agm2000001946": "the same structure is labelled 2.01 eV (4 atoms) in other Alexandria cells; this cell reads 1.89 eV",
+  "agm2000055190": "the same structure is labelled 1.69 eV (8 atoms) in other Alexandria cells; this cell reads 1.80 eV",
+  "agm2000097496": "the same structure is labelled 1.80 eV (4 atoms) in other Alexandria cells; this cell reads 1.69 eV",
+  "agm2000035890": "the same structure is labelled 1.66 eV (4 atoms) in other Alexandria cells; this cell reads 2.05 eV",
+  "agm2000003853": "the same structure is labelled 2.05 eV (16 atoms) in other Alexandria cells; this cell reads 1.66 eV",
+  "agm2000044066": "the same structure is labelled 1.92 eV (2 atoms), 1.78 eV (4 atoms) in other Alexandria cells; this cell reads 1.75 eV",
+  "agm2000010826": "the same structure is labelled 1.92 eV (2 atoms), 1.75 eV (6 atoms) in other Alexandria cells; this cell reads 1.78 eV",
+  "agm2000002617": "the same structure is labelled 1.78 eV (4 atoms), 1.75 eV (6 atoms) in other Alexandria cells; this cell reads 1.92 eV",
+  "agm2000017863": "the same structure is labelled 1.85 eV (4 atoms) in other Alexandria cells; this cell reads 1.69 eV",
+  "agm2000012521": "the same structure is labelled 1.69 eV (8 atoms) in other Alexandria cells; this cell reads 1.85 eV",
+  "agm2000009026": "the same structure is labelled 1.99 eV (3 atoms) in other Alexandria cells; this cell reads 1.83 eV",
+  "agm2000003615": "the same structure is labelled 1.83 eV (6 atoms) in other Alexandria cells; this cell reads 1.99 eV",
+  "agm2000008506": "the same structure is labelled 2.24 eV (2 atoms), 2.01 eV (8 atoms) in other Alexandria cells; this cell reads 2.01 eV",
+  "agm2000002902": "the same structure is labelled 2.01 eV (4 atoms), 2.01 eV (8 atoms) in other Alexandria cells; this cell reads 2.24 eV",
+  "agm2000015690": "the same structure is labelled 2.24 eV (2 atoms), 2.01 eV (4 atoms) in other Alexandria cells; this cell reads 2.01 eV",
+  "agm2000000082": "graphene: semimetal, 0.00 eV in C2DB, 2DMatPedia and JARVIS dft_2d",
+  "agm2000053088": "the same structure is labelled 2.01 eV (8 atoms) in other Alexandria cells; this cell reads 2.24 eV",
+  "agm2000103616": "the same structure is labelled 2.24 eV (4 atoms) in other Alexandria cells; this cell reads 2.01 eV",
+  "agm2000000079": "graphene (4-atom cell): semimetal, 0.00 eV in C2DB, 2DMatPedia and JARVIS dft_2d",
+  "agm2000038558": "the same structure is labelled 2.64 eV (2 atoms), 2.61 eV (4 atoms) in other Alexandria cells; this cell reads 2.51 eV",
+  "agm2000009609": "the same structure is labelled 2.64 eV (2 atoms), 2.51 eV (16 atoms) in other Alexandria cells; this cell reads 2.61 eV",
+  "agm2000004693": "the same structure is labelled 2.29 eV (8 atoms), 2.21 eV (16 atoms) in other Alexandria cells; this cell reads 2.60 eV",
+  "agm2000002595": "the same structure is labelled 2.61 eV (4 atoms), 2.51 eV (16 atoms) in other Alexandria cells; this cell reads 2.64 eV",
+  "agm2000001110": "the same structure is labelled 2.54 eV (8 atoms) in other Alexandria cells; this cell reads 2.33 eV",
+  "agm2000001102": "the same structure is labelled 2.33 eV (4 atoms) in other Alexandria cells; this cell reads 2.54 eV",
+  "agm2000033145": "the same structure is labelled 2.60 eV (4 atoms), 2.29 eV (8 atoms) in other Alexandria cells; this cell reads 2.21 eV",
+  "agm2000015839": "the same structure is labelled 2.60 eV (4 atoms), 2.21 eV (16 atoms) in other Alexandria cells; this cell reads 2.29 eV",
+  "agm2000003750": "the same structure is labelled 2.44 eV (12 atoms), 2.49 eV (8 atoms) in other Alexandria cells; this cell reads 2.55 eV",
+  "agm2000019453": "the same structure is labelled 2.55 eV (4 atoms), 2.49 eV (8 atoms) in other Alexandria cells; this cell reads 2.44 eV",
+  "agm2000022153": "the same structure is labelled 2.55 eV (4 atoms), 2.44 eV (12 atoms) in other Alexandria cells; this cell reads 2.49 eV",
+  "agm2000033148": "the same structure is labelled 2.64 eV (8 atoms) in other Alexandria cells; this cell reads 2.33 eV",
+  "agm2000002877": "the same structure is labelled 2.48 eV (6 atoms), 2.59 eV (6 atoms) in other Alexandria cells; this cell reads 2.55 eV",
+  "agm2000029840": "the same structure is labelled 2.55 eV (3 atoms), 2.48 eV (6 atoms) in other Alexandria cells; this cell reads 2.59 eV",
+  "agm2000008484": "the same structure is labelled 2.55 eV (3 atoms), 2.59 eV (6 atoms) in other Alexandria cells; this cell reads 2.48 eV",
+  "agm2000012705": "the same structure is labelled 2.33 eV (16 atoms) in other Alexandria cells; this cell reads 2.64 eV",
+  "agm2000002906": "the same structure is labelled 2.76 eV (4 atoms), 2.97 eV (8 atoms), 2.76 eV (16 atoms) in other Alexandria cells; this cell reads 2.95 eV",
+  "agm2000032945": "the same structure is labelled 2.95 eV (2 atoms), 2.76 eV (4 atoms), 2.97 eV (8 atoms) in other Alexandria cells; this cell reads 2.76 eV",
+  "agm2000004509": "the same structure is labelled 2.95 eV (2 atoms), 2.97 eV (8 atoms), 2.76 eV (16 atoms) in other Alexandria cells; this cell reads 2.76 eV",
+  "agm2000015698": "the same structure is labelled 2.95 eV (2 atoms), 2.76 eV (4 atoms), 2.76 eV (16 atoms) in other Alexandria cells; this cell reads 2.97 eV",
+  "agm2000029915": "the same structure is labelled 2.95 eV (6 atoms), 2.78 eV (24 atoms) in other Alexandria cells; this cell reads 2.79 eV",
+  "agm2000002981": "the same structure is labelled 2.79 eV (12 atoms), 2.78 eV (24 atoms) in other Alexandria cells; this cell reads 2.95 eV",
+  "agm2000033388": "the same structure is labelled 2.95 eV (6 atoms), 2.79 eV (12 atoms) in other Alexandria cells; this cell reads 2.78 eV",
+  "agm2000059242": "the same structure is labelled 2.94 eV (12 atoms) in other Alexandria cells; this cell reads 3.05 eV",
+  "agm2000108062": "the same structure is labelled 3.05 eV (6 atoms) in other Alexandria cells; this cell reads 2.94 eV",
+  "agm2000027970": "the same structure is labelled 2.83 eV (8 atoms) in other Alexandria cells; this cell reads 2.97 eV",
+  "agm2000017973": "the same structure is labelled 2.97 eV (4 atoms) in other Alexandria cells; this cell reads 2.83 eV",
+  "agm2000043692": "the same structure is labelled 2.75 eV (6 atoms) in other Alexandria cells; this cell reads 2.41 eV",
+  "agm2000018085": "the same structure is labelled 2.41 eV (9 atoms) in other Alexandria cells; this cell reads 2.75 eV",
+  "agm2000056326": "the same structure is labelled 3.32 eV (10 atoms) in other Alexandria cells; this cell reads 3.46 eV",
+  "agm2000098314": "the same structure is labelled 3.46 eV (5 atoms) in other Alexandria cells; this cell reads 3.32 eV",
+  "agm2000054935": "the same structure is labelled 3.48 eV (10 atoms) in other Alexandria cells; this cell reads 3.34 eV",
+  "agm2000065376": "the same structure is labelled 3.34 eV (5 atoms) in other Alexandria cells; this cell reads 3.48 eV",
+  "agm2000102022": "the same structure is labelled 3.31 eV (6 atoms) in other Alexandria cells; this cell reads 3.61 eV",
+  "agm2000062802": "the same structure is labelled 3.61 eV (12 atoms) in other Alexandria cells; this cell reads 3.31 eV",
+  "agm2000005487": "the same structure is labelled 3.69 eV (8 atoms), 3.59 eV (16 atoms) in other Alexandria cells; this cell reads 3.59 eV",
+  "agm2000023931": "the same structure is labelled 3.59 eV (4 atoms), 3.69 eV (8 atoms) in other Alexandria cells; this cell reads 3.59 eV",
+  "agm2000008656": "the same structure is labelled 3.59 eV (4 atoms), 3.59 eV (16 atoms) in other Alexandria cells; this cell reads 3.69 eV",
+  "agm2000038300": "the same structure is labelled 4.95 eV (8 atoms) in other Alexandria cells; this cell reads 4.58 eV",
+  "agm2000038299": "the same structure is labelled 4.58 eV (16 atoms) in other Alexandria cells; this cell reads 4.95 eV",
+  "agm2000000647": "the same structure is labelled 4.98 eV (9 atoms) in other Alexandria cells; this cell reads 4.81 eV",
+  "agm2000000660": "the same structure is labelled 4.81 eV (6 atoms) in other Alexandria cells; this cell reads 4.98 eV"
+ },
  "trust_map": {
   "Ac": {
    "n": 23,
@@ -267,7 +416,7 @@
    "sparse": 1
   },
   "Ag": {
-   "n": 596,
+   "n": 594,
    "mae": 0.207,
    "sparse": 0
   },
@@ -282,8 +431,8 @@
    "sparse": 0
   },
   "Au": {
-   "n": 258,
-   "mae": 0.253,
+   "n": 256,
+   "mae": 0.254,
    "sparse": 0
   },
   "B": {
@@ -302,12 +451,12 @@
    "sparse": 0
   },
   "Bi": {
-   "n": 151,
-   "mae": 0.219,
+   "n": 144,
+   "mae": 0.222,
    "sparse": 0
   },
   "Br": {
-   "n": 1332,
+   "n": 1330,
    "mae": 0.166,
    "sparse": 0
   },
@@ -317,8 +466,8 @@
    "sparse": 0
   },
   "Cd": {
-   "n": 177,
-   "mae": 0.186,
+   "n": 175,
+   "mae": 0.184,
    "sparse": 0
   },
   "Ce": {
@@ -327,7 +476,7 @@
    "sparse": 1
   },
   "Cl": {
-   "n": 1677,
+   "n": 1665,
    "mae": 0.198,
    "sparse": 0
   },
@@ -342,8 +491,8 @@
    "sparse": 0
   },
   "Cs": {
-   "n": 193,
-   "mae": 0.195,
+   "n": 191,
+   "mae": 0.193,
    "sparse": 0
   },
   "Cu": {
@@ -362,7 +511,7 @@
    "sparse": 0
   },
   "F": {
-   "n": 749,
+   "n": 744,
    "mae": 0.38,
    "sparse": 0
   },
@@ -372,8 +521,8 @@
    "sparse": 0
   },
   "Ga": {
-   "n": 132,
-   "mae": 0.243,
+   "n": 130,
+   "mae": 0.242,
    "sparse": 0
   },
   "Gd": {
@@ -387,8 +536,8 @@
    "sparse": 0
   },
   "H": {
-   "n": 175,
-   "mae": 0.614,
+   "n": 171,
+   "mae": 0.62,
    "sparse": 0
   },
   "Hf": {
@@ -412,7 +561,7 @@
    "sparse": 0
   },
   "In": {
-   "n": 317,
+   "n": 312,
    "mae": 0.257,
    "sparse": 0
   },
@@ -422,7 +571,7 @@
    "sparse": 0
   },
   "La": {
-   "n": 74,
+   "n": 72,
    "mae": 0.141,
    "sparse": 0
   },
@@ -452,8 +601,8 @@
    "sparse": 1
   },
   "N": {
-   "n": 65,
-   "mae": 0.484,
+   "n": 63,
+   "mae": 0.494,
    "sparse": 0
   },
   "Na": {
@@ -482,8 +631,8 @@
    "sparse": 1
   },
   "O": {
-   "n": 282,
-   "mae": 0.377,
+   "n": 278,
+   "mae": 0.379,
    "sparse": 0
   },
   "Os": {
@@ -502,8 +651,8 @@
    "sparse": 1
   },
   "Pb": {
-   "n": 258,
-   "mae": 0.233,
+   "n": 256,
+   "mae": 0.232,
    "sparse": 0
   },
   "Pd": {
@@ -532,7 +681,7 @@
    "sparse": 1
   },
   "Rb": {
-   "n": 165,
+   "n": 163,
    "mae": 0.19,
    "sparse": 0
   },
@@ -552,8 +701,8 @@
    "sparse": 1
   },
   "S": {
-   "n": 455,
-   "mae": 0.255,
+   "n": 453,
+   "mae": 0.256,
    "sparse": 0
   },
   "Sb": {
@@ -562,12 +711,12 @@
    "sparse": 0
   },
   "Sc": {
-   "n": 93,
+   "n": 91,
    "mae": 0.154,
    "sparse": 0
   },
   "Se": {
-   "n": 759,
+   "n": 755,
    "mae": 0.221,
    "sparse": 0
   },
@@ -582,8 +731,8 @@
    "sparse": 0
   },
   "Sn": {
-   "n": 180,
-   "mae": 0.241,
+   "n": 178,
+   "mae": 0.238,
    "sparse": 0
   },
   "Sr": {
@@ -607,7 +756,7 @@
    "sparse": 1
   },
   "Te": {
-   "n": 566,
+   "n": 558,
    "mae": 0.214,
    "sparse": 0
   },
@@ -622,7 +771,7 @@
    "sparse": 0
   },
   "Tl": {
-   "n": 495,
+   "n": 489,
    "mae": 0.224,
    "sparse": 0
   },
@@ -637,13 +786,13 @@
    "sparse": 1
   },
   "V": {
-   "n": 106,
-   "mae": 0.249,
+   "n": 101,
+   "mae": 0.255,
    "sparse": 0
   },
   "W": {
-   "n": 51,
-   "mae": 0.218,
+   "n": 49,
+   "mae": 0.225,
    "sparse": 1
   },
   "Y": {
@@ -1077,7 +1226,7 @@
   ]
  },
  "trust_map_basis": {
-  "n_structures": 6104,
+  "n_structures": 6065,
   "source": "alexandria",
   "min_n": 20,
   "sparse_below": 60,

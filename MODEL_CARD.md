@@ -407,6 +407,19 @@ together, so the seed was not the cause: Alexandria labels MoS₂ direct by 0.07
 against a boundary of 0.1, and the added metastable structures move the boundary
 across it. The type call stays a hint.
 
+### Reference labels not to judge the model by
+
+`scripts/reference_flags.py` writes `data/reference_flags.csv`: 4 Alexandria labels
+known to be wrong (graphene in two cells, planar silicene, planar BP — checked against
+the same layer elsewhere) and 145 disputed ones, where one structure sits in several
+Alexandria cells whose labels differ by more than 0.1 eV while the ensemble predicts the
+same gap for all of them to 0.05 eV. In 37 of the 62 disputed structures the smallest
+cell has the highest label, which a mesh missing K would produce — part of the story,
+not all of it. The browser and the language-model tools mark these rows and compute no
+error from them. Test MAE without flagged references: 0.1852 eV (n = 1 313) against
+0.1863 (n = 1 326). 108 of the 149 are in the training set; removing them needs a
+retrain.
+
 ## Intended use and limits
 
 Fast screening of candidate 2D semiconductors before committing DFT time. Trust the
@@ -468,9 +481,16 @@ under `out-of-domain`.
   on the previous ensemble). A learned
   SOC correction was planned, but C2DB's table interface exposes only the SOC-inclusive
   gap. The structures held by both Alexandria (no SOC) and C2DB (SOC) — about 700
-  in `data/structure_twins.csv` — carry exactly that difference and are the training
-  set for one; the light-element offset between them is +0.02 eV, so the code
-  difference (VASP against GPAW) is small next to it.
+  in `data/structure_twins.csv` — carry exactly that difference. `scripts/fit_soc.py`
+  trained a shift head on 576 in-domain twins (rule written first: beat a constant
+  heavy/light shift by 0.02 eV and be no worse on light compounds by more than 0.01).
+  Best candidate, latent space + composition SOC features: cross-validated MAE of the
+  shift 0.102 against 0.157 overall, 0.111 against 0.221 on heavy compounds, but 0.089
+  against 0.068 on light ones — it fails the second condition. On 152 C2DB structures
+  with no Alexandria twin it took the heavy-compound error against C2DB from 0.226 to
+  0.181 eV and the light one from 0.126 to 0.181. Cross-validated TMD shifts: MoS₂
+  −0.07, MoSe₂ −0.12, WSe₂ −0.31 against literature −0.08 / −0.10 / −0.30. Not
+  shipped; a version applied to heavy elements only is the next test, on new data.
 - **Polymorphs: much better, still not solved.** `scripts/polymorph_sensitivity.py`
   compares the spread of predictions against the spread of the reference at three
   levels, from the least to the most dependent on geometry alone; 1.00 would mean

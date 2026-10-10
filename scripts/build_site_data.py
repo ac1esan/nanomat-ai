@@ -39,6 +39,8 @@ STABLE_INDEX = os.path.join(ROOT, "alignn_data_alex_2d", "id_prop.csv")
 ENSEMBLE = os.path.join(ROOT, "weights", "cgcnn_2d_ensemble.pt")
 WORKFUNCTION = os.path.join(ROOT, "weights", "cgcnn_2d_workfunction.pt")
 OUT_DIR = os.path.join(ROOT, "docs", "data")
+FLAGS = os.path.join(ROOT, "data", "reference_flags.csv")
+FLAG_CODES = {"disputed": 1, "wrong": 2}
 
 SOURCES = ["alexandria", "c2db", "jarvis_dft2d"]
 FAM_CODES = list(FAMILIES)
@@ -57,6 +59,7 @@ def main():
     ap.add_argument("--table", default=TABLE)
     ap.add_argument("--stable-index", default=STABLE_INDEX)
     ap.add_argument("--out-dir", default=OUT_DIR)
+    ap.add_argument("--flags", default=FLAGS, help="scripts/reference_flags.py output")
     args = ap.parse_args()
     table, stable_index, out_dir = args.table, args.stable_index, args.out_dir
 
@@ -77,6 +80,14 @@ def main():
     print(f"stable (ehull<=0.1) reference ids: {len(stable)}")
     df["b"] = [1 if (s == "alexandria" and i in stable) else 0
                for s, i in zip(df["source"], df["id"])]
+
+    # --- reference labels not to judge the model by (scripts/reference_flags.py) --
+    if not os.path.exists(args.flags):
+        raise SystemExit(f"missing {args.flags}; run scripts/reference_flags.py")
+    flags = pd.read_csv(args.flags).set_index("id")
+    df["rf"] = df["id"].map(flags["flag"].map(FLAG_CODES)).fillna(0).astype(int)
+    ref_notes = {i: flags.loc[i, "note"] for i in df["id"] if i in flags.index}
+    print(f"reference flags: {int((df.rf == 2).sum())} wrong, {int((df.rf == 1).sum())} disputed")
 
     # --- compact encoding -----------------------------------------------------
     out = pd.DataFrame({
@@ -122,6 +133,8 @@ def main():
         # and the spread quartile, and recomputing that from the rounded columns put
         # 219 rows in the neighbouring cell (up to 0.2 eV off), so it is shipped
         "iv": df["interval90_eV"].round(3),
+        # 1 disputed, 2 known wrong: the card says so and no error is computed from it
+        "rf": df["rf"],
     })
     csv_path = os.path.join(out_dir, "screening.csv")
     out.to_csv(csv_path, index=False)
@@ -156,8 +169,8 @@ def main():
         wf_cal.pop("verified_on", None)
 
     # --- trust map: mean error per element, Alexandria rows never trained on ---
-    unseen = df[(df.source == "alexandria") & (df.in_training_set != "train")].dropna(
-        subset=["error_eV"])
+    unseen = df[(df.source == "alexandria") & (df.in_training_set != "train")
+                & (df.rf == 0)].dropna(subset=["error_eV"])
     per_el: dict[str, list[float]] = defaultdict(list)
     for els, err in zip(unseen["elements"], unseen["error_eV"]):
         for el in str(els).split():
@@ -230,6 +243,7 @@ def main():
         "optical_heads": head_meta,
         "corrections": corrections,
         "metal_gap_eV": METAL_GAP,
+        "ref_notes": ref_notes,
         "trust_map": trust,
         "ptable": layout,
         "trust_map_basis": {

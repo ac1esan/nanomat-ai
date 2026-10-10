@@ -23,6 +23,9 @@ TABLE = os.path.join(ROOT, "screening_table.csv")
 # rows holding the same structure (scripts/structure_twins.py). Without it every row is
 # its own structure, as before
 TWINS = os.path.join(ROOT, "data", "structure_twins.csv")
+# reference labels flagged by scripts/reference_flags.py: "wrong" (KNOWN_BAD_REFERENCE)
+# and "disputed" (one structure, Alexandria labels more than 0.1 eV apart across cells)
+FLAGS = os.path.join(ROOT, "data", "reference_flags.csv")
 # which entry speaks for a structure held by several databases: the one computed with
 # the model's own target method, so its reference is comparable with the prediction
 SOURCE_RANK = {"alexandria": 0, "c2db": 1, "jarvis_dft2d": 2}
@@ -34,6 +37,18 @@ DISAGREE_TIERS = 3.0
 _P = None
 _T = None
 _TW: dict = {}      # group -> its rows' ids
+_FL: dict | None = None   # id -> (flag, note)
+
+
+def _flags() -> dict:
+    global _FL
+    if _FL is None:
+        _FL = {}
+        if os.path.exists(FLAGS):
+            import csv
+            for r in csv.DictReader(open(FLAGS)):
+                _FL[r["id"]] = (r["flag"], r["note"])
+    return _FL
 
 
 def _predictor():
@@ -205,6 +220,14 @@ def _resemblance(p, ood: bool) -> str | None:
             f"{what}")
 
 
+def _light(onset) -> dict:
+    """Absorption onset as a wavelength and a name for that part of the spectrum."""
+    from nanomat.plain import light_name, wavelength_nm
+    nm = wavelength_nm(onset) if onset is not None and onset > 0 else None
+    return {"absorption_onset_nm": None if nm is None else round(nm),
+            "absorption_onset_light": None if nm is None else light_name(nm)}
+
+
 def _row(r, full: bool = False) -> dict:
     ood = r["tier"] == "out_of_domain"
     out = {
@@ -217,6 +240,8 @@ def _row(r, full: bool = False) -> dict:
         "interval90_halfwidth_eV": None if ood else _num(r["interval90_eV"]),
         # returned rather than mentioned: a hint without the value was filled in by guesswork
         "optical_gap_estimate_eV": None if ood else _num(r["exp_gap_est_eV"]),
+        # computed here: models turned gaps into the wrong colours on their own
+        **_light(None if ood else _num(r["exp_gap_est_eV"])),
         "quasiparticle_gap_eV": None if ood else _num(r["gap_quasiparticle_eV"]),
         "gap_type": r["gap_type"] if isinstance(r["gap_type"], str) else None,
         "p_metal": _num(r["p_metal"], 2),
@@ -229,9 +254,13 @@ def _row(r, full: bool = False) -> dict:
         "training_role": ROLE.get(str(r["in_training_set"]), str(r["in_training_set"])),
     }
     ref, pred = _num(r["dft_gap_eV"]), _num(r["pred_gap_eV"])
+    flag = _flags().get(r["id"])
     if r["id"] in KNOWN_BAD_REFERENCE:
         out["reference_note"] = ("this reference label is known to be wrong - "
                                  + KNOWN_BAD_REFERENCE[r["id"]])
+    elif flag and flag[0] == "disputed":
+        out["reference_note"] = ("this reference label is disputed - " + flag[1]
+                                 + "; do not judge the prediction by it")
     elif not ood and ref is not None and pred is not None:
         mae = _tier_mae()[r["tier"]]
         if abs(pred - ref) > DISAGREE_TIERS * mae:
@@ -298,6 +327,7 @@ def predict_structure(structure: str, fmt: str = "") -> dict:
     90% range, quasiparticle and optical estimates, gap type, the metal-gate
     probability, and the work function with the band edges it implies.
     """
+    from nanomat.plain import describe
     from nanomat.predict import tier_key
     try:
         st, fixed = _parse(structure, fmt)
@@ -319,12 +349,14 @@ def predict_structure(structure: str, fmt: str = "") -> dict:
         "gap_type": r.gap_type,
         "quasiparticle_gap_eV": None if ood else _num(r.gap_quasiparticle),
         "optical_gap_estimate_eV": None if ood else _num(r.exp_gap_est),
+        **_light(None if ood else _num(r.exp_gap_est)),
         "exciton_binding_eV": None if ood else _num(r.exciton_binding),
         "work_function_eV": _num(r.work_function),
         "work_function_verdict": r.work_function_verdict,
         "electron_affinity_eV": _num(r.electron_affinity),
         "ionisation_potential_eV": _num(r.ionisation_potential),
         "warnings": list(r.warnings), "note": LEVELS,
+        "in_plain_words": describe(r),
     }
     if fixed:
         out["input_note"] = fixed
