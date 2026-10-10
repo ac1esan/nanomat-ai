@@ -49,7 +49,7 @@ python screen_bandgap.py --app                                # web UI at http:/
 ```
 
 ```bash
-pytest -q                                                     # 27 smoke and contract tests
+pytest -q                                                     # 29 smoke and contract tests
 ```
 
 From a language model, over the Model Context Protocol
@@ -140,6 +140,21 @@ in its own claims.
 A failed intermediate attempt is worth recording: simply counting how many training
 structures shared the query's chemical system correlated with error *backwards*,
 because chemically rich systems are both better represented and intrinsically harder.
+
+**Looked for, not found: a better third signal**
+([`scripts/trust_signals.py`](scripts/trust_signals.py), rule written before scoring:
+beat the current spread × latent product on the test split by more than 0.02 in
+Spearman against error, and lose on none of the three held-out sets). Nothing passed.
+Mahalanobis distance in the embedding space was worse everywhere (0.41 against 0.44
+on the test split, combined with the spread). The nearest neighbour alone (k = 1)
+instead of ten was better on every set, by +0.018 on the test split, short of the
+threshold, though by +0.09 on JARVIS. An *error head* — a ridge regression of the
+error on the signals and the embeddings, fitted on the validation split — reached
+0.49 on the test split and lost on the metastable sets: it learned the near-hull
+population. Shown half of the metastable set as well (an exploration, not a test
+under the rule), it gains on the test split, 2DMatPedia and JARVIS (0.40 against
+0.28) and loses on C2DB. That is the next experiment, with its own rule and a held-out
+set none of this touched.
 
 **Calibrated intervals.** Raw ±1σ of the ensemble spread covers only 44% of cases,
 not 68% — deep ensembles rank well but are overconfident. A scale factor fitted on the
@@ -807,7 +822,9 @@ rejects it (0.68 against 0.47).
   come out 0.27 eV higher on average (median 0.20, n = 389) and the rest 0.03 eV
   (n = 262); against held-out Alexandria, which does not, the same groups show no
   offset (−0.02 and −0.04). C2DB's web table has no SOC-free gap to train a
-  correction on, so the offset is documented, not corrected.
+  correction on, so the offset is documented, not corrected. The structures that sit
+  in both Alexandria and C2DB (about 700, `data/structure_twins.csv`) carry exactly
+  that difference, and are the obvious training set for one.
 - The quasiparticle and optical outputs are linear heads fitted on 214 C2DB materials
   (G₀W₀ and BSE), cross-validated at 0.13–0.27 eV and checked against five measured
   monolayers. Treat them as estimates.
@@ -819,7 +836,12 @@ rejects it (0.68 against 0.47).
   never trained on (held-out near-hull and metastable Alexandria, plus C2DB and JARVIS
   dft_2d under their own functionals) the 90% interval covers 88%: 90% on Alexandria,
   82% on C2DB and 79% on JARVIS, because part of their error is the difference in
-  method. Re-run [`scripts/calibrate_uncertainty.py`](scripts/calibrate_uncertainty.py)
+  method. On C2DB that difference is spin-orbit coupling and nothing else: where the
+  tool shows an interval, compounds without heavy elements are covered 91% of the
+  time and compounds with an element of Z ≥ 52 70%, with the model 0.24 eV above
+  their SOC-inclusive reference. JARVIS would need an interval 3.4 times wider — a
+  different functional. Widening the interval to cover either would change what it
+  means, so it stays an interval on the PBE gap. Re-run [`scripts/calibrate_uncertainty.py`](scripts/calibrate_uncertainty.py)
   and [`scripts/calibrate_population.py`](scripts/calibrate_population.py) on the
   population you actually screen. The precompute script checks this and warns.
 - **The verdict ranks error against PBE, and cannot be checked against JARVIS.** The
@@ -934,9 +956,10 @@ figures/                  README figures and the scripts that regenerate them
    what to give instead.
 2. **A 2D band-gap benchmark for JARVIS-Leaderboard.** Of its 322 benchmarks, 67 are
    about band gaps and none about 2D materials.
-3. **Close the rest of the calibration gap.** Per-cell scales took held-out metastable
-   coverage from 86% to 90%. C2DB (82%) and JARVIS (79%) remain, computed with other
-   methods than the target, and 2DMatPedia (84%), the same method in another database.
+3. **An error head for the verdict.** Fitted with metastable structures it ranked
+   errors better on four of six sets in an exploration; it needs a proper test under
+   a rule written first. A spin-orbit head on the Alexandria–C2DB twins is the other
+   open piece of the trust layer: the C2DB coverage gap is all spin-orbit coupling.
 4. **The next gain is not more metastable data.** The step to 1.0 eV/atom passed its
    rule with 0.004 eV on the stable test, against 0.032 for the step before.
 5. **Repair the known label errors** — Alexandria's planar honeycombs with band edges

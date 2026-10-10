@@ -52,19 +52,27 @@ def tier_code(v: str) -> int:
 
 
 def main():
-    os.makedirs(OUT_DIR, exist_ok=True)
-    df = pd.read_csv(TABLE)
-    print(f"read {len(df)} rows from {os.path.basename(TABLE)}")
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--table", default=TABLE)
+    ap.add_argument("--stable-index", default=STABLE_INDEX)
+    ap.add_argument("--out-dir", default=OUT_DIR)
+    args = ap.parse_args()
+    table, stable_index, out_dir = args.table, args.stable_index, args.out_dir
+
+    os.makedirs(out_dir, exist_ok=True)
+    df = pd.read_csv(table)
+    print(f"read {len(df)} rows from {os.path.basename(table)}")
 
     # --- stability flag: which Alexandria ids passed e_above_hull <= 0.1 -------
     # Without it every row is marked non-stable and the browser's default view, the
     # population the calibration holds on, comes up empty - a broken page, not a
     # degraded one. So it is required.
-    if not os.path.exists(STABLE_INDEX):
-        raise SystemExit(f"missing {STABLE_INDEX} (the e_above_hull <= 0.1 export); the "
+    if not os.path.exists(stable_index):
+        raise SystemExit(f"missing {stable_index} (the e_above_hull <= 0.1 export); the "
                          "browser's default view would be empty without it")
     stable = set()
-    for line in open(STABLE_INDEX):
+    for line in open(stable_index):
         stable.add(os.path.splitext(line.split(",")[0])[0])
     print(f"stable (ehull<=0.1) reference ids: {len(stable)}")
     df["b"] = [1 if (s == "alexandria" and i in stable) else 0
@@ -115,7 +123,7 @@ def main():
         # 219 rows in the neighbouring cell (up to 0.2 eV off), so it is shipped
         "iv": df["interval90_eV"].round(3),
     })
-    csv_path = os.path.join(OUT_DIR, "screening.csv")
+    csv_path = os.path.join(out_dir, "screening.csv")
     out.to_csv(csv_path, index=False)
     raw = os.path.getsize(csv_path)
     gz = len(gzip.compress(open(csv_path, "rb").read(), 6))
@@ -234,7 +242,7 @@ def main():
                     "marked as thinly measured",
         },
     }
-    meta_path = os.path.join(OUT_DIR, "meta.json")
+    meta_path = os.path.join(out_dir, "meta.json")
     json.dump(meta, open(meta_path, "w"), indent=1)
     print(f"wrote {meta_path}: {os.path.getsize(meta_path)/1000:.0f} kB")
     print(f"\ndefault view (stable, not trained on): {meta['counts']['default_view']} rows")

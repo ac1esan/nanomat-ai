@@ -227,6 +227,24 @@ ensemble predicts 0.908 eV, latent distance 0.27 against a q90 of 0.32, and the
 latent signal no longer fires. It reads `check` because the spread (0.102) is just
 above the median — the spread's call, not the neighbourhood's.
 
+**Looked for, not found: a better third signal** (`scripts/trust_signals.py`, rule
+written before scoring — beat spread × latent distance by more than 0.02 in Spearman
+on the test split and lose on none of the held-out metastable, far and 2DMatPedia
+sets). Spearman against |error|, test / T_meta / T_far / T_2dmp / C2DB / JARVIS:
+
+| signal, combined with the spread | test | T_meta | T_far | T_2dmp | C2DB | JARVIS |
+|---|---|---|---|---|---|---|
+| latent distance, k = 10 (shipped) | 0.437 | 0.391 | 0.367 | 0.400 | 0.307 | 0.278 |
+| latent distance, k = 1 | 0.455 | 0.395 | 0.390 | 0.411 | 0.333 | 0.368 |
+| Mahalanobis (Ledoit–Wolf, member-0 embeddings) | 0.405 | 0.376 | 0.342 | 0.392 | 0.313 | 0.307 |
+| error head (ridge, fitted on validation) | 0.491 | 0.376 | 0.321 | 0.438 | 0.250 | 0.389 |
+
+k = 1 misses the threshold by 0.002; the error head learns the near-hull population
+and loses on the metastable sets. Fitted with half of the metastable set as well (an
+exploration, 10 composition-grouped halvings, not a test under the rule) the head
+reads 0.495 / 0.413 / 0.370 / 0.459 / 0.262 / 0.399 — ahead everywhere but C2DB. It
+is the next experiment, with its own rule.
+
 An intermediate attempt that did **not** work, recorded so it is not repeated:
 counting how many training structures share the query's chemical system correlates
 with error in the wrong direction (MAE 0.236 for unseen systems versus 0.378 for
@@ -449,7 +467,10 @@ under `out-of-domain`.
   without SOC: −0.02 and −0.04, so the offset is the physics, not the model (measured
   on the previous ensemble). A learned
   SOC correction was planned, but C2DB's table interface exposes only the SOC-inclusive
-  gap.
+  gap. The structures held by both Alexandria (no SOC) and C2DB (SOC) — about 700
+  in `data/structure_twins.csv` — carry exactly that difference and are the training
+  set for one; the light-element offset between them is +0.02 eV, so the code
+  difference (VASP against GPAW) is small next to it.
 - **Polymorphs: much better, still not solved.** `scripts/polymorph_sensitivity.py`
   compares the spread of predictions against the spread of the reference at three
   levels, from the least to the most dependent on geometry alone; 1.00 would mean
@@ -476,7 +497,12 @@ under `out-of-domain`.
   the screening table this ensemble never trained on — held-out near-hull and
   metastable Alexandria, plus C2DB and JARVIS dft_2d under their own functionals — the
   interval covers 87.9%: 90.4% on Alexandria, 82.5% on C2DB and 79.2% on JARVIS,
-  because part of their error is the difference in method. The typical errors the tool
+  because part of their error is the difference in method. Restricted to the rows
+  where the tool shows an interval (`scripts/trust_signals.py sources`): C2DB
+  compounds without an element of Z ≥ 52 are covered 91.3%, those with one 69.7% with
+  the model +0.24 eV above the SOC-inclusive reference — the whole C2DB shortfall is
+  spin-orbit coupling. JARVIS would need the interval ×3.4. Neither is widened: the
+  interval stays an interval on the PBE gap. The typical errors the tool
   quotes per tier (0.10 / 0.17 / 0.35 eV) are measured on the near-hull test split and
   are optimistic elsewhere. Re-calibrate before trusting absolute intervals on a
   different population.

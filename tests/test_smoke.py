@@ -536,3 +536,66 @@ def test_llm_tools_say_what_metastable_resemblance_means():
     if os.path.exists(L.TABLE):
         row = L.find_structures("TbGaSe3")["structures"][0]
         assert "p_metastable" not in row and row["metastable_resemblance_meaning"]
+
+
+def test_screening_table_and_site_data_end_to_end(tmp_path):
+    """The two scripts that build the browser, run on three structures.
+
+    They used to break silently: a missing stable index once built a page whose default
+    view was empty. This runs precompute_screening.py on a tiny folder, then
+    build_site_data.py on its output, and checks what the browser reads.
+    """
+    import json
+    import shutil
+    import pandas as pd
+    data = tmp_path / "data"
+    data.mkdir()
+    refs = {"MoS2.vasp": 1.74, "hBN.vasp": 4.6, "graphene.vasp": 0.0}
+    for f in refs:
+        shutil.copy(os.path.join(EX, f), data / f)
+    (data / "id_prop.csv").write_text("".join(f"{f},{v}\n" for f, v in refs.items()))
+    table = tmp_path / "table.csv"
+    run = lambda *a: subprocess.run([sys.executable, *a], cwd=ROOT, capture_output=True, text=True)
+    r = run("scripts/precompute_screening.py", "--data", f"{data}:alexandria", "--out", str(table))
+    assert r.returncode == 0, r.stderr[-2000:]
+    t = pd.read_csv(table)
+    assert len(t) == 3 and set(t["id"]) == {"MoS2", "hBN", "graphene"}
+    assert t.set_index("id").loc["graphene", "verdict"].startswith("out-of-domain")
+
+    out = tmp_path / "site"
+    missing = run("scripts/build_site_data.py", "--table", str(table),
+                  "--stable-index", str(tmp_path / "nope.csv"), "--out-dir", str(out))
+    assert missing.returncode != 0, "a missing stable index must stop the build"
+    stable = tmp_path / "stable.csv"
+    stable.write_text("MoS2.vasp,1.74\n")
+    r = run("scripts/build_site_data.py", "--table", str(table),
+            "--stable-index", str(stable), "--out-dir", str(out))
+    assert r.returncode == 0, r.stderr[-2000:]
+    site = pd.read_csv(out / "screening.csv")
+    assert len(site) == 3
+    for col in ("i", "g", "u", "w", "iv", "b", "q", "o"):
+        assert col in site.columns, col
+    assert dict(zip(site["i"], site["b"])) == {"MoS2": 1, "hBN": 0, "graphene": 0}
+    meta = json.load(open(out / "meta.json"))
+    blob = json.dumps(meta)
+    for key in ("scale90", "unc_median", "latent_q90", "metal_threshold"):
+        assert key in blob, key
+
+
+def test_c2db_table_parser():
+    """fetch_c2db_optical.cells() on the markup C2DB serves.
+
+    Body cells are <th scope="row">, not <td>, and a formula is split by <sub> tags
+    that must be dropped to nothing - a space would turn Tl2Br2 into "Tl 2 Br 2". The
+    parser returned 0 rows once when the first of these went unnoticed.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    from fetch_c2db_optical import cells
+    html = ("<table><thead><tr><th>Formula</th><th>Old uid</th><th>E_B</th></tr></thead>"
+            "<tbody><tr><th scope=\"row\">Tl<sub>2</sub>Br<sub>2</sub></th>"
+            "<td>Tl2Br2-abc</td><td> 0.41 </td></tr>"
+            "<tr><th scope=\"row\">MoS<sub>2</sub></th><td>MoS2-xyz</td><td>0.55</td></tr>"
+            "</tbody></table>")
+    headers, rows = cells(html)
+    assert headers == ["Formula", "Old uid", "E_B"]
+    assert rows == [["Tl2Br2", "Tl2Br2-abc", "0.41"], ["MoS2", "MoS2-xyz", "0.55"]]
