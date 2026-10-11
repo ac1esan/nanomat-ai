@@ -194,7 +194,7 @@ def cache(args):
 
 
 def evaluate(args, arms_def=None, control="B0", gain_tests=("T_meta", "T_2dmp", "T_far"),
-             seen_key="seen_in_B0", prefix="hull"):
+             seen_key="seen_in_B0", prefix="hull", guard_tests=()):
     """Paired comparison of every trained arm against the control, then the rule.
 
     The defaults are this experiment's; hull_1ev_experiment.py calls it with its own."""
@@ -269,10 +269,12 @@ def evaluate(args, arms_def=None, control="B0", gain_tests=("T_meta", "T_2dmp", 
         ok1 = t["diff"] <= 0.005 and t["ci95"][1] < 0.015
         gains = {k: report[k]["all"][a] for k in gain_tests}
         ok2 = any(g["diff"] < 0 and g["ci95"][1] < 0 for g in gains.values())
+        # guard sets: none may get worse with its whole interval above zero
+        ok3 = all(report[k]["all"][a]["ci95"][0] <= 0 for k in guard_tests)
         total = -sum(g["diff"] for g in gains.values())
         print(f"  {a}: near-hull not worse {ok1}, some population better {ok2}, "
-              f"summed gain {total:+.3f}")
-        if ok1 and ok2:
+              f"no guard set worse {ok3}, summed gain {total:+.3f}")
+        if ok1 and ok2 and ok3:
             passed[a] = total
     if not passed:
         choice = f"{control} (no arm passed)"

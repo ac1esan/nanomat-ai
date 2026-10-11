@@ -35,10 +35,10 @@ plt.rcParams.update({
 # The composition-disjoint ("grouped") re-measurement of the 13 349 point is marked
 # separately: same code, same data, only the split differs.
 GROUPED_13K = (13349, 0.2614)
-# The shipped ensemble: angles, plus Alexandria up to 1.0 eV/atom above the hull and
-# non-magnetic 2DMatPedia in training (hull_1ev_experiment.py, arm C1), scored on the
-# same composition-disjoint near-hull test set as the diamond above.
-SHIPPED = (45115, 0.1864)
+# The shipped ensemble: angles, plus Alexandria up to 1.0 eV/atom above the hull,
+# non-magnetic 2DMatPedia and MC2D in training (mc2d_experiment.py, arm E1), scored on
+# the same composition-disjoint near-hull test set as the diamond above.
+SHIPPED = (45857, 0.1904)
 # (dataset, N, composition CV MAE, CGCNN MAE)
 SCALING = [
     ("JARVIS\ndft_2d", 696, 0.583, 0.585),
@@ -64,7 +64,7 @@ def fig_scaling():
                 arrowprops=dict(arrowstyle="-", color=C_MUTED, lw=0.8, ls=":"))
     sx, sy = SHIPPED
     ax.plot([sx], [sy], marker="D", ms=8, color=C_GNN, ls="none",
-            label="Shipped: + metastable to 1.0 eV/atom + 2DMatPedia, same test")
+            label="Shipped: + metastable to 1.0 eV/atom, 2DMatPedia, MC2D; same test")
     ax.annotate(f"{sy:.3f}", (sx, sy), textcoords="offset points", xytext=(0, -16),
                 ha="center", color=C_TEXT, fontsize=9.5)
     for x, yc, yg in zip(n, comp, gnn):
@@ -86,7 +86,7 @@ def fig_scaling():
                  loc="left", color=C_TEXT, fontsize=12.5, pad=26)
     ax.text(0, 1.005, "Solid lines: random split. Diamonds: no composition shared between "
             "train and test, one fixed near-hull test set -\nhollow for the first ensemble, "
-            "filled for the shipped one (metastable to 0.5 eV/atom and 2DMatPedia in training)",
+            "filled for the shipped one (metastable to 1.0 eV/atom, 2DMatPedia and MC2D in training)",
             transform=ax.transAxes, color=C_MUTED, fontsize=8.5, va="bottom")
     ax.legend(frameon=False, loc="upper right", fontsize=9.5)
     fig.tight_layout()

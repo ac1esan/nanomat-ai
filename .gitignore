@@ -16,6 +16,7 @@ alignn_data_hull/
 alignn_data_hull1/
 alignn_data_metal/
 alignn_data_typed/
+alignn_data_mc2dexp/
 *.zip
 graphs_cache_*.pt
 
@@ -48,3 +49,4 @@ data_c2db_wf/
 data_c2db_all/
 data_dft2d_all/
 data_metal_merged/
+data/mc2d.json.gz

@@ -202,8 +202,9 @@ def _resemblance(p, ood: bool) -> str | None:
     Shipped as p_metastable, it was read as the probability that a material is
     metastable by five of ten models. On Alexandria rows that is close to what the
     head learned, since it was fitted on exactly that label; but the phosphorene file
-    scores 0.83 while the same structure sits near the hull in Alexandria. In the
-    tool the number only picks the interval's scale, so that is what the row says.
+    scored 0.83 while the same structure sits near the hull in Alexandria, and with the
+    current ensemble h-BN, a stable crystal, scores 0.77. In the tool the number only
+    picks the interval's scale, so that is what the row says.
     """
     p = _num(p, 2)
     if p is None:
@@ -218,6 +219,15 @@ def _resemblance(p, ood: bool) -> str | None:
                 f"times as much at the same verdict{widened}. {what}")
     return (f"At or below {thr:.1f}: the structure resembles the near-hull training structures. "
             f"{what}")
+
+
+def _type_trust(gap_type):
+    # measured on the held-out test split (scripts/gap_type_borderline.py)
+    if gap_type == "indirect":
+        return "indirect calls are right only about 35% of the time: treat as a weak hint"
+    if gap_type == "direct":
+        return "direct calls are right about 92% of the time"
+    return None
 
 
 def _light(onset) -> dict:
@@ -244,6 +254,7 @@ def _row(r, full: bool = False) -> dict:
         **_light(None if ood else _num(r["exp_gap_est_eV"])),
         "quasiparticle_gap_eV": None if ood else _num(r["gap_quasiparticle_eV"]),
         "gap_type": r["gap_type"] if isinstance(r["gap_type"], str) else None,
+        "gap_type_reliability": _type_trust(r["gap_type"]),
         "p_metal": _num(r["p_metal"], 2),
         # named for what it measures, and explained in every row: as p_metastable it was
         # read as a probability that the material is metastable
@@ -347,6 +358,7 @@ def predict_structure(structure: str, fmt: str = "") -> dict:
         "metastable_resemblance": _num(r.p_metastable, 2),
         "metastable_resemblance_meaning": _resemblance(r.p_metastable, ood),
         "gap_type": r.gap_type,
+        "gap_type_reliability": _type_trust(r.gap_type),
         "quasiparticle_gap_eV": None if ood else _num(r.gap_quasiparticle),
         "optical_gap_estimate_eV": None if ood else _num(r.exp_gap_est),
         **_light(None if ood else _num(r.exp_gap_est)),
@@ -477,7 +489,7 @@ def model_card() -> dict:
         "predicts": "PBE band gap (without spin-orbit coupling) of an isolated 2D monolayer from "
                     "its crystal structure, plus quasiparticle and optical estimates, gap type "
                     "and work function",
-        "accuracy": f"MAE {cal.get('test_mae', 0.186):.3f} eV on 1 326 held-out stable monolayers "
+        "accuracy": f"MAE {cal.get('test_mae', 0.190):.3f} eV on 1 326 held-out stable monolayers "
                     "whose compositions never appear in training; 0.43 for composition alone",
         "verdict_tiers": {k: f"typical error {v:.2f} eV" for k, v in _tier_mae().items()},
         "interval": "gap_range90_eV is the prediction plus or minus the ensemble spread times a "
@@ -485,8 +497,9 @@ def model_card() -> dict:
                     "population?, spread quartile). It covers about 92% of held-out near-hull "
                     "monolayers and 90% of held-out metastable ones; against references computed "
                     "with other methods (C2DB, JARVIS) it covers less",
-        "training_data": "45 115 PBE monolayers: Alexandria 2D (stable, and metastable up to "
-                         "1.0 eV/atom above the hull) and non-magnetic 2DMatPedia",
+        "training_data": "45 857 PBE monolayers: Alexandria 2D (stable, and metastable up to "
+                         "1.0 eV/atom above the hull), non-magnetic 2DMatPedia, and MC2D layers "
+                         "of experimentally known bulk crystals",
         "limits": [
             "Semiconductors only: a metal gate rejects metals first; its gap number means nothing.",
             "PBE underestimates measured gaps; use the optical or quasiparticle estimate for experiment.",
@@ -498,7 +511,7 @@ def model_card() -> dict:
             "(metastable_resemblance > 0.5) err about one and a half times as much at the same "
             "verdict; their "
             "gap_range90_eV is widened for it. The resemblance is not a stability calculation: "
-            "phosphorene, near the hull, scores above 0.8.",
+            "h-BN, a stable crystal, scores 0.77.",
             "Weakest on light main-group chemistry (C, B, N, H), strongest on transition-metal compounds.",
             "Labels carry database errors: Alexandria reports planar honeycombs with band edges "
             "at K too high (graphene is labelled 1.23 eV).",

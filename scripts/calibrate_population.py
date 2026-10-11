@@ -131,7 +131,8 @@ def main():
                          "would be fitted on structures the ensemble never saw")
     # every Alexandria training structure off the near-hull split; 2DMatPedia records no
     # hull distance, so its entries belong to neither side
-    meta_tr = sorted(f for f in trained - set(stable_tr) if not f.startswith("2dm"))
+    # Alexandria only: 2DMatPedia and MC2D records carry no hull distance
+    meta_tr = sorted(f for f in trained - set(stable_tr) if not f.startswith(("2dm", "mc2d-")))
     meta_tests = args.meta_tests.split(",")
     t_meta = [f for k in meta_tests for f in exp["tests"][k]]
     truth = {}

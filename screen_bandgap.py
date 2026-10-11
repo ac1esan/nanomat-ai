@@ -157,7 +157,9 @@ def format_markdown(r, cal: dict | None = None) -> str:
                      "this structure outside its own training distribution |")
     if r.gap_type is not None:
         conf = r.p_indirect if r.gap_type == "indirect" else 1 - r.p_indirect
-        lines.append(f"| Gap type | {r.gap_type} (p = {conf:.2f}) |")
+        trust = ("indirect calls like this are right only about a third of the time"
+                 if r.gap_type == "indirect" else "direct calls are right about nine times in ten")
+        lines.append(f"| Gap type | {r.gap_type} (p = {conf:.2f}) <br><sub>{trust}</sub> |")
     if r.p_metal is not None:
         lines.append(f"| Metal gate | p(metal) = {r.p_metal:.2f} |")
     lines.append(f"| Ensemble spread | {r.unc:.3f} eV |")
@@ -185,8 +187,9 @@ def format_markdown(r, cal: dict | None = None) -> str:
     mae = cal.get("test_mae")
     lines += [
         "",
-        "<sub>CGCNN ensemble (5 models) on 45 115 2D semiconductors (Alexandria, stable and "
-        "metastable up to 1.0 eV/atom, and non-magnetic 2DMatPedia; PBE), "
+        "<sub>CGCNN ensemble (5 models) on 45 857 2D semiconductors (Alexandria, stable and "
+        "metastable up to 1.0 eV/atom, non-magnetic 2DMatPedia, and MC2D layers of known "
+        "crystals; PBE), "
         f"evaluated on a composition-disjoint split: test MAE {mae:.2f} eV. "
         "Two independent out-of-domain signals are used, because neither alone is enough: "
         "the spread between ensemble members, and the distance to the training set in the "

@@ -23,11 +23,14 @@ structures, and a trust layer that was tested until it broke and then fixed.
 **Main finding.** With 700 structures a graph network is no better than a random
 forest on composition features (MAE 0.58 eV both). The gap opens only with data: on
 a composition-disjoint test set of stable 2D semiconductors the shipped model reaches
-**MAE 0.186 eV** against 0.430 eV for composition. The bottleneck was data volume,
+**MAE 0.190 eV** against 0.430 eV for composition. The bottleneck was data volume,
 not model class — and most of the data the model needed had been filtered out as
 "metastable": training on monolayers up to 0.5 eV/atom above the hull improved the
 near-hull test as well ([below](#what-the-stability-filter-was-costing)). The step to
 1.0 eV/atom still passed, but by little: the return on metastable data is running out.
+Layers of real crystals did help where it counts: adding MC2D took held-out MC2D layers
+from 0.449 to 0.385 eV and left the stable test where it was
+([below](#training-on-it)).
 
 ## Quick start
 
@@ -83,20 +86,21 @@ Output for the bundled examples ([examples/expected_results.csv](examples/expect
 
 | file | formula | gap (PBE), eV | 90% interval | verdict |
 |---|---|---|---|---|
-| WS2.vasp | WS2 | 1.88 | ±0.22 | reliable |
-| MoS2.vasp | MoS2 | 1.67 | ±0.23 | reliable |
-| MoSe2.vasp | MoSe2 | 1.47 | ±0.25 | reliable |
-| WSe2.vasp | WSe2 | 1.56 | ±0.16 | reliable |
-| hBN.vasp | BN | 4.69 | ±0.37 | reliable |
-| phosphorene.vasp | P | 0.91 | ±0.44 | check |
-| graphene.vasp | C | 2.05 | — | **out-of-domain: metal gate** |
+| WS2.vasp | WS2 | 1.86 | ±0.28 | reliable |
+| MoS2.vasp | MoS2 | 1.69 | ±0.30 | reliable |
+| MoSe2.vasp | MoSe2 | 1.53 | ±0.36 | reliable |
+| WSe2.vasp | WSe2 | 1.57 | ±0.13 | reliable |
+| hBN.vasp | BN | 4.69 | ±0.30 | reliable |
+| phosphorene.vasp | P | 1.00 | — | out-of-domain: unfamiliar chemistry |
+| graphene.vasp | C | 1.40 | — | **out-of-domain: metal gate** |
 
 The last row is the point of the project: graphene is a semimetal, the regressor
 never trained on metals, and the tool says so without being told. Phosphorene's PBE
-gap is about 0.9 eV in every database that carries it, so 0.91 is sound; it is marked
-check because its ensemble spread is above the median, and its interval is the widest
-of the six because it resembles the metastable training structures, where the model
-errs more.
+gap is about 0.9 eV in every database that carries it, so 1.00 is close; it is
+out-of-domain because its latent distance, 0.318, is 0.002 above the threshold — it
+has sat on that edge for three releases (see the retraction below). MoSe₂'s interval is
+the widest of the reliable ones because the population head finds it resembles the
+metastable training structures (0.57), where the model errs more.
 
 ## Knowing when not to believe it
 
@@ -117,21 +121,21 @@ on three merged sources (24 314 structures, graphene among them) it returns
 `p(metal) = 1.00` on graphene with no false positives on the TMDs.
 
 **2. Ensemble spread.** Five models with different seeds; the standard deviation
-between them ranks errors well (Spearman 0.40 against absolute error; MC-dropout on
-a single model managed 0.17). Error rises from 0.09 to 0.35 eV across its quartiles.
+between them ranks errors well (Spearman 0.45 against absolute error; MC-dropout on
+a single model managed 0.17). Error rises from 0.09 to 0.40 eV across its quartiles.
 
 **3. Distance to the training set in latent space.** All five members train on the
 same data, so on a chemistry the training set barely covers they can agree for the
 wrong reason: the spread measures disagreement between initialisations, not how well
 a chemistry is covered. Cosine distance to the ten nearest training structures in the
-model's own embedding space measures that directly. It correlates with error at 0.39
-against 0.40 for the spread, and the two together reach 0.44, so they carry different
-information. (Before the training set reached 0.5 eV/atom it was the stronger of the
-two, 0.47 against 0.45: a denser training set leaves less that is far away, and both
-signals have weakened as the errors themselves shrank and evened out.) Built from
-both, the verdict keeps its order on every held-out set the model never trained on:
-0.15 / 0.22 / 0.39 eV across the three tiers on metastable Alexandria at 0.1–0.2
-eV/atom, 0.15 / 0.22 / 0.39 at 0.2–0.5, and 0.13 / 0.25 / 0.48 on 2DMatPedia.
+model's own embedding space measures that directly. It correlates with error at 0.43
+against 0.45 for the spread, and the two together reach 0.48, so they carry different
+information. (At 0.2 eV/atom it was the stronger of the two, 0.47 against 0.45; both
+weakened as metastable data made the errors smaller and more even, to 0.39 and 0.40,
+and recovered when MC2D joined training.) Built from both, the verdict keeps its order
+on every held-out set the model never trained on: 0.15 / 0.21 / 0.37 eV across the
+three tiers on metastable Alexandria at 0.1–0.2 eV/atom, 0.14 / 0.21 / 0.37 at
+0.2–0.5, 0.15 / 0.25 / 0.47 on 2DMatPedia and 0.16 / 0.29 / 0.49 on MC2D.
 
 **A retraction.** This section used to prove the point with phosphorene: 0.82 eV
 predicted, 2.0 eV measured, called reliable. Phosphorene is in the training split, and
@@ -140,9 +144,10 @@ right at the level the model predicts; the 1.2 eV was PBE against an optical
 measurement — physics, which is what the optical output below exists for. What the
 latent distance flagged was a sparse neighbourhood, since it was the only
 elemental-phosphorus layer near the hull: a false alarm on a training point, not an
-error caught. With metastable phosphorus layers now in training the flag is gone, as
-it should be for a structure the model has seen. The signal stands on the statistics
-above instead. Comparing a
+error caught. With metastable phosphorus layers in training it has sat on the edge
+ever since — unflagged, then `check`, now out-of-domain by 0.002 — and a tier that
+flips on a retrain says nothing either way. The signal stands on the statistics above
+instead. Comparing a
 PBE-level number with experiment is the fifth protocol mistake this project has caught
 in its own claims.
 
@@ -153,7 +158,8 @@ because chemically rich systems are both better represented and intrinsically ha
 **Looked for, not found: a better third signal**
 ([`scripts/trust_signals.py`](scripts/trust_signals.py), rule written before scoring:
 beat the current spread × latent product on the test split by more than 0.02 in
-Spearman against error, and lose on none of the three held-out sets). Nothing passed.
+Spearman against error, and lose on none of the three held-out sets; measured on the
+previous ensemble). Nothing passed.
 Mahalanobis distance in the embedding space was worse everywhere (0.41 against 0.44
 on the test split, combined with the spread). The nearest neighbour alone (k = 1)
 instead of ten was better on every set, by +0.018 on the test split, short of the
@@ -165,18 +171,18 @@ under the rule), it gains on the test split, 2DMatPedia and JARVIS (0.40 against
 0.28) and loses on C2DB. That is the next experiment, with its own rule and a held-out
 set none of this touched.
 
-**Calibrated intervals.** Raw ±1σ of the ensemble spread covers only 44% of cases,
+**Calibrated intervals.** Raw ±1σ of the ensemble spread covers only 46% of cases,
 not 68% — deep ensembles rank well but are overconfident. A scale factor fitted on the
-validation split (×4.07) gives 91% coverage on the held-out test split against a 90%
-target. It beats a fixed conformal interval, which would have to be ±0.44 eV for
+validation split (×3.77) gives 92% coverage on the held-out test split against a 90%
+target. It beats a fixed conformal interval, which would have to be ±0.45 eV for
 everyone; a prediction in the reliable tier carries a median ±0.25 eV instead.
 
 **Calibrated for the population it meets, not only the one it was fitted on.** That
 scale came from near-hull structures, and the ensemble now also trains on metastable
 ones (0.1–1.0 eV/atom above the hull). On held-out metastable monolayers the same
-interval covers 86%, because at equal spread a metastable structure errs more.
+interval covers 84%, because at equal spread a metastable structure errs more.
 Neither trust signal sees this: the spread and the latent distance each separate the
-two populations barely better than chance (ROC-AUC 0.56 and 0.63). The latent space
+two populations barely better than chance (ROC-AUC 0.56 and 0.61). The latent space
 itself does see it: a linear head on the five members' embeddings tells a held-out
 metastable structure from a held-out near-hull one at ROC-AUC 0.91. So the interval
 scale is read per cell of *resembles metastable × spread quartile*. Over 20
@@ -185,15 +191,15 @@ reporting on the other:
 
 | | one scale | per cell |
 |---|---|---|
-| held-out metastable (0.1–0.5 eV/atom) | 85.8% ± 0.5 | **89.6% ± 0.8** |
-| near-hull test split | 91.5% | 91.1%, median width ±0.37 → ±0.36 eV |
-| most confident spread quartile (near-hull) | 84% | **91%** |
-| 2DMatPedia, in no part of the fit | **85.1%** | 84.1% |
+| held-out metastable (0.1–0.5 eV/atom) | 84.0% ± 0.6 | **89.6% ± 0.8** |
+| near-hull test split | 91.6% | 91.5%, median width ±0.36 → ±0.33 eV |
+| most confident spread quartile (near-hull) | 85% | **91%** |
+| 2DMatPedia, in no part of the fit | **84.1%** | 82.9% |
 
 The last row goes the wrong way: on a database the fit never saw, the per-cell table
 covers a point less than a single scale. Across the screening table's rows the
-ensemble never trained on, the interval covers 87.9%: 90.4% on Alexandria, 82.5% on
-C2DB and 79.2% on JARVIS dft_2d, the last two computed with other methods than the
+ensemble never trained on, the interval covers 87.9%: 90.5% on Alexandria, 82.3% on
+C2DB and 78.3% on JARVIS dft_2d, the last two computed with other methods than the
 target.
 
 The same head was also tried as a verdict rule — reliable becomes check when a
@@ -229,11 +235,12 @@ flowchart LR
   `CGConv` layers with Gaussian radial-basis edge features (40 centres on 0–8 Å),
   mean pooling, MLP head. Defined once in [`nanomat/model.py`](nanomat/model.py)
   and shared by training and inference, so the two cannot drift apart.
-- **Data.** Alexandria 2D and 2DMatPedia via the JARVIS-Tools API; no custom
-  scraper anywhere. Training uses 45 115 monolayers: 10 733 stable Alexandria
-  semiconductors (`e_above_hull ≤ 0.1 eV/atom`, `gap > 0.01 eV`), 32 736 metastable
-  ones (0.1–1.0 eV/atom) and 1 646 non-magnetic 2DMatPedia layers that Alexandria does
-  not contain. Target = PBE fundamental gap.
+- **Data.** Alexandria 2D and 2DMatPedia via the JARVIS-Tools API, MC2D via its
+  official OPTIMADE endpoint; no custom scraper anywhere. Training uses 45 857
+  monolayers: 10 733 stable Alexandria semiconductors (`e_above_hull ≤ 0.1 eV/atom`,
+  `gap > 0.01 eV`), 32 736 metastable ones (0.1–1.0 eV/atom), and 1 646 non-magnetic
+  2DMatPedia layers and 742 MC2D layers that Alexandria does not contain. Target = PBE
+  fundamental gap.
 - **Evaluation.** Splits are composition-disjoint: no formula appears in both train
   and test. Validation and test are stable Alexandria (1 290 and 1 326 structures)
   and have not changed since the first model, so every number below is on the same
@@ -258,12 +265,13 @@ Composition baseline (Magpie + RandomForest/XGBoost) versus CGCNN:
 | Alexandria 2D, ehull ≤ 0.1 | 13 349 | 0.430 | 0.246 | composition-disjoint |
 | + metastable to 0.2 + 2DMatPedia, training only | 22 103 train | 0.430 | 0.225 | composition-disjoint, same test |
 | + metastable to 0.5 + 2DMatPedia | 40 548 train | 0.430 | 0.197 | composition-disjoint, same test |
-| **+ metastable to 1.0 + 2DMatPedia (shipped)** | **45 115 train** | **0.430** | **0.186** | **composition-disjoint, same test** |
+| + metastable to 1.0 + 2DMatPedia | 45 115 train | 0.430 | 0.186 | composition-disjoint, same test |
+| **+ MC2D (shipped)** | **45 857 train** | **0.430** | **0.190** | **composition-disjoint, same test** |
 
 The composition figures in the first rows are five-fold cross-validation, which is
 not the same protocol as a composition-disjoint split and should not be compared
 against it. Scored properly on the very same test set, composition gives 0.430 eV,
-not 0.360 — so structure wins by 57% with the shipped model, and the 27% this project
+not 0.360 — so structure wins by 56% with the shipped model, and the 27% this project
 claimed until the comparison was redone with
 [`scripts/composition_baseline.py`](scripts/composition_baseline.py) was an error in
 our disfavour. The ehull ≤ 0.2 row misled in the other direction; see
@@ -295,14 +303,16 @@ move the way the diagnosis predicted — global spread unchanged, within-composi
 and 1H-against-1T substantially better. The data added next roughly doubled those
 gains again; the [model card](MODEL_CARD.md) carries all three generations.
 
-The shipped ensemble adds the data described next and scores **MAE 0.186 eV (95% CI
-0.172–0.202), RMSE 0.327, R² 0.942** on the same 1 326 held-out structures, whose
-compositions never appear in training. Members score 0.220 / 0.208 / 0.215 / 0.218 /
-0.217, so averaging buys 0.03 eV. Part of the distance from the previous release's
-0.197 is not the data: its exact recipe, retrained as the control of the last
-experiment, scored 0.191. Two trainings of one recipe differ by about 0.005 eV here,
-which is why every comparison in this README is against a control from the same
-session.
+The shipped ensemble adds the data described next and scores **MAE 0.190 eV (95% CI
+0.173–0.209), RMSE 0.395, R² 0.916** on the same 1 326 held-out structures, whose
+compositions never appear in training. Members score 0.212 / 0.208 / 0.208 / 0.261 /
+0.209, so averaging buys about 0.02 eV. The fourth member is the odd one out for a
+single reason: it predicts about −40 eV for one layer of molecular fluorine, which the
+ensemble disowns (spread 17 eV); that one structure is also why the RMSE rose from
+0.33 ([honest limits](#honest-limits)). The previous release scored 0.186, and the
+same recipe retrained as this experiment's control scored 0.191: two trainings of one
+recipe differ by about 0.005 eV here, which is why every comparison in this README is
+against a control from the same session, and why 0.186 → 0.190 is not a regression.
 
 A control run on the first ensemble isolated the cost of honest evaluation: identical
 code and data, only the split differing.
@@ -354,9 +364,9 @@ visible; the data supplied it. The next two steps up the hull (below) moved the 
 measures in turn. To 0.5 eV/atom: within one composition 0.69 → 0.91, 1H/1T only
 0.65 → 0.68. To 1.0 eV/atom, the shipped model: 1H/1T 0.68 → 0.81 (the correlation
 of the differences 0.77 → 0.90, sign right 92%), while within one composition fell
-back to 0.81. Neither is a monotone function of the data; the shipped model separates
-the 1H/1T pair best of any so far and composition-mates in general less well than the
-previous one.
+back to 0.81. Adding MC2D, the shipped model, swung them back: within one composition
+0.87, 1H/1T 0.75 (53 pairs, sign still 92%). Neither is a monotone function of the
+data, and a swing of 0.06 on 53 pairs is about what a retrain moves it by.
 
 Errors still follow data density rather than physics — best on transition-metal
 chemistries, worst on light main-group ones, flat in the size of the gap — but the
@@ -397,7 +407,7 @@ control. The rule was written into the script before either arm trained, with on
 change: the new band's own test set is reported but does not vote, since an arm that
 trains on a band improves on it almost by construction.
 
-| test set | control | **+ 0.5–1.0 (shipped)** | Δ, 95% CI |
+| test set | control | **+ 0.5–1.0** | Δ, 95% CI |
 |---|---|---|---|
 | stable Alexandria, 1 326 | 0.191 | **0.186** | −0.004 [−0.011, +0.003] |
 | held-out metastable Alexandria, 2 512 | 0.263 | **0.260** | −0.003 [−0.007, +0.002] |
@@ -415,7 +425,8 @@ eV/atom, and the next gain will have to come from somewhere else.
 It cost something in the trust layer. Against the same test set the spread's Spearman
 correlation with error fell from 0.45 to 0.40 and the latent distance's from 0.41 to
 0.39; the tiers still rank (0.10 / 0.17 / 0.35 eV, against 0.10 / 0.17 / 0.37), but
-with less to work with, because the errors are both smaller and more even.
+with less to work with, because the errors are both smaller and more even. The MC2D
+step below gave both back (0.45 and 0.43).
 
 ### The two classifiers, retrained on the same data
 
@@ -536,15 +547,91 @@ as an external validation on a database it had never seen: MAE 0.75 eV, 78% of t
 population flagged out-of-domain by the model itself, and the verdict still ranking the
 error — 0.31 / 0.58 / 0.83 eV across the three tiers.
 
+### A third database: MC2D, layers of crystals that exist
+
+Alexandria 2D is mostly hypothetical. [MC2D](https://www.materialscloud.org/discover/mc2d)
+(Materials Cloud) is the opposite: monolayers computationally exfoliated from layered
+bulk crystals in experimental databases, so it is close to what people actually try to
+make. It is served over the official OPTIMADE API
+([`scripts/fetch_mc2d.py`](scripts/fetch_mc2d.py)): 2 683 entries, 1 458 with a band
+gap. [`scripts/audit_mc2d.py`](scripts/audit_mc2d.py) asks the same two questions as
+for 2DMatPedia.
+
+**Do the labels agree?** On the 317 structures both databases hold (same matcher and
+thickness check): MAE 0.070 eV, bias −0.02, metal/semiconductor agreement 98% — closer
+than 2DMatPedia (0.088), despite a different code (Quantum ESPRESSO) and lattices
+relaxed with a van der Waals functional. Heavy-element compounds show no extra offset,
+so MC2D's gaps, like Alexandria's, carry no spin-orbit coupling. Of the 11 pairs more
+than 0.3 eV apart most are magnetic (CrBr₃, CrSiTe₃, MoCl₃, NiO₂, VO₂). MC2D has
+graphene at 0.00 eV and ZrNCl at 1.92 — both cases where another database was wrong.
+
+**How did the model do on real layers?** The previous release, on 1 179 MC2D
+semiconductors it never trained on:
+
+| | n | MAE against MC2D, eV |
+|---|---|---|
+| all | 1 179 | 0.51 |
+| reliable | 98 | **0.20** |
+| check | 248 | 0.26 |
+| out-of-domain | 833 | 0.62 |
+
+That is the honest number for the population that matters most: the model is far less
+accurate on layers of known crystals than on Alexandria-like ones (0.19), and it knows
+it — it disowns 71% of them, and the tiers keep their order. The 90% interval covers 80%
+where it is shown. Light elements are the weak spot again, now with a sign: the model
+runs low on carbon (MAE 0.78, bias −0.18 eV), nitrogen (0.73, −0.19) and boron (0.65,
+−0.18). The metal gate caught only 15 of MC2D's 41 metals. MC2D also holds 1 103
+semiconductors with no Alexandria twin — 179 with carbon, 164 with nitrogen, 278 with
+hydrogen — which made it the next training experiment.
+
+#### Training on it
+
+[`scripts/mc2d_experiment.py`](scripts/mc2d_experiment.py) adds MC2D semiconductors that
+have no Alexandria twin to the previous release's training set. It leaves out compounds
+of V, Cr, Mn, Fe, Co and Ni, where the two databases disagree (MAE 0.374 against 0.057
+for everything else), and holds out a fifth of the formulas, plus every formula an
+earlier experiment held out, as a test set of 273 layers. The other 742 train. The rule,
+written into the script before training: not worse on the stable test, better on
+held-out MC2D with the whole interval below zero, and no other held-out set worse.
+This time the new population's test set votes, because it is held out by formula and
+it is the population the tool is for.
+
+| test set | control | **+ MC2D (shipped)** | Δ, 95% CI |
+|---|---|---|---|
+| stable Alexandria, 1 326 | 0.191 | **0.190** | −0.001 [−0.011, +0.014] |
+| held-out metastable Alexandria, 2 512 | 0.258 | **0.255** | −0.003 [−0.008, +0.001] |
+| held-out 2DMatPedia, 397 | 0.410 | **0.392** | −0.018 [−0.040, +0.003] |
+| held-out 0.2–0.5 eV/atom, 2 524 | 0.247 | **0.246** | −0.001 [−0.005, +0.003] |
+| held-out 0.5–1.0 eV/atom, 453 | 0.219 | 0.222 | +0.003 [−0.006, +0.011] |
+| **held-out MC2D, 273** | 0.449 | **0.385** | **−0.064 [−0.103, −0.027]** |
+
+It passes, and on the 208 held-out MC2D layers whose formula nothing trained on the
+gain is larger (0.519 → 0.438). The upper bound on the stable test, +0.014, is 0.001
+inside the limit; the F₂ layer described under [honest limits](#honest-limits) widens
+that interval. Two light-element slices got worse, both on held-out metastable
+Alexandria and outside the rule: boron +0.26 eV [+0.12, +0.39] on 26 structures and
+nitrogen +0.04 [+0.003, +0.08] on 45; oxygen there improved by 0.03. On the held-out
+MC2D layers the tiers read 0.16 / 0.29 / 0.49 eV and the 90% interval covers 79% where
+it is shown — real crystals remain harder than Alexandria's population, and the model
+still says so.
+
+Rerunning the audit on the shipped model first reported MAE 0.216 on "unseen" MC2D —
+because it excluded only Alexandria twins of training structures, not the MC2D entries
+now in training: the same mistake as the 2DMatPedia audit after that database joined
+training. Fixed, it leaves 437 MC2D semiconductors the model never saw: MAE **0.437**
+against 0.484 for the previous release on the same entries, tiers 0.15 / 0.29 / 0.54
+eV. The light-element bias on them is now positive (nitrogen +0.23, hydrogen +0.23 eV):
+the entries that ran low are the ones now in training.
+
 ### A second property: work function, and the band edges it unlocks
 
 | | Composition | Structure | n_test |
 |---|---|---|---|
-| Band gap | 0.430 | **0.186** | 1 326 |
+| Band gap | 0.430 | **0.190** | 1 326 |
 | Work function | 0.314 | **0.254** | 337 |
 
 Trained on the 3 505 C2DB structures carrying a work function, same architecture,
-same protocol, its own checkpoint. Structure wins by 19% here against 57% for the
+same protocol, its own checkpoint. Structure wins by 19% here against 56% for the
 gap, which is what you would expect: the work function leans more on chemistry and
 less on geometry.
 
@@ -559,10 +646,10 @@ the pair a contact metal is matched against:
 
 | | Electron affinity | published | Ionisation potential | published |
 |---|---|---|---|---|
-| MoS₂ | 4.42 | 4.0 | 6.09 | 6.1 |
-| MoSe₂ | 3.99 | 3.9 | 5.45 | 5.5 |
-| WS₂ | 4.01 | 3.9 | 5.89 | 6.0 |
-| WSe₂ | 3.64 | 3.6 | 5.20 | 5.2 |
+| MoS₂ | 4.41 | 4.0 | 6.10 | 6.1 |
+| MoSe₂ | 3.95 | 3.9 | 5.49 | 5.5 |
+| WS₂ | 4.02 | 3.9 | 5.88 | 6.0 |
+| WSe₂ | 3.64 | 3.6 | 5.21 | 5.2 |
 
 The edges are a subtraction between two models, so they need **both** to stand
 behind their half and are withheld when either verdict says out-of-domain. This
@@ -591,9 +678,9 @@ the trap:
 
 | | Fitted against | n | Validated error |
 |---|---|---|---|
-| **Quasiparticle gap** — photoemission, transport | G₀W₀ from C2DB | 214 | **0.25 eV** |
-| **Exciton binding energy** | Bethe–Salpeter from C2DB | 214 | **0.13 eV** |
-| **Optical gap** = direct G₀W₀ − exciton | the two above | 214 | **0.23 eV** |
+| **Quasiparticle gap** — photoemission, transport | G₀W₀ from C2DB | 199 | **0.24 eV** |
+| **Exciton binding energy** | Bethe–Salpeter from C2DB | 199 | **0.14 eV** |
+| **Optical gap** = direct G₀W₀ − exciton | the two above | 199 | **0.22 eV** |
 
 All three are cross-validated on **composition-disjoint** folds, the same protocol
 as the gap model, because C2DB holds several entries per composition.
@@ -601,8 +688,8 @@ as the gap model, because C2DB holds several entries per composition.
 **These are not corrections applied to the band gap.** They are linear heads on the
 ensemble's own latent space — the 128-dimensional embedding each member already
 computes on the way to a gap, five of them concatenated. Training a graph network on
-214 materials would fail; this project measured that at 696. Fitting a ridge head on
-an encoder that saw 45 115 structures does not.
+199 materials would fail; this project measured that at 696. Fitting a ridge head on
+an encoder that saw 45 857 structures does not.
 
 That change came from measuring where the error actually was. As a function of the
 band gap alone, the optical correction sat at 0.38 eV — and feeding it C2DB's *own*
@@ -613,16 +700,17 @@ structure, and the structure is what the encoder already saw.
 
 | | gap alone | latent head |
 |---|---|---|
-| Quasiparticle gap (G₀W₀) | 0.42 | **0.25** |
-| Exciton binding (BSE) | 0.24 | **0.13** |
-| Optical gap | 0.39 | **0.23** |
+| Quasiparticle gap (G₀W₀) | 0.41 | **0.24** |
+| Exciton binding (BSE) | 0.25 | **0.14** |
+| Optical gap | 0.38 | **0.22** |
 
 Each encoder gets its own heads, and they have moved with every encoder. On the one
 trained to 0.2 eV/atom the gaps slipped (optical 0.198 → 0.218); on the one trained to
-0.5 the quasiparticle gaps recovered (0.255 → 0.226); on the shipped one, trained to
-1.0, they slipped again (fundamental 0.249, direct 0.266, optical 0.229, binding
-0.133). The materials the heads are fitted on change with the encoder too — 214 now
-against 196, because fewer are out-of-domain — so these are not paired comparisons.
+0.5 the quasiparticle gaps recovered (0.255 → 0.226); on the one trained to 1.0 they
+slipped again (fundamental 0.249, direct 0.266, optical 0.229, binding 0.133); on the
+shipped one, with MC2D, fundamental 0.236, direct 0.274, optical 0.220, binding 0.139.
+The materials the heads are fitted on change with the encoder too — 199 now, 214 and
+196 before — so these are not paired comparisons.
 The gap model is chosen on the gap; the heads take what that encoder gives them.
 
 The head wins in every band of predicted gap, from 0–1 eV to above 5. It also makes
@@ -632,9 +720,9 @@ below.
 
 **Where it loses.** Hold out an entire family at the sparse top of the range and ridge
 cannot extrapolate where a polynomial can: refit with every entry of BN and the four
-TMDs removed, the head gives h-BN 5.12 eV against a measured 6.00, where the polynomial
-gives 6.06. Against measurement on those five the polynomial wins overall (0.29 against
-0.33 eV) while the head wins on the four TMDs (0.19 against 0.34): h-BN carries the
+TMDs removed, the head gives h-BN 4.78 eV against a measured 6.00, where the polynomial
+gives 5.99. Against measurement on those five the polynomial wins overall (0.28 against
+0.40 eV) while the head wins on the four TMDs (0.19 against 0.35): h-BN carries the
 difference. It is the one place the head loses, and it is reported rather than hidden.
 
 ### How the optical target was built
@@ -649,7 +737,8 @@ measurement.
 
 C2DB computes both halves of an optical gap from first principles for part of its
 catalogue: G₀W₀ for the quasiparticle gap, the Bethe–Salpeter equation for the
-exciton. That is 214 usable non-magnetic materials instead of 5.
+exciton. That is about 200 usable non-magnetic materials instead of 5 (199 in-domain
+for the shipped encoder).
 [`scripts/fetch_c2db_optical.py`](scripts/fetch_c2db_optical.py) pulls them and
 caches the result in the repository. That target is what the heads above are fitted
 to; a quadratic in the gap alone is kept in the checkpoint as the fallback for a
@@ -665,12 +754,12 @@ the fit:
 
 | | pred | quadratic | old 5-point fit | measured |
 |---|---|---|---|---|
-| MoS₂ | 1.67 | 2.13 | 1.88 | 1.88 |
-| MoSe₂ | 1.46 | 1.92 | 1.59 | 1.55 |
-| WS₂ | 1.88 | 2.35 | 2.17 | 2.00 |
-| WSe₂ | 1.56 | 2.01 | 1.72 | 1.65 |
-| h-BN | 4.69 | 6.05 | 6.07 | 6.00 |
-| | | **0.33 eV** | 0.26 eV in-sample, **0.71 eV** leave-one-out | |
+| MoS₂ | 1.69 | 2.13 | 1.91 | 1.88 |
+| MoSe₂ | 1.53 | 1.97 | 1.69 | 1.55 |
+| WS₂ | 1.86 | 2.30 | 2.14 | 2.00 |
+| WSe₂ | 1.57 | 2.01 | 1.74 | 1.65 |
+| h-BN | 4.69 | 5.98 | 6.07 | 6.00 |
+| | | **0.27 eV** | 0.09 eV in-sample, **0.71 eV** leave-one-out | |
 
 The old fit looks better in that table only because those five rows are its training
 data. Against a monolayer it has not seen it errs by 0.71 eV.
@@ -684,11 +773,11 @@ caught. Two corrections referenced to *different* quantities cannot have a physi
 difference, and HSE06 itself sits about 0.4 eV below G₀W₀ at a 1.7 eV gap.
 
 The latent heads settle it properly, because the binding energy is now predicted
-rather than inferred. On the four TMDs the head returns **0.57 / 0.50 / 0.51 / 0.48
+rather than inferred. On the four TMDs the head returns **0.55 / 0.51 / 0.53 / 0.48
 eV** against BSE's 0.55 / 0.50 / 0.52 / 0.48 — the published few-tenths-of-an-eV
 figure for a monolayer, arrived at from the structure rather than from a coincidence
-of two fits. Across the 210 the binding energy is a median of 0.29 of the gap with a
-spread of 0.09, which is where the published E_g/4 scaling for 2D materials sits —
+of two fits. Across the 196 the binding energy is a median of 0.29 of the gap with a
+spread of 0.10, which is where the published E_g/4 scaling for 2D materials sits —
 and that spread is exactly why no function of the gap alone could have found it.
 
 Both corrections are fitted only on points the tool itself calls usable — a
@@ -819,19 +908,26 @@ rejects it (0.68 against 0.47).
   18% of the semiconductors, and it is sensitive to strain: MoSe₂ and WSe₂ stretched by
   3% in plane are rejected as metals (MoSe₂ sits on the threshold at +2%).
 - The gap-type classifier is the older, weaker one (ROC-AUC 0.76 on the stable test,
-  0.56–0.63 on metastable structures). Its retrained successors rank better and call
-  MoS₂ indirect, so they were not shipped; treat a type call as a hint.
+  0.56–0.63 on metastable structures). On the test split its *direct* calls are right
+  92% of the time and its *indirect* calls only 35%; every front end now says so next to
+  the call. A three-way answer (direct / indirect / too close to call) was tried under a
+  rule written first ([`scripts/gap_type_borderline.py`](scripts/gap_type_borderline.py))
+  and failed: no threshold made indirect calls right 75% of the time, and the structures
+  it called borderline were no closer to the physical boundary than the rest (median
+  margin 0.100 against 0.098 eV) — the uncertainty is the classifier's, not the
+  material's. Retrained successors rank better and call MoS₂ indirect, so they were not
+  shipped either.
 - The labels carry the errors of their databases. Alexandria reports planar
   honeycombs with their band edges at K too high (graphene is labelled 1.23 and 1.13
   eV in two cells, and both entries sit in the test split);
   [`scripts/reference_flags.py`](scripts/reference_flags.py) flags those as wrong and
-  145 more as disputed — one structure, several Alexandria cells, labels more than 0.1
-  eV apart (the model gives all of them the same number). In 37 of 62 such structures
+  139 more as disputed — one structure, several Alexandria cells, labels more than 0.1
+  eV apart (the model gives all of them the same number). In 35 of 59 such structures
   the smallest cell carries the highest label, which a k-point mesh that misses K would
   do, so that mechanism explains some of them and not all. The browser and the
   language-model tools say so on the row and compute no error from those labels; without
-  them the test MAE is 0.185 rather than 0.186 eV. The labels stay in training: removing
-  them means retraining.
+  them the test MAE is the same 0.190 eV. The labels stay in training: removing them
+  means retraining.
   2DMatPedia is about 1 eV high on the ZrNCl family and less reliable on magnetic
   materials, which is why only its non-magnetic entries are used.
 - **No spin-orbit coupling in the target** (Alexandria's PBE), and spin-orbit coupling
@@ -847,8 +943,8 @@ rejects it (0.68 against 0.47).
   within 0.02 eV of the literature shift, but on light compounds it invented a shift
   (0.13 → 0.18). Applying it only to heavy elements is the obvious fix, and it needs
   data none of this has touched to be tested honestly.
-- The quasiparticle and optical outputs are linear heads fitted on 214 C2DB materials
-  (G₀W₀ and BSE), cross-validated at 0.13–0.27 eV and checked against five measured
+- The quasiparticle and optical outputs are linear heads fitted on 199 C2DB materials
+  (G₀W₀ and BSE), cross-validated at 0.14–0.27 eV and checked against five measured
   monolayers. Treat them as estimates.
 - The calibrated interval assumes the ensemble spread is meaningful, which is exactly
   what fails out-of-domain. That is why out-of-domain results hide the interval
@@ -857,8 +953,9 @@ rejects it (0.68 against 0.47).
   metastable Alexandria 2D. On the 6 625 rows of the screening table the ensemble
   never trained on (held-out near-hull and metastable Alexandria, plus C2DB and JARVIS
   dft_2d under their own functionals) the 90% interval covers 88%: 90% on Alexandria,
-  82% on C2DB and 79% on JARVIS, because part of their error is the difference in
-  method. On C2DB that difference is spin-orbit coupling and nothing else: where the
+  82% on C2DB and 78% on JARVIS, because part of their error is the difference in
+  method. On C2DB that difference is spin-orbit coupling and nothing else (measured on
+  the previous ensemble): where the
   tool shows an interval, compounds without heavy elements are covered 91% of the
   time and compounds with an element of Z ≥ 52 70%, with the model 0.24 eV above
   their SOC-inclusive reference. JARVIS would need an interval 3.4 times wider — a
@@ -866,18 +963,28 @@ rejects it (0.68 against 0.47).
   means, so it stays an interval on the PBE gap. Re-run [`scripts/calibrate_uncertainty.py`](scripts/calibrate_uncertainty.py)
   and [`scripts/calibrate_population.py`](scripts/calibrate_population.py) on the
   population you actually screen. The precompute script checks this and warns.
-- **The verdict ranks error against PBE, and cannot be checked against JARVIS.** The
-  tiers keep their order on Alexandria (0.13 / 0.20 / 0.34 eV) and C2DB (0.19 / 0.21 /
-  0.36). On JARVIS dft_2d the reliable tier errs more than the check tier (0.40 against
-  0.33 eV), and did under every earlier ensemble too, hidden in the pooled numbers. Its
-  labels use the OptB88vdW functional: on the 149 reliable JARVIS rows whose structure
-  is also in Alexandria (measured on the previous ensemble), the model matched
-  Alexandria's PBE label to 0.07 eV while the JARVIS label differs from that PBE label
-  by 0.33. Most of what that tier "gets wrong" there is the functional.
-- Both out-of-domain signals lost ground as the training set grew: the latent
-  distance's Spearman against error went 0.47 → 0.41 → 0.39, the spread's 0.45 → 0.40.
-  A training set that covers more leaves less that is far away, and smaller, more even
-  errors leave less to rank.
+- **The verdict ranks error against PBE; against JARVIS it is a weak check.** The
+  tiers keep their order on Alexandria (0.13 / 0.19 / 0.34 eV), C2DB (0.18 / 0.21 /
+  0.35) and, with this ensemble, JARVIS dft_2d (0.31 / 0.36 / 0.49). Under every
+  earlier ensemble the reliable JARVIS tier erred more than check (0.40 against 0.33
+  for the previous release), hidden in the pooled numbers. JARVIS labels use the
+  OptB88vdW functional: on the 149 reliable JARVIS rows whose structure is also in
+  Alexandria (measured on the previous ensemble), the model matched Alexandria's PBE
+  label to 0.07 eV while the JARVIS label differs from that PBE label by 0.33. Most of
+  what a tier "gets wrong" there is the functional, so the restored order is welcome
+  and proves little.
+- The out-of-domain signals move with the training set: the latent distance's
+  Spearman against error went 0.47 → 0.41 → 0.39 as metastable data grew, the spread's
+  0.45 → 0.40, and adding MC2D brought them to 0.43 and 0.45. A training set that
+  covers more leaves less that is far away, and smaller, more even errors leave less
+  to rank.
+- **One member fails on molecular fluorine.** Seed 3 predicts about −40 eV for one of
+  four F₂ layers in the test split (label 0.09 eV); its validation error is like the
+  others', so this is one extrapolation, not a broken model. The ensemble mean is
+  −7.3 eV with a spread of 17 eV, all four F₂ layers are out-of-domain, and in the
+  screening table they are the only predictions outside −0.5…11 eV. Retraining that
+  member with another seed would mean choosing a seed after seeing the test, so it
+  ships as trained, and the test RMSE (0.39 against 0.33 before) carries it.
 - Inputs must be monolayers with a vacuum gap. Thin vacuum is padded automatically —
   at training time too, since this release — because with periodic boundaries it
   silently adds inter-layer edges; cells with no gap ≥ 5 Å are flagged as not 2D.
@@ -887,11 +994,14 @@ Full details: [MODEL_CARD.md](MODEL_CARD.md).
 ## Reproduce
 
 Data export runs locally through the JARVIS API; training needs a GPU. The shipped
-ensemble came from one rented box with two RTX 5060 Ti, trained side by side with its
-control and the classifier experiment in about four and a half hours, one container
-restart included (training now keeps every finished ensemble member on disk and
-resumes from the one it lost); calibration, heads and the screening table took
-another ten minutes there.
+ensemble came from one rented box with two RTX 3080 (20 GB) on an old Xeon, trained
+side by side with its control in about two and a half hours. One training process
+kept a GPU at a third of its capacity — the main process, not the card, is the
+bottleneck for a model this small — so each run got three helper processes
+(`--only-members`), each training some of the five members into the run's member
+folder, which the main run collects. Training keeps every finished member on disk
+and resumes from the one it lost. Calibration, heads and the screening table took
+another fifteen minutes there.
 
 ```bash
 python export_structures_for_alignn.py --source alex_2d --ehull-max 0.1
@@ -903,19 +1013,23 @@ python scripts/audit_2dmatpedia.py                 # which 2DMatPedia entries ar
 python scripts/stability_experiment.py prepare     # one folder, four split files, two extra test sets
 python scripts/hull_experiment.py prepare          # adds Alexandria 0.2-0.5 eV/atom and the far test set
 python scripts/hull_1ev_experiment.py prepare      # adds 0.5-1.0 eV/atom and one more test set
-python scripts/hull_1ev_experiment.py cache        # once, before arms run in parallel
+python scripts/fetch_mc2d.py                       # MC2D over OPTIMADE, cached in data/
+python scripts/audit_mc2d.py                       # which MC2D entries are new, and usable
+python scripts/mc2d_experiment.py prepare          # adds MC2D and its held-out test set
+python scripts/mc2d_experiment.py cache            # once, before arms run in parallel
 ```
 
 ```bash
-python train_cgcnn.py --data alignn_data_hull1 --split-file alignn_data_hull1/splits/C1.json \
+python train_cgcnn.py --data alignn_data_mc2dexp --split-file alignn_data_mc2dexp/splits/E1.json \
     --ensemble 5 --angles 9 --cache --workers 4 --out weights/cgcnn_2d_ensemble.pt
+# optional helpers, same command plus e.g. --only-members 2 (and 3, 4) in other processes
 ```
 
 ```bash
 python scripts/calibrate_uncertainty.py --weights weights/cgcnn_2d_ensemble.pt \
-    --data alignn_data_hull1 --split weights/cgcnn_2d_ensemble.split.json
+    --data alignn_data_mc2dexp --split weights/cgcnn_2d_ensemble.split.json
 python scripts/calibrate_population.py --weights weights/cgcnn_2d_ensemble.pt \
-    --data alignn_data_hull1 --near-hull-split alignn_data_exp/splits/A0.json --meta-tests T_meta,T_far
+    --data alignn_data_mc2dexp --near-hull-split alignn_data_exp/splits/A0.json --meta-tests T_meta,T_far
 python scripts/fit_gap_corrections.py --write      # quasiparticle + optical fallback
 python scripts/fit_exciton.py --write              # latent heads: G0W0 gaps, exciton, optical
 ```
@@ -959,8 +1073,8 @@ nanomat/                  graph.py (structure -> graph, angles, vacuum checks), 
 notebooks/predict.ipynb   the Colab notebook: upload a structure, read the answer
 screen_bandgap.py         CLI batch screening + Gradio UI      app.py: Hugging Face Spaces entry
 train_cgcnn.py            training: gap / type / metal, ensembles, grouped split, --split-file, --angles
-scripts/                  calibration, corrections and latent heads, the 2DMatPedia audit, the
-                          stability experiment, polymorph sensitivity, baselines, the screening
+scripts/                  calibration, corrections and latent heads, the 2DMatPedia and MC2D
+                          audits, the data experiments, polymorph sensitivity, baselines, the screening
                           table, the browser's data, deployment, structure twins, the
                           language-model test
 validate_experiment.py    model vs experiment on reference monolayers (offline)
@@ -968,8 +1082,9 @@ baseline_2d_bandgap.py    composition baseline (Magpie + RF/XGBoost)
 export_structures_for_alignn.py   JARVIS / C2DB / Alexandria -> POSCAR folder + id_prop.csv
 weights/                  gap ensemble (calibration, heads, reference embeddings inside), metal
                           gate, gap type, work function
-data/                     cached C2DB G0W0 + BSE table; which table rows hold the same structure
-examples/  tests/         reference structures incl. failure cases; 26 pytest checks
+data/                     cached C2DB G0W0 + BSE table; which table rows hold the same structure;
+                          flagged reference labels (the MC2D cache is rebuilt from its API, not shipped)
+examples/  tests/         reference structures incl. failure cases; 31 pytest checks
 figures/                  README figures and the scripts that regenerate them
 ```
 
@@ -986,10 +1101,12 @@ figures/                  README figures and the scripts that regenerate them
    open piece of the trust layer: the C2DB coverage gap is all spin-orbit coupling.
 4. **The next gain is not more metastable data.** The step to 1.0 eV/atom passed its
    rule with 0.004 eV on the stable test, against 0.032 for the step before.
-5. **Retrain without the flagged labels** (149, `data/reference_flags.csv`); they are
-   flagged everywhere they are shown, but 108 of them are still in the training set.
-6. **More light-element data.** Full C2DB (16 789 entries against 3 520 mirrored in
-   JARVIS) and Materials Cloud MC2D; carbon is still the sparsest element in training.
+5. **Retrain without the flagged labels** (143, `data/reference_flags.csv`); they are
+   flagged everywhere they are shown, but 110 of them are still in the training set.
+6. **Light elements on real crystals.** With MC2D in training, the held-out MC2D layers
+   with nitrogen, hydrogen and oxygen still run 0.18–0.23 eV high, and boron on
+   held-out metastable Alexandria got worse (+0.26 eV, 26 structures). The magnetic
+   3d-metal MC2D entries left out of training are the open part of that database.
 7. Host the uploader somewhere free. Gradio Spaces now require a paid tier, so
    `python screen_bandgap.py --app` is the local answer.
 

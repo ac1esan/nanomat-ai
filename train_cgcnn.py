@@ -313,6 +313,9 @@ def main():
                          "separates polymorphs - 1H against 1T-MX2 is the measured case")
     ap.add_argument("--seed", type=int, default=0, help="split seed and first model seed")
     ap.add_argument("--ensemble", type=int, default=1, help="train N members with seeds seed..seed+N-1")
+    ap.add_argument("--only-members", default="",
+                    help="comma-separated member indices: train only these, keep them on disk "
+                         "and exit (helpers for a resumable ensemble run)")
     ap.add_argument("--bootstrap", action="store_true",
                     help="bagging: resample the training set per ensemble member instead of "
                          "showing every member identical data. Without it the spread between "
@@ -400,10 +403,17 @@ def main():
     # restarted machine resumes at the member it lost instead of from scratch
     partial = os.path.splitext(args.out)[0] + ".members"
     fingerprint = {k_: v for k_, v in vars(args).items()
-                   if k_ not in ("out", "workers", "device", "ensemble")}
+                   if k_ not in ("out", "workers", "device", "ensemble", "only_members")}
+    # --only-members: a helper process trains just these members, leaves them on disk
+    # and exits; the main run of the same command picks them up when it gets there.
+    # Members are independent, so on a box whose CPU, not its GPU, limits one run,
+    # helpers multiply the throughput without changing the recipe.
+    only = {int(x) for x in args.only_members.split(",") if x.strip()}
     fingerprint.update(n_train=len(tr), n_val=len(va), n_test=len(te))
     states, tests, vals, member_metrics = [], [], [], []
     for k in range(args.ensemble):
+        if only and k not in only:
+            continue
         seed = args.seed + k
         print(f"\n=== model {k + 1}/{args.ensemble}  seed {seed} ===")
         done = os.path.join(partial, f"{k}.pt")
@@ -432,6 +442,10 @@ def main():
             m = cls_metrics(test["lbl"], test["prob"], thr)
         member_metrics.append(m)
         print("  test:", json.dumps({k_: (round(v, 4) if isinstance(v, float) else v) for k_, v in m.items()}))
+
+    if only:
+        print(f"\nmembers {sorted(only)} written to {partial}; the main run collects them")
+        return
 
     # --- aggregate + save --------------------------------------------------
     metrics = {"task": args.task, "split": args.split, "members": member_metrics,
