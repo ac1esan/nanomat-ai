@@ -222,7 +222,7 @@ def fit_optical(P: Predictor) -> tuple[dict, list[dict]]:
         "mae_uncorrected": float(np.mean(np.abs(x - y))),
         "pearson": float(np.corrcoef(x, y)[0, 1]),
         "reference": "G0W0 - BSE exciton",
-        "source": "C2DB (Haastrup 2018, Gjerding 2021), CC-BY-SA 4.0",
+        "source": "C2DB (Haastrup 2018, Gjerding 2021), CC BY-NC 4.0",
     }
     print(f"  fit: optical ~= " + " + ".join(
         f"{c:.4f}" + ("" if i == len(coeffs) - 1 else f"*g^{len(coeffs)-1-i}".replace("^1", ""))

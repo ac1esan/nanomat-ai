@@ -1098,7 +1098,8 @@ figures/                  рисунки README и скрипты, которы�
 
 MIT. Данные: Alexandria (CC-BY 4.0), C2DB и JARVIS-DFT через
 [JARVIS-Tools](https://github.com/usnistgov/jarvis). Оптическая поправка подогнана по
-результатам G₀W₀ и BSE из [C2DB](https://c2db.fysik.dtu.dk/), CC-BY-SA 4.0 —
+результатам G₀W₀ и BSE из [C2DB](https://c2db.fysik.dtu.dk/), CC BY-NC 4.0 (поэтому
+`data/c2db_optical.csv`, кэш выгрузки из неё, распространяется по этой лицензии, а не по MIT) —
 цитировать Haastrup et al., *2D Materials* **5**, 042002 (2018) и Gjerding et al.,
 *2D Materials* **8**, 044002 (2021). Ансамбль также учится на
 [2DMatPedia](https://doi.org/10.1038/s41597-019-0097-3) — цитировать Zhou et al.,

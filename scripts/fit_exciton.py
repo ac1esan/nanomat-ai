@@ -244,7 +244,7 @@ def main():
                "folds": FOLDS, "shuffles": SHUFFLES,
                "mae_cv": {k: float(v) for k, v in scores.items()},
                "stress_test": stress,
-               "source": "C2DB G0W0 + BSE (Haastrup 2018, Gjerding 2021), CC-BY-SA 4.0"}
+               "source": "C2DB G0W0 + BSE (Haastrup 2018, Gjerding 2021), CC BY-NC 4.0"}
     for col, name, _ in TARGETS:
         sc, m = ridge(X, y[col], np.arange(len(comp)))
         payload[name] = collapse(sc, m)

@@ -19,7 +19,8 @@ earns them the job — see scripts/fit_gap_corrections.py, which prints that che
 The result is cached in the repository, so nothing downstream depends on the site
 being reachable or on its internals staying the same. Re-run this only to refresh.
 
-Data: C2DB, https://c2db.fysik.dtu.dk/, CC-BY-SA 4.0. Cite Haastrup et al.,
+Data: C2DB, https://c2db.fysik.dtu.dk/, CC BY-NC 4.0 (so is the cache this
+script writes). Cite Haastrup et al.,
 2D Materials 5, 042002 (2018) and Gjerding et al., 2D Materials 8, 044002 (2021).
 """
 

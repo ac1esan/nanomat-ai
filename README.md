@@ -1125,7 +1125,8 @@ GitHub's *Cite this repository* button and most reference managers pick it up.
 MIT. Training data: Alexandria (CC-BY 4.0), C2DB and JARVIS-DFT, accessed through
 [JARVIS-Tools](https://github.com/usnistgov/jarvis). The optical correction is
 fitted against G₀W₀ and BSE results from [C2DB](https://c2db.fysik.dtu.dk/),
-CC-BY-SA 4.0 — cite Haastrup et al., *2D Materials* **5**, 042002 (2018) and
+CC BY-NC 4.0 (so `data/c2db_optical.csv`, a cached extract of it, is under that
+licence rather than MIT) — cite Haastrup et al., *2D Materials* **5**, 042002 (2018) and
 Gjerding et al., *2D Materials* **8**, 044002 (2021). The ensemble also trains on
 [2DMatPedia](https://doi.org/10.1038/s41597-019-0097-3) — cite Zhou et al.,
 *Scientific Data* **6**, 86 (2019).
