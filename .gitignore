@@ -50,3 +50,4 @@ data_c2db_all/
 data_dft2d_all/
 data_metal_merged/
 data/mc2d.json.gz
+data/c2db.db

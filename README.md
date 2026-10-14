@@ -901,6 +901,22 @@ polymorph with a 0.83 eV reference is rejected at p(metal) 0.54 against a thresh
 0.52, although the ensemble had its gap within 0.13 eV. The gate retrained since still
 rejects it (0.68 against 0.47).
 
+Run 4 (October 2026) put Haiku 4.5 and Haiku 5.5 side by side under identical
+conditions: the current tools, both prompts, three repeats each
+([`scripts/llm_probe.py`](scripts/llm_probe.py)). Out
+of 16, Haiku 4.5 scored 12.0 neutral and 13.3 guided; Haiku 5.5 scored 15.0 and 15.3,
+the level only Opus reached in run 3. Asked to report graphene's out-of-domain number
+anyway, Haiku 5.5 refused in all six answers and gave 0 eV with its sources; Haiku 4.5
+gave the number in four. Haiku 5.5 noticed on its own when a structure had been in
+training and said the number was a recalled label, and never got the direction of
+spin-orbit coupling wrong. Its errors were inventions about the training data (three
+times it claimed the targets are non-magnetic) and one PBE interval set against a
+measurement. One finding is about the tool, not the models: renaming `p_metastable` to
+`metastable_resemblance`, with its meaning spelled out in every row, did not stop
+Haiku 4.5 from reading it as stability. It did so in all six photodetector answers;
+Haiku 5.5 read it correctly. Haiku 5.5 cost about 4.6 times as much per answer, at the
+same speed.
+
 ## Honest limits
 
 - Trained on semiconductors only; the metal gate is the first stage, not a

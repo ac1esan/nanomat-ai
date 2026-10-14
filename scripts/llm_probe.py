@@ -31,6 +31,7 @@ import asyncio
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -186,6 +187,10 @@ def find_claude() -> str:
         path = CLAUDE_BIN.format(ver=v)
         if os.path.exists(path):
             return path
+    # newer app bundles moved the binary; a standalone install works the same way
+    standalone = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
+    if os.path.exists(standalone):
+        return standalone
     raise SystemExit("Claude Code CLI not found")
 
 
