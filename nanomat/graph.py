@@ -33,6 +33,22 @@ DEFAULT_ANG_CUTOFF = 4.0
 DEFAULT_N_ANG = 9      # soft bins over cos(theta) in [-1, 1]
 
 
+class TriGraph(Data):
+    """A graph that also carries three-body triplets.
+
+    `tri_index[0]` is the edge whose feature is updated, `tri_index[1]` another bond
+    leaving the same atom; `tri_cos` is the angle between the two bonds and `tri_env`
+    the product of their smooth cutoffs. Both rows index EDGES, so batching must
+    shift them by the number of edges, not of nodes - the one thing the plain Data
+    class would get wrong.
+    """
+
+    def __inc__(self, key, value, *args, **kwargs):
+        if key == "tri_index":
+            return self.edge_index.size(1)
+        return super().__inc__(key, value, *args, **kwargs)
+
+
 def _axis_gap(st: Structure, axis: int) -> tuple[float, float, float]:
     """Largest empty gap along a lattice axis (with wrap-around).
 
@@ -167,20 +183,64 @@ def angle_features(st: Structure, cutoff: float = DEFAULT_ANG_CUTOFF,
     return np.divide(out, total, out=np.zeros_like(out), where=total > 1e-9).astype(np.float32)
 
 
+def triplets(st: Structure, c: np.ndarray, n: np.ndarray, img: np.ndarray, d: np.ndarray,
+             cutoff: float = DEFAULT_ANG_CUTOFF) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Ordered pairs of distinct bonds that leave the same atom, both within `cutoff`.
+
+    Takes the neighbour list the edges were built from, so the indices it returns
+    are edge indices of that graph. Returns (index [2, T], cos [T], envelope [T]).
+    """
+    short = np.where(d <= cutoff)[0]
+    empty = (np.zeros((2, 0), dtype=np.int64), np.zeros(0, np.float32), np.zeros(0, np.float32))
+    if len(short) < 2:
+        return empty
+    vec = st.cart_coords[n[short]] + img[short] @ st.lattice.matrix - st.cart_coords[c[short]]
+    unit = vec / np.maximum(d[short], 1e-9)[:, None]
+    env = 0.5 * (np.cos(np.pi * np.clip(d[short] / cutoff, 0.0, 1.0)) + 1.0)
+    order = np.argsort(c[short], kind="stable")
+    src = c[short][order]
+    starts = np.flatnonzero(np.r_[True, src[1:] != src[:-1]])
+    ends = np.r_[starts[1:], len(src)]
+    rows, cols, coss, envs = [], [], [], []
+    for a, b in zip(starts, ends):
+        if b - a < 2:
+            continue
+        loc = order[a:b]                       # positions within `short`
+        i, j = np.meshgrid(np.arange(b - a), np.arange(b - a), indexing="ij")
+        keep = i != j
+        i, j = i[keep], j[keep]
+        rows.append(short[loc[i]])
+        cols.append(short[loc[j]])
+        coss.append(np.clip(np.einsum("ij,ij->i", unit[loc[i]], unit[loc[j]]), -1.0, 1.0))
+        envs.append(env[loc[i]] * env[loc[j]])
+    if not rows:
+        return empty
+    return (np.vstack([np.concatenate(rows), np.concatenate(cols)]).astype(np.int64),
+            np.concatenate(coss).astype(np.float32), np.concatenate(envs).astype(np.float32))
+
+
 def to_graph(st: Structure, cutoff: float = DEFAULT_CUTOFF, n_ang: int = 0,
-             ang_cutoff: float = DEFAULT_ANG_CUTOFF) -> Data | None:
+             ang_cutoff: float = DEFAULT_ANG_CUTOFF, n_tri: int = 0) -> Data | None:
     """Periodic neighbour graph with distances as edge weights. None if no edges.
 
-    `n_ang > 0` additionally attaches per-atom angular features. Left at 0 the graph
-    is byte-identical to the one the shipped weights were trained on.
+    `n_ang > 0` additionally attaches per-atom angular features; `n_tri > 0` attaches
+    bond-pair triplets for the model's three-body edge update (the width itself is
+    a model setting, the graph only needs to know that triplets are wanted). Left at
+    0 the graph is byte-identical to the one the shipped weights were trained on.
     """
-    c, n, _img, d = st.get_neighbor_list(r=cutoff)
+    c, n, img, d = st.get_neighbor_list(r=cutoff)
     if len(c) == 0:
         return None
     z = torch.tensor([s.specie.Z for s in st], dtype=torch.long)
     ei = torch.tensor(np.vstack([c, n]), dtype=torch.long)
     ew = torch.tensor(d, dtype=torch.float)
-    data = Data(z=z, edge_index=ei, edge_weight=ew, num_nodes=len(z))
+    cls = TriGraph if n_tri else Data
+    data = cls(z=z, edge_index=ei, edge_weight=ew, num_nodes=len(z))
     if n_ang:
         data.ang = torch.tensor(angle_features(st, ang_cutoff, n_ang), dtype=torch.float)
+    if n_tri:
+        ti, tc, te = triplets(st, c, n, img, d, ang_cutoff)
+        data.tri_index = torch.from_numpy(ti)
+        data.tri_cos = torch.from_numpy(tc)
+        data.tri_env = torch.from_numpy(te)
     return data

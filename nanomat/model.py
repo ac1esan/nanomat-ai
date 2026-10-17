@@ -22,16 +22,33 @@ class _Body(nn.Module):
     nearly indistinguishable - measured on 1H against 1T-MX2, where the model
     compresses a 0.44 eV gap difference into 0.12 eV.
 
-    At ang_dim = 0 no parameter is created and the state_dict is byte-identical to
-    the shipped checkpoints, which is the contract this class has to keep.
+    `tri_dim > 0` adds a three-body update of the edge features: every bond receives
+    a message from the other bonds leaving the same atom, filtered by the angle
+    between them (tri_dim Gaussians over cos(theta)) and by both bonds' smooth
+    cutoffs. The per-atom descriptor says what angles an atom has; this says which
+    bond makes which angle with which, the step from a histogram to a geometry
+    (the idea of DimeNet and ALIGNN, written as one block on plain PyG). The update
+    goes through tanh with no bias, so a bond without triplets is left untouched.
+
+    At ang_dim = tri_dim = 0 no parameter is created and the state_dict is
+    byte-identical to the shipped checkpoints, which is the contract this class has
+    to keep.
     """
 
-    def __init__(self, h: int, n_conv: int, cutoff: float, n_rbf: int, ang_dim: int = 0):
+    def __init__(self, h: int, n_conv: int, cutoff: float, n_rbf: int, ang_dim: int = 0,
+                 tri_dim: int = 0):
         super().__init__()
         self.emb = nn.Embedding(100, h)
         self.ang_dim = int(ang_dim)
         if self.ang_dim:
             self.ang = nn.Linear(self.ang_dim, h)
+        self.tri_dim = int(tri_dim)
+        if self.tri_dim:
+            self.tri_ang = nn.Linear(self.tri_dim, n_rbf)
+            self.tri_edge = nn.Linear(n_rbf, n_rbf)
+            self.tri_out = nn.Linear(n_rbf, n_rbf, bias=False)
+            self.register_buffer("tri_centers", torch.linspace(-1, 1, self.tri_dim))
+            self.tri_width = 2.0 / max(self.tri_dim - 1, 1)
         self.convs = nn.ModuleList(
             [CGConv(h, dim=n_rbf, batch_norm=True) for _ in range(n_conv)]
         )
@@ -40,6 +57,11 @@ class _Body(nn.Module):
     def encode(self, data) -> torch.Tensor:
         # Gaussian RBF expansion of distances, computed on the fly (memory-friendly)
         ea = torch.exp(-0.5 * (data.edge_weight.unsqueeze(1) - self.centers.unsqueeze(0)) ** 2)
+        if self.tri_dim:
+            a = torch.exp(-0.5 * ((data.tri_cos.unsqueeze(1) - self.tri_centers) / self.tri_width) ** 2)
+            m = self.tri_ang(a) * self.tri_edge(ea[data.tri_index[1]]) * data.tri_env.unsqueeze(1)
+            agg = torch.zeros_like(ea).index_add_(0, data.tri_index[0], m)
+            ea = ea + torch.tanh(self.tri_out(agg))
         x = self.emb(data.z)
         if self.ang_dim:
             x = x + self.ang(data.ang)
@@ -53,8 +75,8 @@ class CGCNN(_Body):
 
     def __init__(self, h: int = 128, n_conv: int = 4, p: float = 0.2,
                  cutoff: float = DEFAULT_CUTOFF, n_rbf: int = DEFAULT_N_RBF,
-                 ang_dim: int = 0):
-        super().__init__(h, n_conv, cutoff, n_rbf, ang_dim)
+                 ang_dim: int = 0, tri_dim: int = 0):
+        super().__init__(h, n_conv, cutoff, n_rbf, ang_dim, tri_dim)
         self.head = nn.Sequential(nn.Linear(h, h), nn.Softplus(), nn.Linear(h, 1))
         self.drop = nn.Dropout(p)
 
@@ -73,8 +95,8 @@ class CGCNNcls(_Body):
 
     def __init__(self, h: int = 128, n_conv: int = 4,
                  cutoff: float = DEFAULT_CUTOFF, n_rbf: int = DEFAULT_N_RBF,
-                 ang_dim: int = 0):
-        super().__init__(h, n_conv, cutoff, n_rbf, ang_dim)
+                 ang_dim: int = 0, tri_dim: int = 0):
+        super().__init__(h, n_conv, cutoff, n_rbf, ang_dim, tri_dim)
         self.body = nn.Sequential(nn.Linear(h, h), nn.Softplus())
         self.reg = nn.Linear(h, 1)
         self.cls = nn.Linear(h, 1)

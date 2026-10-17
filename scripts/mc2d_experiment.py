@@ -73,8 +73,9 @@ def prepare(args):
     prev = json.load(open(os.path.join(PREV, "experiment.json")))
     c1 = json.load(open(os.path.join(PREV, "splits", "C1.json")))
     shipped = json.load(open(os.path.join(ROOT, "weights", "cgcnn_2d_ensemble.split.json")))
-    if sorted(c1["train"]) != sorted(shipped["train"]):
-        raise SystemExit("alignn_data_hull1/splits/C1.json is not the shipped split; rebuild it")
+    # C1 was shipped when this experiment ran; E1 (C1 + MC2D) is shipped since. Either
+    # way the rebuilt arm must reproduce the shipped split exactly - checked below,
+    # once E1 exists
     labels = H.id_prop(PREV)
     formula, elements = dict(prev["formula"]), dict(prev["elements"])
     held = ({formula[f] for f in c1["val"] + c1["test"]}
@@ -136,6 +137,11 @@ def prepare(args):
                   open(os.path.join(OUT, "splits", f"{arm}.json"), "w"))
         c = Counter(el for f in train for el in elements[f] if el in H.LIGHT)
         counts[arm] = {"n_train": len(train), **{el: c[el] for el in H.LIGHT}}
+    rebuilt = {arm: sorted(json.load(open(os.path.join(OUT, "splits", f"{arm}.json")))["train"])
+               for arm in ARMS}
+    if sorted(shipped["train"]) not in rebuilt.values():
+        raise SystemExit("neither rebuilt arm reproduces the shipped training split; "
+                         "check alignn_data_hull1 and runs/audit_mc2d_entries.csv")
     seen = {f: formula[f] in trained for v in tests.values() for f in v}
     json.dump({"tests": tests, "formula": {f: formula[f] for f in used},
                "elements": {f: elements[f] for f in used}, "band": {},

@@ -17,6 +17,7 @@ alignn_data_hull1/
 alignn_data_metal/
 alignn_data_typed/
 alignn_data_mc2dexp/
+alignn_data_refine/
 *.zip
 graphs_cache_*.pt
 
@@ -47,6 +48,8 @@ CLAUDE.md
 build/
 data_c2db_wf/
 data_c2db_all/
+data_c2db_emass_cbm/
+data_c2db_emass_vbm/
 data_dft2d_all/
 data_metal_merged/
 data/mc2d.json.gz

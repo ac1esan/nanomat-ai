@@ -65,11 +65,12 @@ def read_id_prop(data_dir: str) -> pd.DataFrame:
 
 
 def build_graphs(data_dir: str, files: list[str], cutoff: float, cache: bool,
-                 n_ang: int = 0):
+                 n_ang: int = 0, n_tri: int = 0):
     # the angular width is part of the cache key: a cache built without angles would
     # silently train a model whose angular layer never sees anything. "_pad" marks
-    # graphs built after the vacuum padding below; an older cache holds unpadded ones
-    suffix = f"_a{n_ang}" if n_ang else ""
+    # graphs built after the vacuum padding below; an older cache holds unpadded ones.
+    # Triplets likewise ("_t"): a cache without them crashes a three-body model
+    suffix = (f"_a{n_ang}" if n_ang else "") + ("_t" if n_tri else "")
     cache_path = os.path.join(data_dir, f"graphs_cache_c{cutoff:g}{suffix}_pad.pt")
     if cache and os.path.exists(cache_path):
         ck = torch.load(cache_path, weights_only=False)
@@ -83,7 +84,7 @@ def build_graphs(data_dir: str, files: list[str], cutoff: float, cache: bool,
         # than the cutoff trains on edges to its own periodic image and is predicted
         # without them (2 of 13 349 Alexandria cells, elemental Br and Cl2)
         st, _ = ensure_vacuum(st, cutoff)
-        g = to_graph(st, cutoff, n_ang=n_ang)
+        g = to_graph(st, cutoff, n_ang=n_ang, n_tri=n_tri)
         graphs.append(g)
         formulas.append(st.composition.reduced_formula)
         if (i + 1) % 500 == 0 or i + 1 == len(files):
@@ -229,10 +230,10 @@ def train_one(args, graphs, tr, va, te, mean, std, pos_weight, device, seed: int
     set_seed(seed)
     if args.task == "gap":
         model = CGCNN(args.h, args.n_conv, args.dropout, args.cutoff, args.n_rbf,
-                      ang_dim=args.angles)
+                      ang_dim=args.angles, tri_dim=args.tri)
     else:
         model = CGCNNcls(args.h, args.n_conv, args.cutoff, args.n_rbf,
-                         ang_dim=args.angles)
+                         ang_dim=args.angles, tri_dim=args.tri)
     if args.pretrained:
         ck = torch.load(args.pretrained, map_location="cpu")
         sd = ck["state_dicts"][0] if "state_dicts" in ck else ck["state_dict"]
@@ -311,6 +312,10 @@ def main():
                          "default: the shipped weights were trained without it. An edge "
                          "carries only a distance, so without this the model barely "
                          "separates polymorphs - 1H against 1T-MX2 is the measured case")
+    ap.add_argument("--tri", type=int, default=0, metavar="N",
+                    help="three-body edge update with N angle basis functions (try 9): each "
+                         "bond hears the other bonds of its atom, filtered by their angle. "
+                         "Off by default")
     ap.add_argument("--seed", type=int, default=0, help="split seed and first model seed")
     ap.add_argument("--ensemble", type=int, default=1, help="train N members with seeds seed..seed+N-1")
     ap.add_argument("--only-members", default="",
@@ -349,7 +354,8 @@ def main():
     if args.limit:
         df = df.iloc[: args.limit].reset_index(drop=True)
     files = df["file"].tolist()
-    graphs, formulas = build_graphs(args.data, files, args.cutoff, args.cache, args.angles)
+    graphs, formulas = build_graphs(args.data, files, args.cutoff, args.cache, args.angles,
+                                    args.tri)
 
     keep = [i for i, g in enumerate(graphs) if g is not None]
     if len(keep) < len(graphs):
@@ -469,7 +475,8 @@ def main():
             "torch": str(torch.__version__), "args": vars(args),
             "bagged": bool(args.bootstrap)}
     ck = {"mean": mean, "std": std, "cutoff": args.cutoff, "n_rbf": args.n_rbf,
-          "h": args.h, "n_conv": args.n_conv, "n_ang": args.angles, "meta": meta}
+          "h": args.h, "n_conv": args.n_conv, "n_ang": args.angles, "n_tri": args.tri,
+          "meta": meta}
     if args.ensemble > 1:
         # every member, for the gap and for the classifiers alike; a classifier
         # ensemble used to be saved as its first member alone, with a threshold

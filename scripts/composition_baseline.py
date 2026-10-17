@@ -35,6 +35,7 @@ def main():
                     help="matminer workers. Keep 1 on macOS: its spawn start method "
                          "deadlocks a script without a __main__ guard. On Linux raise it.")
     ap.add_argument("--json", help="write the metrics to this file")
+    ap.add_argument("--preds", help="write per-structure test predictions (file,target,pred) here")
     args = ap.parse_args()
 
     from matminer.featurizers.base import MultipleFeaturizer
@@ -86,6 +87,9 @@ def main():
     print(f"  predicting the median would give MAE {out['mae_predict_median']:.3f}")
     top = sorted(zip(feat.feature_labels(), model.feature_importances_), key=lambda t: -t[1])[:6]
     print("  top features: " + ", ".join(k for k, _ in top))
+    if args.preds:
+        pd.DataFrame({"file": [names[i] for i in te], "target": y[te], "pred": pred}).to_csv(
+            args.preds, index=False)
     if args.json:
         json.dump(out, open(args.json, "w"), indent=1)
         print(f"\nwritten {args.json}")

@@ -466,6 +466,48 @@ def test_angles_are_off_by_default_and_do_not_touch_the_contract():
     assert shipped - plain == {"ang.weight", "ang.bias"}
 
 
+def test_three_body_update_is_off_by_default_and_batches_correctly():
+    """tri_dim=0 creates nothing; with it, triplets index edges and batch as edges.
+
+    The triplet rows point at EDGES. A plain Data object shifts every "*index" key
+    by the number of nodes when graphs are batched, which would silently pair
+    bonds of one structure with bonds of another; TriGraph shifts by edges. The
+    check: a batch of two structures predicts exactly what each does alone.
+    """
+    import numpy as np
+    from torch_geometric.data import Batch
+
+    from nanomat.graph import TriGraph
+    from nanomat.model import CGCNN
+    plain, with_tri = set(CGCNN().state_dict()), set(CGCNN(tri_dim=9).state_dict())
+    assert {k.split(".")[0] for k in with_tri - plain} == {"tri_ang", "tri_edge", "tri_out",
+                                                         "tri_centers"}
+
+    sts = [read_structure(os.path.join(EX, f)) for f in ("MoS2.vasp", "hBN.vasp")]
+    graphs = [to_graph(st, n_ang=9, n_tri=9) for st in sts]
+    assert all(isinstance(g, TriGraph) for g in graphs)
+    g = graphs[0]
+    # every triplet joins two distinct short bonds leaving the same atom
+    src = g.edge_index[0]
+    assert (src[g.tri_index[0]] == src[g.tri_index[1]]).all()
+    assert (g.tri_index[0] != g.tri_index[1]).all()
+    assert (g.edge_weight[g.tri_index[0]] <= 4.0).all()
+    assert g.tri_cos.min() >= -1.0 and g.tri_cos.max() <= 1.0
+    # each atom with k short bonds contributes k(k-1) ordered pairs
+    short = src[g.edge_weight <= 4.0]
+    k = torch.bincount(short, minlength=g.num_nodes)
+    assert g.tri_index.shape[1] == int((k * (k - 1)).sum())
+
+    torch.manual_seed(0)
+    m = CGCNN(ang_dim=9, tri_dim=9).eval()
+    with torch.no_grad():
+        alone = [float(m(Batch.from_data_list([x]))) for x in graphs]
+        together = m(Batch.from_data_list(graphs)).tolist()
+    assert np.allclose(alone, together, atol=1e-5)
+    # graphs without triplets are the graphs the shipped weights read
+    assert not isinstance(to_graph(sts[0], n_ang=9), TriGraph)
+
+
 def test_llm_tools_forgive_what_models_get_wrong():
     """The language-model tools, called directly: no MCP needed.
 

@@ -201,10 +201,11 @@ class PropertyEnsemble:
         # Predictor for the gap model. Training this one with angles therefore
         # requires the gap model to carry them too, or its graphs arrive without.
         self.n_ang = int(ck.get("n_ang", 0))
+        self.n_tri = int(ck.get("n_tri", 0))
         states = ck.get("state_dicts") or [ck["state_dict"]]
         self.models = []
         for sd in states:
-            m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf, ang_dim=self.n_ang)
+            m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf, ang_dim=self.n_ang, tri_dim=self.n_tri)
             m.load_state_dict(sd)
             m.eval()
             self.models.append(m)
@@ -378,6 +379,7 @@ class Predictor:
         self.weights_dir = weights_dir or default_weights_dir()
         self.cutoff, self.n_rbf = DEFAULT_CUTOFF, DEFAULT_N_RBF
         self.n_ang = 0          # angular descriptor width, read from the checkpoint
+        self.n_tri = 0          # three-body angle basis width, read from the checkpoint
         self.cal = dict(DEFAULT_CAL)
         self.corr = {k: dict(v) for k, v in DEFAULT_CORRECTIONS.items()}
         self.ref_emb: torch.Tensor | None = None  # normalised training embeddings
@@ -414,8 +416,10 @@ class Predictor:
             ck = torch.load(ens, map_location="cpu")
             self.cutoff, self.n_rbf = float(ck.get("cutoff", self.cutoff)), int(ck.get("n_rbf", self.n_rbf))
             self.n_ang = int(ck.get("n_ang", 0))
+            self.n_tri = int(ck.get("n_tri", 0))
             for sd in ck["state_dicts"]:
-                m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf, ang_dim=self.n_ang)
+                m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf, ang_dim=self.n_ang,
+                          tri_dim=self.n_tri)
                 m.load_state_dict(sd)
                 m.eval()
                 self.models.append(m)
@@ -445,7 +449,8 @@ class Predictor:
             ck = torch.load(one, map_location="cpu")
             self.cutoff, self.n_rbf = float(ck.get("cutoff", self.cutoff)), int(ck.get("n_rbf", self.n_rbf))
             self.n_ang = int(ck.get("n_ang", 0))
-            m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf, ang_dim=self.n_ang)
+            self.n_tri = int(ck.get("n_tri", 0))
+            m = CGCNN(cutoff=self.cutoff, n_rbf=self.n_rbf, ang_dim=self.n_ang, tri_dim=self.n_tri)
             m.load_state_dict(ck["state_dict"])
             m.eval()
             self.models = [m]
@@ -470,11 +475,15 @@ class Predictor:
         if n_ang not in (0, self.n_ang):
             raise ValueError(f"{WEIGHT_FILES[key]} was trained with {n_ang} angular bins, "
                              f"the gap ensemble with {self.n_ang}")
+        n_tri = int(ck.get("n_tri") or 0)
+        if n_tri and not self.n_tri:
+            raise ValueError(f"{WEIGHT_FILES[key]} needs three-body triplets, and the gap "
+                             "ensemble's graphs carry none")
         members = []
         for sd in ck.get("state_dicts") or [ck["state_dict"]]:
             m = CGCNNcls(cutoff=float(ck.get("cutoff", self.cutoff)),
                          n_rbf=int(ck.get("n_rbf", self.n_rbf)),
-                         ang_dim=n_ang)
+                         ang_dim=n_ang, tri_dim=n_tri)
             m.load_state_dict(sd)
             members.append(m.eval())
         model = members[0] if len(members) == 1 else ClsEnsemble(members).eval()
@@ -493,7 +502,7 @@ class Predictor:
         should ask the predictor instead of calling to_graph themselves.
         """
         st2 = self.prepare(st)[0] if pad_vacuum else st
-        return to_graph(st2, self.cutoff, n_ang=self.n_ang)
+        return to_graph(st2, self.cutoff, n_ang=self.n_ang, n_tri=self.n_tri)
 
     def prepare(self, st: Structure) -> tuple[Structure, dict, list[str]]:
         """Vacuum padding + warnings. Returns (structure, layer_info, warnings)."""
@@ -515,7 +524,7 @@ class Predictor:
     def predict_gap(self, st: Structure, mc: int = 30) -> tuple[float, float] | tuple[None, None]:
         """(gap, uncertainty) in eV. Ensemble: mean/std across members.
         Single model: point estimate + MC-dropout std."""
-        g = to_graph(st, self.cutoff, n_ang=self.n_ang)
+        g = to_graph(st, self.cutoff, n_ang=self.n_ang, n_tri=self.n_tri)
         if g is None:
             return None, None
         batch = Batch.from_data_list([g])
@@ -571,7 +580,7 @@ class Predictor:
     def _cls_prob(self, model: nn.Module | None, st: Structure) -> float | None:
         if model is None:
             return None
-        g = to_graph(st, self.cutoff, n_ang=self.n_ang)
+        g = to_graph(st, self.cutoff, n_ang=self.n_ang, n_tri=self.n_tri)
         if g is None:
             return None
         _, logit = model(Batch.from_data_list([g]))
@@ -597,7 +606,7 @@ class Predictor:
         gap, unc = self.predict_gap(st)
         if gap is None:
             return None
-        g = to_graph(st, self.cutoff, n_ang=self.n_ang)
+        g = to_graph(st, self.cutoff, n_ang=self.n_ang, n_tri=self.n_tri)
         emb = None
         if (self.heads is not None or self.pop is not None) and len(self.models) > 1:
             with torch.no_grad():
@@ -698,7 +707,7 @@ class Predictor:
                 from .graph import layer_info
                 info = {k: v for k, v in layer_info(st).items() if not k.startswith("_")}
                 st2, warns = st, []
-            g = to_graph(st2, self.cutoff, n_ang=self.n_ang)
+            g = to_graph(st2, self.cutoff, n_ang=self.n_ang, n_tri=self.n_tri)
             if g is None:
                 continue
             keys.append(key)
