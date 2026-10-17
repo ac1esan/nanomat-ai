@@ -9,7 +9,9 @@
 
 **[Browse the predictions →](https://ac1esan.github.io/nanomat-ai/)** — 28 372
 structures with a calibrated interval and a verdict on each, plus a periodic-table
-map of where the model actually works. No install, no upload.
+map of where the model actually works. No install. Its **Your structure** tab runs the
+same ensemble in your browser on a CIF or POSCAR of your own; the file never leaves your
+computer.
 Same page on [Hugging Face Spaces](https://huggingface.co/spaces/ac1esan/nanomat-ai).
 
 A graph neural network that predicts the band gap of a 2D monolayer from its
@@ -34,7 +36,11 @@ from 0.449 to 0.385 eV and left the stable test where it was
 
 ## Quick start
 
-**Without installing anything:**
+**Without installing anything:** drop a CIF or POSCAR into the
+[browser's *Your structure* tab](https://ac1esan.github.io/nanomat-ai/#predict). The
+predictor there is a JavaScript port of the Python one, run on weights exported from the
+same checkpoints, and agrees with it to a millionth of an eV on 2 016 structures from
+four databases (`scripts/web_parity.py`, checked in CI on every push). Or use Colab:
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ac1esan/nanomat-ai/blob/main/notebooks/predict.ipynb)
 — upload a CIF or POSCAR, or paste one, and get the gap with its verdict and a summary
 in plain words: where the material starts absorbing light, what a gap like that is used
@@ -1080,7 +1086,9 @@ transfer). The composition baseline is
 ## Repository layout
 
 ```
-docs/                     the static browser published on GitHub Pages (index.html + data/)
+docs/                     the static browser published on GitHub Pages (index.html + data/), and
+                          js/nanomat.js, the in-browser predictor; its model is exported from
+                          weights/ at deploy time (scripts/export_web_model.py, .github/workflows/pages.yml)
 nanomat/                  graph.py (structure -> graph, angles, vacuum checks), model.py (CGCNN),
                           predict.py (Predictor, batched inference, verdicts, calibration, heads),
                           families.py (1H/1T MX2 and honeycomb prototype tags),

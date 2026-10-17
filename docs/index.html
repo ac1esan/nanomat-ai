@@ -59,6 +59,22 @@ header p{margin:0;color:var(--text-2);max-width:70ch}
   cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab[aria-selected="true"]{color:var(--text-1);border-bottom-color:var(--accent);font-weight:600}
 .panel[hidden]{display:none!important}
+.filters[hidden],#pop-warning[hidden]{display:none!important}
+/* your structure */
+.pr-in{display:flex;flex-direction:column;gap:8px;min-width:0}
+.drop{display:block;border:1.5px dashed var(--border-strong);border-radius:8px;padding:18px 14px;
+  text-align:center;color:var(--text-2);background:var(--surface-2);cursor:pointer}
+.drop:hover,.drop.over{border-color:var(--accent);color:var(--text-1)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.pr-label{font-size:12px;color:var(--text-2)}
+#pr-text{width:100%;min-width:0;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;
+  background:var(--surface-1);color:var(--text-1);border:1px solid var(--border-strong);
+  border-radius:6px;padding:8px;resize:vertical}
+.pr-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;color:var(--text-3)}
+.preset.pr-go{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.preset.pr-go:hover{color:#fff;filter:brightness(1.08)}
+.pr-status{margin:0;font-size:13px;color:var(--text-2);min-height:1.5em}
+.pr-status.err{color:var(--tier-2)}
 
 /* filters */
 .filters{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:flex-end;
@@ -200,7 +216,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
     <a href="https://github.com/ac1esan/nanomat-ai" target="_blank" rel="noopener noreferrer">GitHub</a>
     <a href="https://github.com/ac1esan/nanomat-ai/blob/main/MODEL_CARD.md" target="_blank" rel="noopener noreferrer" id="t-mc">Model card</a>
     <a href="https://github.com/ac1esan/nanomat-ai#knowing-when-not-to-believe-it" target="_blank" rel="noopener noreferrer" id="t-how">How the verdict works</a>
-    <a href="https://github.com/ac1esan/nanomat-ai#quick-start" target="_blank" rel="noopener noreferrer" id="t-own">Run your own structure</a>
+    <a href="#predict" id="t-own">Run your own structure</a>
     <button class="preset themebtn" id="theme-btn" type="button" aria-live="polite"></button>
   </div>
 </header>
@@ -264,6 +280,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
   <button class="tab" role="tab" aria-selected="true" data-panel="browse" id="t-tab1">Browse</button>
   <button class="tab" role="tab" aria-selected="false" data-panel="fam" id="t-tab3">Families</button>
   <button class="tab" role="tab" aria-selected="false" data-panel="trust" id="t-tab2">Trust map</button>
+  <button class="tab" role="tab" aria-selected="false" data-panel="predict" id="t-tab4">Your structure</button>
 </div>
 
 <div class="loading" id="loading">Loading 28 372 predictions…</div>
@@ -347,6 +364,30 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
   <div class="prose" id="tm-prose"></div>
 </section>
 
+<section class="panel" id="panel-predict" hidden>
+  <div class="prose"><p id="t-pr-lede"></p></div>
+  <div class="results">
+    <div class="pr-in">
+      <label class="drop" id="pr-drop">
+        <input type="file" id="pr-file" accept=".cif,.vasp,.poscar,.contcar,.txt,text/plain">
+        <span id="t-pr-drop"></span>
+      </label>
+      <label class="pr-label" for="pr-text" id="t-pr-paste"></label>
+      <textarea id="pr-text" rows="11" wrap="off" spellcheck="false" autocomplete="off"></textarea>
+      <div class="pr-actions">
+        <button class="preset pr-go" id="pr-go" type="button"></button>
+        <span id="t-pr-try"></span>
+        <button class="preset" type="button" data-ex="MoS2">MoS₂</button>
+        <button class="preset" type="button" data-ex="hBN">h-BN</button>
+        <button class="preset" type="button" data-ex="graphene">graphene</button>
+      </div>
+      <p class="pr-status" id="pr-status" aria-live="polite"></p>
+    </div>
+    <aside class="detail" id="pr-detail"></aside>
+  </div>
+  <div class="prose" id="pr-prose"></div>
+</section>
+
 <footer id="t-footer"></footer>
 </div>
 
@@ -359,8 +400,25 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
 const I18N = {
   en: {
     title: "NanoMatAI — 2D band gap screening",
-    lede: n => `Predicted band gaps for ${n} two-dimensional structures, each with a calibrated interval and an explicit verdict on whether to believe it. A second ensemble adds the vacuum-referenced work function, and the two together place the band edges — the pair a contact metal is chosen on. Nothing is computed here: this is a graph neural network's output, precomputed once and served as a static table.`,
-    tab_browse: "Browse", tab_trust: "Trust map", tab_fam: "Families",
+    lede: n => `Predicted band gaps for ${n} two-dimensional structures, each with a calibrated interval and an explicit verdict on whether to believe it. A second ensemble adds the vacuum-referenced work function, and the two together place the band edges — the pair a contact metal is chosen on. The table is a graph neural network's output, precomputed once and served as static data; the "Your structure" tab runs the same network in your browser on a file of your own.`,
+    tab_browse: "Browse", tab_trust: "Trust map", tab_fam: "Families", tab_pred: "Your structure",
+    pr_lede: "Drop in a CIF or POSCAR of a 2D layer and get the same card as every row of the table: the predicted gap, its calibrated interval, the verdict with its reason, the optical estimate and the band edges. It runs in your browser — the file never leaves your computer. The first prediction downloads the models once.",
+    pr_drop: "Drop a CIF or POSCAR here, or click to choose a file",
+    pr_paste: "…or paste the file's text",
+    pr_go: "Predict", pr_try: "or try",
+    pr_loading: (a, b) => `Downloading the models: ${a} of ${b} MB (once; your browser keeps them)…`,
+    pr_computing: "Computing…",
+    pr_done: (ms, f) => `Done in ${ms < 1000 ? Math.round(ms) + " ms" : (ms / 1000).toFixed(1) + " s"} — ${f}.`,
+    pr_err: m => `Could not read this structure: ${m}`,
+    pr_nothing: "Paste a structure or choose a file first.",
+    pr_pasted: "pasted structure",
+    pr_empty: "Your structure's card appears here.",
+    pr_matches: (n, f) => `The table holds ${n === 1 ? "one structure" : n + " structures"} with the formula ${f}, computed by DFT. `,
+    pr_show: "Show them",
+    pr_prose: `<h2>What runs here</h2><p>Your browser runs the same five-member ensemble, metal gate, gap-type classifier and work-function ensemble as the Python package, from weights exported out of the same checkpoints, and assembles the verdict the same way. The vacuum is detected and, if thinner than the 8 Å neighbour cutoff, padded, exactly as the Python tool does. Agreement with Python is checked on thousands of structures before every release.</p><p>Upload a relaxed monolayer. The model was trained on DFT-relaxed structures, and an unrelaxed or experimental cell can shift the prediction: a 2% larger lattice already moves the gap and can trip the metal gate. A bulk crystal, with no vacuum gap, is flagged as not a 2D layer.</p>`,
+    d_computed: "Computed", d_inbrowser: "in your browser, from your file",
+    d_warn: "Note",
+    plain_notlayer: "It does not look like an isolated 2D layer — no vacuum gap of 5 Å along any axis — and the model was trained on monolayers only.",
     fam_lede: "Nobody asks what the gap of one database entry is. They ask what happens across a family when the chalcogen changes. This pivots the same predictions into that shape: pick a prototype, read the grid.",
     fam_pick: "Prototype", fam_pop: "Population",
     fam_scope_all: "Every structure of this prototype",
@@ -462,6 +520,7 @@ const I18N = {
 };
 let LANG = "en";
 const t = (k, ...a) => { const v = I18N[LANG][k]; return typeof v === "function" ? v(...a) : v; };
+const esc = x => String(x).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const fmt = (x, n = 2) => (x === null || x === undefined || Number.isNaN(x)) ? "—" : x.toFixed(n);
 const int = x => x.toLocaleString("en-US").replace(/,/g, " ");
 
@@ -532,7 +591,8 @@ const USES = [
 function plainWords(r) {
   const cal = S.meta.calibration;
   if (r.w === 2) {
-    const why = (r.m !== null && cal.metal_threshold !== undefined && r.m >= cal.metal_threshold)
+    const why = r.nl ? t("plain_notlayer")
+      : (r.m !== null && cal.metal_threshold !== undefined && r.m >= cal.metal_threshold)
       ? "The structure looks metallic, and the gap model was only ever trained on semiconductors."
       : (r.l !== null && r.l > cal.latent_q90)
         ? "Its chemistry is unlike anything the model was trained on."
@@ -1015,16 +1075,20 @@ function renderDetail(hostId = "detail", row = undefined) {
     }
   }
   rows.push([t("d_atoms"), String(r.n)]);
-  rows.push([t("d_source"), S.meta.sources[r.s]]);
-  rows.push([t("d_role"), t("role")[r.r]]);
+  if (r.up) rows.push([t("d_computed"), t("d_inbrowser")]);
+  else {
+    rows.push([t("d_source"), S.meta.sources[r.s]]);
+    rows.push([t("d_role"), t("role")[r.r]]);
+  }
 
-  el.innerHTML = `<h3>${r.f}</h3>
-    <p class="sub">${r.i} · ${r.e.join(" ")}</p>
+  el.innerHTML = `<h3>${esc(r.f)}</h3>
+    <p class="sub">${esc(r.i)} · ${r.e.join(" ")}</p>
     <div class="big">${fmt(r.g, 2)} eV${ood ? ` <span style="font-size:13px;color:var(--tier-2)">— do not use</span>` : ""}</div>
     <div class="note plain"><b>${t("d_plain")}</b> ${plainWords(r)}</div>
     ${r.rf ? `<div class="note stop"><b>${t(r.rf === 2 ? "d_ref_wrong" : "d_ref_disputed")}.</b> ${(S.meta.ref_notes || {})[r.i] || ""}</div>` : ""}
     <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
     ${ood ? `<div class="note stop">${t("d_stop")}</div>` : ""}
+    ${r.up && r.warns.length ? `<div class="note"><b>${t("d_warn")}.</b> ${r.warns.map(esc).join("; ")}</div>` : ""}
     ${(!ood && r.g >= S.meta.metal_gap_eV) ? `<div class="note">
         <b>${t("d_qp")}</b> — ${H ? t("d_qp_note", H.n, fmt(H.mae_cv.gap_gw, 2))
                                      : t("d_qp_note", C.quasiparticle.n, "0.19")}<br>
@@ -1251,19 +1315,165 @@ function buildUI() {
   document.getElementById("fam-axisnote").textContent = t("fam_axis_note");
   document.getElementById("fam-pick").innerHTML = S.meta.families.map((f, i) =>
     `<option value="${i}">${t("fam_opt", f.label, int(f.n), f.pairs)}</option>`).join("");
+  document.getElementById("t-tab4").textContent = t("tab_pred");
+  for (const [id, k] of [["t-pr-lede", "pr_lede"], ["t-pr-drop", "pr_drop"], ["t-pr-paste", "pr_paste"],
+                         ["pr-go", "pr_go"], ["t-pr-try", "pr_try"]])
+    document.getElementById(id).textContent = t(k);
+  document.getElementById("pr-prose").innerHTML = t("pr_prose");
+  document.getElementById("pr-detail").innerHTML = `<p class="sub" style="margin:0">${t("pr_empty")}</p>`;
   renderTHead();
   document.getElementById("panel-browse").hidden = false;
+  if (location.hash === "#predict") selectTab("predict");
 }
+
+/* ------------------------------------------------------------ your structure */
+// The predictor runs in a module worker (js/worker.js -> js/nanomat.js) so a large
+// cell cannot freeze the page, and the models are fetched only when someone first
+// asks for a prediction, never on page load.
+const PR_EXAMPLES = { MoS2: `MoS2 monolayer, JARVIS-DFT JVASP-664 (OptB88vdW relaxed)
+1.0
+   1.5939818713880687   -2.7608568870413697    0.0000000000000000
+   1.5939818713880687    2.7608568870413697    0.0000000000000000
+   0.0000000000000000    0.0000000000000000   34.8790040000000019
+Mo S
+1 2
+direct
+   0.6666669999999968    0.3333330000000032    0.1066470000000024 Mo
+   0.3333330000000032    0.6666669999999968    0.0617311719827050 S
+   0.3333330000000032    0.6666669999999968    0.1515638280172972 S`, hBN: `hBN monolayer, JARVIS-DFT JVASP-76649 (OptB88vdW relaxed)
+1.0
+   1.2552133963388850   -2.1740933471581640    0.0000000000000000
+   1.2552133963388850    2.1740933471581640    0.0000000000000000
+   0.0000000000000000    0.0000000000000000   20.0000000000000000
+B N
+1 1
+direct
+   0.6666659999999993    0.3333340000000007    0.0000000000000000 B
+   0.0000000000000000    0.0000000000000000    0.0000000000000000 N`, graphene: `graphene monolayer, a=2.46 A (semimetal, out-of-domain sanity check)
+1.0
+   2.4600000000000000    0.0000000000000000    0.0000000000000002
+  -1.2299999999999998    2.1304224933097191    0.0000000000000002
+   0.0000000000000000    0.0000000000000000   20.0000000000000000
+C
+2
+direct
+   0.3333333333333333    0.6666666666666666    0.5000000000000000 C
+   0.6666666666666666    0.3333333333333333    0.5000000000000000 C` };
+let PR_WORKER = null, PR_JOB = 0, PR_NAME = "";
+function selectTab(name) {
+  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.panel === name));
+  for (const p of ["browse", "fam", "trust", "predict"])
+    document.getElementById("panel-" + p).hidden = p !== name;
+  // the filter bar governs the table's rows; an uploaded structure is not one of them
+  document.querySelector(".filters").hidden = name === "predict";
+  document.getElementById("pop-warning").hidden = name === "predict";
+  if (name === "browse") drawChart();
+}
+function prStatus(msg, err = false) {
+  const el = document.getElementById("pr-status");
+  el.textContent = msg;
+  el.classList.toggle("err", err);
+}
+function prWorker() {
+  if (PR_WORKER) return PR_WORKER;
+  PR_WORKER = new Worker("js/worker.js", { type: "module" });
+  PR_WORKER.onmessage = e => {
+    const m = e.data;
+    if (m.type === "progress")
+      prStatus(t("pr_loading", (m.loaded / 1e6).toFixed(1), (m.total / 1e6).toFixed(1)));
+    else if (m.type === "ready") prStatus(t("pr_computing"));
+    else if (m.id !== PR_JOB) return;               // a newer request superseded this one
+    else if (m.type === "result") prShow(m.res);
+    else if (m.type === "error") prStatus(t("pr_err", m.message), true);
+  };
+  PR_WORKER.onerror = e => { prStatus(t("pr_err", e.message || "the predictor could not start"), true); PR_WORKER = null; };
+  return PR_WORKER;
+}
+function prRun(text, name) {
+  if (!text || !text.trim()) { prStatus(t("pr_nothing"), true); return; }
+  PR_NAME = name;
+  prStatus(t("pr_computing"));
+  // absolute: inside the worker a relative URL would resolve against js/, not the page
+  prWorker().postMessage({ id: ++PR_JOB, text, base: new URL("model/", document.baseURI).href });
+}
+const tierOf = v => (v.startsWith("reliable") ? 0 : v.startsWith("check") ? 1 : 2);
+// formula -> element counts reduced and sorted, so "S2Mo" and "MoS2" meet
+function canonFormula(f) {
+  const m = {};
+  for (const [, el, n] of f.matchAll(/([A-Z][a-z]?)(\d*)/g)) m[el] = (m[el] || 0) + (n ? +n : 1);
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const g = Object.values(m).reduce(gcd);
+  return Object.keys(m).sort().map(k => k + m[k] / g).join("");
+}
+function prShow(res) {
+  // the same shape as a table row, so the card, its notes and the plain-words line
+  // are the ones every table row gets
+  const row = { i: PR_NAME, s: -1, f: res.formula, e: res.elements, n: res.natoms, d: null,
+    g: res.gap, u: res.unc, l: res.latent_distance, m: res.p_metal,
+    t: res.gap_type === null ? null : (res.gap_type === "indirect" ? 1 : 0), p: res.p_indirect,
+    w: tierOf(res.verdict), r: -1, b: 0, fm: -1, fa: "", fb: "",
+    k: res.work_function ?? null, ku: res.work_function_unc ?? null, kl: res.work_function_latent ?? null,
+    kw: res.work_function_verdict ? tierOf(res.work_function_verdict) : null, kr: -1, kd: null,
+    q: res.gap_quasiparticle ?? null, x: res.exciton_binding ?? null, o: res.exp_gap_est ?? null,
+    pm: res.p_metastable, iv: res.interval90, rf: 0,
+    up: true, nl: !res.layer.is_layer,
+    warns: res.warnings.filter(w => !w.startsWith("metal gate")) };
+  setEdges(row);
+  renderDetail("pr-detail", row);
+  const key = canonFormula(res.formula);
+  S.canon = S.canon || S.rows.map(r => canonFormula(r.f));
+  const hits = S.rows.filter((r, k) => S.canon[k] === key);
+  if (hits.length) {
+    const note = document.createElement("div");
+    note.className = "note";
+    note.innerHTML = t("pr_matches", hits.length, esc(hits[0].f)) +
+      `<button class="preset" id="pr-show" data-f="${esc(hits[0].f)}">${t("pr_show")}</button>`;
+    document.getElementById("pr-detail").appendChild(note);
+  }
+  prStatus(t("pr_done", res.ms, res.verdict));
+}
+function prFile(file) {
+  if (!file) return;
+  file.text().then(text => {
+    document.getElementById("pr-text").value = text;
+    prRun(text, file.name);
+  });
+}
+document.getElementById("pr-file").addEventListener("change", e => prFile(e.target.files[0]));
+const DROP = document.getElementById("pr-drop");
+DROP.addEventListener("dragover", e => { e.preventDefault(); DROP.classList.add("over"); });
+DROP.addEventListener("dragleave", () => DROP.classList.remove("over"));
+DROP.addEventListener("drop", e => {
+  e.preventDefault();
+  DROP.classList.remove("over");
+  prFile(e.dataTransfer.files[0]);
+});
 
 /* -------------------------------------------------------------------- events */
 document.addEventListener("click", e => {
   const tab = e.target.closest(".tab");
-  if (tab) {
-    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b === tab));
-    document.getElementById("panel-browse").hidden = tab.dataset.panel !== "browse";
-    document.getElementById("panel-fam").hidden = tab.dataset.panel !== "fam";
-    document.getElementById("panel-trust").hidden = tab.dataset.panel !== "trust";
-    if (tab.dataset.panel === "browse") drawChart();
+  if (tab) { selectTab(tab.dataset.panel); return; }
+  if (e.target.closest("#t-own")) { e.preventDefault(); selectTab("predict"); return; }
+  if (e.target.id === "pr-go") {
+    prRun(document.getElementById("pr-text").value, t("pr_pasted"));
+    return;
+  }
+  const ex = e.target.closest("[data-ex]");
+  if (ex) {
+    const text = PR_EXAMPLES[ex.dataset.ex];
+    document.getElementById("pr-text").value = text;
+    prRun(text, ex.dataset.ex + " (example)");
+    return;
+  }
+  if (e.target.id === "pr-show") {
+    // the DFT rows with this formula, wherever they sit: every population and tier
+    document.getElementById("f-reset").click();      // clears every control, not only S.f
+    S.f.pop = 2; S.f.tiers = [true, true, true]; S.f.q = e.target.dataset.f;
+    document.getElementById("f-pop").value = "2";
+    document.getElementById("f-q").value = S.f.q;
+    document.querySelectorAll(".chip[data-tier]").forEach(c => c.setAttribute("aria-pressed", "true"));
+    selectTab("browse");
+    apply();
     return;
   }
   const chip = e.target.closest(".chip[data-tier]");

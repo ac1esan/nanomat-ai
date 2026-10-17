@@ -24,3 +24,13 @@ jobs:
         run: pytest -q
       - name: External validation runs offline
         run: python validate_experiment.py
+      # the in-browser predictor (docs/js/nanomat.js) must say what Python says, on the
+      # reference structures as POSCAR and as symmetrised CIF
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Browser predictor matches Python
+        run: |
+          python scripts/export_web_model.py --out /tmp/web_model
+          python scripts/web_parity.py --examples-only --out /tmp/parity.json
+          node scripts/web_parity.mjs --model /tmp/web_model --cases /tmp/parity.json

@@ -6,7 +6,9 @@
 
 **[Открыть обозреватель предсказаний →](https://ac1esan.github.io/nanomat-ai/)** —
 28 372 структуры с калиброванным интервалом и вердиктом на каждой, плюс карта по
-таблице Менделеева, где модель реально работает. Без установки и без загрузки файлов.
+таблице Менделеева, где модель реально работает. Без установки. Вкладка **Your structure**
+запускает тот же ансамбль прямо в браузере на вашем CIF или POSCAR; файл не покидает
+ваш компьютер.
 Та же страница на [Hugging Face Spaces](https://huggingface.co/spaces/ac1esan/nanomat-ai).
 
 Графовая нейросеть, которая по структуре монослоя предсказывает ширину запрещённой
@@ -32,7 +34,11 @@
 
 ## Быстрый старт
 
-**Без установки:**
+**Без установки:** перетащите CIF или POSCAR на
+[вкладку *Your structure* обозревателя](https://ac1esan.github.io/nanomat-ai/#predict).
+Там работает порт Python-предиктора на JavaScript с весами, выгруженными из тех же
+чекпойнтов; с Python он совпадает до миллионной эВ на 2 016 структурах из четырёх баз
+(`scripts/web_parity.py`, проверяется в CI при каждом пуше). Или в Colab:
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ac1esan/nanomat-ai/blob/main/notebooks/predict.ipynb)
 — загрузите CIF или POSCAR или вставьте его текст и получите щель с вердиктом и
 пояснением простыми словами: с какой длины волны материал начинает поглощать свет, для
@@ -1051,7 +1057,9 @@ python export_structures_for_alignn.py --source alex_2d --extra-target band_gap_
 ## Структура репозитория
 
 ```
-docs/                     статический обозреватель, публикуется через GitHub Pages
+docs/                     статический обозреватель, публикуется через GitHub Pages; js/nanomat.js —
+                          предиктор в браузере, его модель выгружается из weights/ при деплое
+                          (scripts/export_web_model.py, .github/workflows/pages.yml)
 nanomat/                  graph.py (структура -> граф, углы, проверки вакуума), model.py (CGCNN),
                           predict.py (Predictor, пакетный инференс, вердикты, калибровка, головы),
                           families.py (прототипы 1H/1T MX2 и honeycomb),

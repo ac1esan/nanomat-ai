@@ -54,3 +54,5 @@ data_dft2d_all/
 data_metal_merged/
 data/mc2d.json.gz
 data/c2db.db
+# exported by scripts/export_web_model.py; how it is published is decided separately
+docs/model/

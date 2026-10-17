@@ -64,8 +64,9 @@ A CGCNN ensemble of five models trained on 45 857 two-dimensional semiconductors
 (Alexandria, stable and metastable up to 1.0 eV/atom, non-magnetic 2DMatPedia, and MC2D
 layers of experimentally known crystals),
 reading bond angles as well as bond lengths. Test MAE **0.19 eV** on a split where no
-composition is shared between training and test. Nothing is computed
-in this page: the predictions were made once and are served as a static table.
+composition is shared between training and test. The table was computed once and is
+served as static data; the **Your structure** tab runs the same ensemble in your browser
+on a CIF or POSCAR of your own, and the file never leaves your computer.
 
 **The verdict is the point.** Three independent checks decide whether to trust a
 prediction, and each exists because the previous one was caught failing on a real
@@ -84,9 +85,8 @@ Bethe–Salpeter results from C2DB and validated on composition-disjoint folds.
 - **[Source, method and model card]({repo})**
 - **[The same page on GitHub Pages]({browser})**
 
-To run a structure of your own, clone the repository and use the uploader locally:
-`python screen_bandgap.py --app`. It is not hosted here because a Gradio Space now
-requires a paid subscription, and the model itself is free.
+The in-browser predictor agrees with the Python package to a millionth of an eV on
+2 016 structures from four databases, checked before every release.
 """
 
 GRADIO_BODY = """# NanoMatAI — band gap of 2D materials from structure
@@ -122,6 +122,12 @@ def build_static(out_dir: str) -> None:
         raise SystemExit(f"missing {index} — run scripts/build_site_data.py first")
     shutil.copy(index, out_dir)
     shutil.copytree(os.path.join(src, "data"), os.path.join(out_dir, "data"))
+    # the in-browser predictor: its code, and the models exported fresh from weights/
+    # so the page cannot run older weights than the table was built with
+    shutil.copytree(os.path.join(src, "js"), os.path.join(out_dir, "js"))
+    import subprocess
+    subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "export_web_model.py"),
+                    "--out", os.path.join(out_dir, "model")], check=True)
     with open(os.path.join(out_dir, "README.md"), "w") as f:
         f.write(FRONT_MATTER.format(sdk="static", extra="app_file: index.html\n"))
         f.write(STATIC_BODY.format(repo=REPO_URL, browser=BROWSER_URL))
