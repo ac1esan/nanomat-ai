@@ -159,8 +159,13 @@ def main():
     ck = torch.load(args.weights, map_location="cpu")
     ck["calibration"] = cal
     ck["reference_embeddings"] = torch.tensor(E_train, dtype=torch.float16)
+    # names written for the old rows would label the new ones; drop them until
+    # scripts/reference_meta.py names these
+    stale = ck.pop("reference_meta", None) is not None
     torch.save(ck, args.weights)
     print(f"\nwritten calibration + {E_train.shape[0]} reference embeddings into {args.weights}")
+    if stale:
+        print("reference_meta removed: run scripts/reference_meta.py to name the new rows")
 
 
 if __name__ == "__main__":

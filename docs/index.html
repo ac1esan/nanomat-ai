@@ -157,6 +157,11 @@ canvas{display:block;width:100%;height:320px;cursor:crosshair}
   font-size:12px;color:var(--text-2);line-height:1.45}
 .detail .stop{background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--text-1)}
 .detail .plain{margin:0 0 10px;font-size:13px;color:var(--text-1)}
+.detail table.nbt{width:100%;border-collapse:collapse;margin-top:6px;font-variant-numeric:tabular-nums}
+.detail .nbt td{padding:3px 4px;border-top:1px solid var(--border);vertical-align:top}
+.detail .nbt td.r{text-align:right;white-space:nowrap}
+.detail .nbt button{all:unset;cursor:pointer;color:var(--accent,inherit);text-decoration:underline}
+.detail .nbt .fl{color:var(--tier-2)}
 
 /* families */
 .famgrid{overflow-x:auto;margin:14px 0 6px}
@@ -402,7 +407,7 @@ const I18N = {
     title: "NanoMatAI — 2D band gap screening",
     lede: n => `Predicted band gaps for ${n} two-dimensional structures, each with a calibrated interval and an explicit verdict on whether to believe it. A second ensemble adds the vacuum-referenced work function, and the two together place the band edges — the pair a contact metal is chosen on. The table is a graph neural network's output, precomputed once and served as static data; the "Your structure" tab runs the same network in your browser on a file of your own.`,
     tab_browse: "Browse", tab_trust: "Trust map", tab_fam: "Families", tab_pred: "Your structure",
-    pr_lede: "Drop in a CIF or POSCAR of a 2D layer and get the same card as every row of the table: the predicted gap, its calibrated interval, the verdict with its reason, the optical estimate and the band edges. It runs in your browser — the file never leaves your computer. The first prediction downloads the models once.",
+    pr_lede: "Drop in a CIF or POSCAR of a 2D layer and get the same card as every row of the table: the predicted gap, its calibrated interval, the verdict with its reason, the optical estimate, the band edges and the training structures yours is closest to. It runs in your browser — the file never leaves your computer. The first prediction downloads the models once.",
     pr_drop: "Drop a CIF or POSCAR here, or click to choose a file",
     pr_paste: "…or paste the file's text",
     pr_go: "Predict", pr_try: "or try",
@@ -417,6 +422,11 @@ const I18N = {
     pr_show: "Show them",
     pr_prose: `<h2>What runs here</h2><p>Your browser runs the same five-member ensemble, metal gate, gap-type classifier and work-function ensemble as the Python package, from weights exported out of the same checkpoints, and assembles the verdict the same way. The vacuum is detected and, if thinner than the 8 Å neighbour cutoff, padded, exactly as the Python tool does. Agreement with Python is checked on thousands of structures before every release.</p><p>Upload a relaxed monolayer. The model was trained on DFT-relaxed structures, and an unrelaxed or experimental cell can shift the prediction: a 2% larger lattice already moves the gap and can trip the metal gate. A bulk crystal, with no vacuum gap, is flagged as not a 2D layer.</p>`,
     d_computed: "Computed", d_inbrowser: "in your browser, from your file",
+    d_nb: "Nearest training structures",
+    d_nb_note: "Closest to yours in the model's own representation, with their DFT labels: what the prediction leans on, not measurements of your structure. A distance below 0.005 is practically the same layer. Underlined formulas open in the table.",
+    nb_src: { alexandria: "Alexandria", "2dmatpedia": "2DMatPedia", mc2d: "MC2D" },
+    nb_mc2d: "not shown",
+    nb_wrong: "label known to be wrong", nb_disputed: "disputed label",
     d_warn: "Note",
     plain_notlayer: "It does not look like an isolated 2D layer — no vacuum gap of 5 Å along any axis — and the model was trained on monolayers only.",
     fam_lede: "Nobody asks what the gap of one database entry is. They ask what happens across a family when the chalcogen changes. This pivots the same predictions into that shape: pick a prototype, read the grid.",
@@ -588,16 +598,33 @@ const USES = [
   { label: "an insulating or dielectric layer", test: r => r.g >= 4,
     hint: "a PBE gap above 4 eV, like hexagonal boron nitride, used to insulate and protect other layers." },
 ];
+// nanomat/plain.py SAME_LAYER and nearest_words: keep the two in step
+const SAME_LAYER = 0.005;
+function nbDetail(n) {
+  let s = n.dft_gap === null ? "from MC2D" : `DFT gap ${n.dft_gap.toFixed(2)} eV`;
+  if (n.flag === "wrong") s += ", a label known to be wrong";
+  else if (n.flag === "disputed") s += ", a disputed label";
+  return s;
+}
+function nearestWords(nb) {
+  if (!nb || !nb.length) return "";
+  const n = nb[0];
+  return n.distance < SAME_LAYER
+    ? `The model was trained on practically this same layer, ${n.formula} (${nbDetail(n)}), so the number largely recalls that result rather than predicting a new one.`
+    : `The closest material it was trained on is ${n.formula} (${nbDetail(n)}).`;
+}
 function plainWords(r) {
   const cal = S.meta.calibration;
   if (r.w === 2) {
+    const metal = r.m !== null && cal.metal_threshold !== undefined && r.m >= cal.metal_threshold;
+    const chem = !r.nl && !metal && r.l !== null && r.l > cal.latent_q90;
     const why = r.nl ? t("plain_notlayer")
-      : (r.m !== null && cal.metal_threshold !== undefined && r.m >= cal.metal_threshold)
+      : metal
       ? "The structure looks metallic, and the gap model was only ever trained on semiconductors."
-      : (r.l !== null && r.l > cal.latent_q90)
+      : chem
         ? "Its chemistry is unlike anything the model was trained on."
         : "The five models disagree too much to trust any of them; the structure may be metallic or unusual.";
-    return "Do not use the number. " + why;
+    return ["Do not use the number. " + why, chem ? nearestWords(r.nb) : ""].filter(Boolean).join(" ");
   }
   const parts = [];
   if (r.g < S.meta.metal_gap_eV) parts.push("The model sees this as a metal or very nearly one.");
@@ -610,7 +637,8 @@ function plainWords(r) {
   parts.push(r.w === 0
     ? `The model is confident here${err ? `; predictions like this are typically off by about ${fmt(err, 2)} eV` : ""}.`
     : `Worth confirming with a DFT calculation before relying on it${err ? `; predictions like this are typically off by about ${fmt(err, 2)} eV` : ""}.`);
-  return parts.join(" ");
+  parts.push(nearestWords(r.nb));
+  return parts.filter(Boolean).join(" ");
 }
 
 /* --------------------------------------------------------------------- theme */
@@ -1089,6 +1117,7 @@ function renderDetail(hostId = "detail", row = undefined) {
     <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
     ${ood ? `<div class="note stop">${t("d_stop")}</div>` : ""}
     ${r.up && r.warns.length ? `<div class="note"><b>${t("d_warn")}.</b> ${r.warns.map(esc).join("; ")}</div>` : ""}
+    ${r.nb && r.nb.length ? nbBlock(r.nb) : ""}
     ${(!ood && r.g >= S.meta.metal_gap_eV) ? `<div class="note">
         <b>${t("d_qp")}</b> — ${H ? t("d_qp_note", H.n, fmt(H.mae_cv.gap_gw, 2))
                                      : t("d_qp_note", C.quasiparticle.n, "0.19")}<br>
@@ -1102,6 +1131,21 @@ function renderDetail(hostId = "detail", row = undefined) {
     ${(r.k !== null && r.ea === null && r.kw === 2) ? `<div class="note stop">${t("d_wf_stop")}</div>` : ""}
     ${(r.k !== null && r.ea === null && r.kw !== 2 && ood) ? `<div class="note">${t("d_wf_gapstop")}</div>` : ""}
     <div class="note">${t("d_note", fmt(cal.test_mae, 2))}</div>`;
+}
+
+function nbBlock(nb) {
+  S.byId = S.byId || new Map(S.rows.map(r => [r.i, r]));
+  const row = n => {
+    const inTable = S.byId.has(n.id);
+    const f = inTable ? `<button data-nb="${esc(n.id)}" title="${esc(n.id)}">${esc(n.formula)}</button>`
+                      : `<span title="${esc(n.id)}">${esc(n.formula)}</span>`;
+    const g = n.dft_gap === null ? t("nb_mc2d") : fmt(n.dft_gap, 2) + " eV";
+    const fl = n.flag ? `<br><span class="fl">${t(n.flag === "wrong" ? "nb_wrong" : "nb_disputed")}</span>` : "";
+    return `<tr><td>${f}${fl}</td><td class="r">${g}</td><td>${t("nb_src")[n.source] || n.source}</td>` +
+           `<td class="r">${n.distance < 0.001 ? "&lt; 0.001" : fmt(n.distance, 3)}</td></tr>`;
+  };
+  return `<div class="note"><b>${t("d_nb")}</b> — ${t("d_nb_note")}
+    <table class="nbt">${nb.map(row).join("")}</table></div>`;
 }
 
 /* families ---------------------------------------------------------------- */
@@ -1415,7 +1459,7 @@ function prShow(res) {
     k: res.work_function ?? null, ku: res.work_function_unc ?? null, kl: res.work_function_latent ?? null,
     kw: res.work_function_verdict ? tierOf(res.work_function_verdict) : null, kr: -1, kd: null,
     q: res.gap_quasiparticle ?? null, x: res.exciton_binding ?? null, o: res.exp_gap_est ?? null,
-    pm: res.p_metastable, iv: res.interval90, rf: 0,
+    pm: res.p_metastable, iv: res.interval90, rf: 0, nb: res.neighbours || [],
     up: true, nl: !res.layer.is_layer,
     warns: res.warnings.filter(w => !w.startsWith("metal gate")) };
   setEdges(row);
@@ -1463,6 +1507,20 @@ document.addEventListener("click", e => {
     const text = PR_EXAMPLES[ex.dataset.ex];
     document.getElementById("pr-text").value = text;
     prRun(text, ex.dataset.ex + " (example)");
+    return;
+  }
+  const nbBtn = e.target.closest("button[data-nb]");
+  if (nbBtn) {
+    // the neighbour's own row, reached through its formula in the widest population
+    const r = S.byId.get(nbBtn.dataset.nb);
+    document.getElementById("f-reset").click();
+    S.f.pop = 2; S.f.tiers = [true, true, true]; S.f.q = r.f;
+    document.getElementById("f-pop").value = "2";
+    document.getElementById("f-q").value = S.f.q;
+    document.querySelectorAll(".chip[data-tier]").forEach(c => c.setAttribute("aria-pressed", "true"));
+    selectTab("browse");
+    apply();
+    S.sel = r; renderTable(); renderDetail(); drawChart();
     return;
   }
   if (e.target.id === "pr-show") {

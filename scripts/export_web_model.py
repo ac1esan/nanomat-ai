@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 """Export the shipped checkpoints for the in-browser predictor (docs/js/nanomat.js).
 
-Writes three files:
+Writes three files, and a fourth when the checkpoint names its training structures:
   manifest.json  - architecture, normalisation, calibration, thresholds, the heads'
                    and the population's constants, and where every tensor lives
   weights.bin    - every member of the gap, metal-gate, gap-type and work-function
                    ensembles, plus the latent heads, one tensor after another
   refs.bin       - the training-set embeddings the latent distance is measured
                    against (gap model and work-function model), float16 as shipped
+  neighbours.json - id, formula, DFT label and flag of each gap-model reference row
+                   (scripts/reference_meta.py), so the page can say which training
+                   structures a prediction sits closest to
 
 Everything the page computes comes from here, so the page cannot drift from the
 checkpoints: re-export after every recalibration, the same rule as for
@@ -164,10 +167,26 @@ def main():
     W.write(os.path.join(args.out, "weights.bin"))
     R.write(os.path.join(args.out, "refs.bin"))
     manifest["bytes"] = {"weights.bin": W.size, "refs.bin": R.size}
+    meta = gap.get("reference_meta")
+    nb_path = os.path.join(args.out, "neighbours.json")
+    if isinstance(meta, dict) and len(meta["id"]) == gap["reference_embeddings"].shape[0]:
+        # the source follows from the id prefix, so it is not repeated per row; labels
+        # are rounded to the precision the card shows
+        g = meta["gap"].numpy()
+        nb = {"id": meta["id"], "formula": meta["formula"],
+              "gap": [None if not np.isfinite(v) else round(float(v), 3) for v in g],
+              "flag": {str(i): f for i, f in enumerate(meta["flag"]) if f},
+              "label": meta.get("label")}
+        with open(nb_path, "w") as fh:
+            json.dump(nb, fh, separators=(",", ":"))
+        manifest["bytes"]["neighbours.json"] = os.path.getsize(nb_path)
+    elif os.path.exists(nb_path):
+        os.remove(nb_path)
     json.dump(manifest, open(os.path.join(args.out, "manifest.json"), "w"), indent=1)
     n = {k: len(v["members"]) for k, v in manifest["models"].items()}
     print(f"members {n}; weights.bin {W.size / 1e6:.1f} MB ({args.weights_dtype}), "
-          f"refs.bin {R.size / 1e6:.1f} MB ({args.refs_dtype}) -> {args.out}")
+          f"refs.bin {R.size / 1e6:.1f} MB ({args.refs_dtype}), neighbours.json "
+          f"{manifest['bytes'].get('neighbours.json', 0) / 1e6:.1f} MB -> {args.out}")
 
 
 if __name__ == "__main__":

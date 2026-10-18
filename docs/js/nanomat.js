@@ -521,9 +521,11 @@ function member(buf, spec, kind) {
 }
 
 export class Model {
-  // manifest: docs/model/manifest.json; weights, refs: ArrayBuffers of the two .bin files
-  constructor(manifest, weights, refs) {
+  // manifest: docs/model/manifest.json; weights, refs: ArrayBuffers of the two .bin files;
+  // meta: the parsed neighbours.json, or null (then no neighbours are named)
+  constructor(manifest, weights, refs, meta = null) {
     this.M = manifest;
+    this.meta = meta;
     const g = manifest.models;
     this.gap = g.gap.members.map(s => member(weights, s, "reg"));
     this.metal = g.metal ? g.metal.members.map(s => member(weights, s, "cls")) : null;
@@ -537,27 +539,49 @@ export class Model {
     this.pop = pop ? { w: tensor(weights, pop.w), b: pop.b, table: pop.table } : null;
   }
 
-  latent(h, refs, dim = 128) {
-    // 1 - mean cosine similarity to the 10 nearest reference embeddings
+  nearest(h, refs, dim = 128) {
+    // Predictor.nearest: the 10 nearest reference embeddings by cosine similarity,
+    // most similar first (an exact tie keeps the lower index, as in Python), and
+    // 1 - their mean similarity
     let n = 0;
     for (let k = 0; k < dim; k++) n += h[k] * h[k];
     n = Math.max(Math.sqrt(n), 1e-9);
     const e = h.map(v => v / n);
-    const R = refs.length / dim, top = new Float64Array(10).fill(-Infinity);
+    const R = refs.length / dim, top = new Float64Array(10).fill(-Infinity), idx = new Int32Array(10).fill(-1);
     for (let r = 0; r < R; r++) {
       let s = 0;
       const o = r * dim;
       for (let k = 0; k < dim; k++) s += e[k] * refs[o + k];
       if (s > top[9]) {                       // keep the ten largest, sorted
         let p = 9;
-        while (p > 0 && top[p - 1] < s) { top[p] = top[p - 1]; p--; }
+        while (p > 0 && top[p - 1] < s) { top[p] = top[p - 1]; idx[p] = idx[p - 1]; p--; }
         top[p] = s;
+        idx[p] = r;
       }
     }
     const k = Math.min(10, R);
     let m = 0;
     for (let i = 0; i < k; i++) m += top[i];
-    return 1 - m / k;
+    return { distance: 1 - m / k, idx: Array.from(idx.slice(0, k)), sims: Array.from(top.slice(0, k)) };
+  }
+
+  latent(h, refs, dim = 128) {               // 1 - mean cosine similarity to the 10 nearest
+    return this.nearest(h, refs, dim).distance;
+  }
+
+  neighbours(near, show = 5) {               // Predictor.neighbours
+    const M = this.meta;
+    if (!M) return [];
+    const out = [], seen = new Set();
+    for (let j = 0; j < near.idx.length && out.length < show; j++) {
+      const i = near.idx[j], gap = M.gap[i];
+      const key = M.formula[i] + "|" + (gap === null ? "none" : Math.floor(gap * 100 + 0.5));
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: M.id[i], source: sourceOf(M.id[i]), formula: M.formula[i], dft_gap: gap,
+                 flag: M.flag[String(i)] || "", distance: Math.max(0, 1 - near.sims[j]) });
+    }
+    return out;
   }
 
   verdict(unc, cal, latent, reason) {      // predict.verdict
@@ -592,7 +616,8 @@ export class Model {
     const unc = Math.sqrt(preds.reduce((a, p) => a + (p - gap) ** 2, 0) / preds.length);
     const emb = new Float64Array(hs.length * hs[0].length);
     hs.forEach((h, k) => emb.set(h, k * h.length));
-    const ld = this.latent(hs[0], this.refs);
+    const near = this.nearest(hs[0], this.refs);
+    const ld = near.distance;
 
     let pMeta = null;
     if (this.pop) {
@@ -626,7 +651,8 @@ export class Model {
                   p_metal: pMetal, p_metastable: pMeta, interval90: iv,
                   typical_error: cal.tier_mae[tierKey(v)], is_metal_like: metalLike,
                   gap_type: pInd === null ? null : (pInd >= M.models.type.threshold ? "indirect" : "direct"),
-                  p_indirect: pInd, layer: { axis: info.axis, vacuum: info.vacuum, thickness: info.thickness,
+                  p_indirect: pInd, neighbours: this.neighbours(near),
+                  layer: { axis: info.axis, vacuum: info.vacuum, thickness: info.thickness,
                                              is_layer: info.is_layer, padded: info.padded },
                   warnings };
     if (!metalLike && !ood && this.heads) {      // _apply_heads
@@ -659,6 +685,7 @@ export class Model {
     return out;
   }
 }
+const sourceOf = id => (id.startsWith("2dm-") ? "2dmatpedia" : id.startsWith("mc2d-") ? "mc2d" : "alexandria");
 export const tierKey = v => (v.startsWith("reliable") ? "reliable" : v.startsWith("check") ? "check" : "out_of_domain");
 export const tierCode = v => (v.startsWith("reliable") ? 0 : v.startsWith("check") ? 1 : 2);
 

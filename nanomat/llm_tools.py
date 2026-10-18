@@ -330,6 +330,13 @@ def _parse(structure: str, fmt: str):
                      "the whole file, including the POSCAR comment line.")
 
 
+NEAREST = ("Training structures closest to this one in the model's own representation, with "
+           "their DFT labels (PBE, from the database named in source). A distance below 0.005 "
+           "means practically the same layer: the prediction then largely recalls that label. "
+           "They show what the prediction leans on; they are not measurements of this "
+           "structure. MC2D labels are not redistributed, so those rows carry no gap.")
+
+
 def predict_structure(structure: str, fmt: str = "") -> dict:
     """Predict the band gap of a 2D monolayer from its crystal structure.
 
@@ -367,6 +374,12 @@ def predict_structure(structure: str, fmt: str = "") -> dict:
         "work_function_verdict": r.work_function_verdict,
         "electron_affinity_eV": _num(r.electron_affinity),
         "ionisation_potential_eV": _num(r.ionisation_potential),
+        "nearest_training_structures": [
+            {"formula": n["formula"], "dft_gap_pbe_eV": _num(n["dft_gap"]), "source": n["source"],
+             "id": n["id"], "distance": _num(n["distance"], 4),
+             **({"label_flag": n["flag"]} if n["flag"] else {})}
+            for n in r.neighbours[:3]],
+        "nearest_meaning": NEAREST,
         "warnings": list(r.warnings), "note": LEVELS,
         "in_plain_words": describe(r),
     }

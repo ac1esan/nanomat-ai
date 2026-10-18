@@ -32,14 +32,17 @@ async function fetchBuffer(url, expected, report) {
 
 async function load(base) {
   const manifest = await (await fetch(base + "manifest.json", { cache: "no-cache" })).json();
-  const total = manifest.bytes["weights.bin"] + manifest.bytes["refs.bin"];
+  const nbBytes = manifest.bytes["neighbours.json"] || 0;
+  const total = manifest.bytes["weights.bin"] + manifest.bytes["refs.bin"] + nbBytes;
   let done = 0;
   const report = n => { done += n; postMessage({ type: "progress", loaded: done, total }); };
-  const [w, r] = await Promise.all([
+  const [w, r, nb] = await Promise.all([
     fetchBuffer(base + "weights.bin", manifest.bytes["weights.bin"], report),
     fetchBuffer(base + "refs.bin", manifest.bytes["refs.bin"], report),
+    nbBytes ? fetchBuffer(base + "neighbours.json", nbBytes, report) : null,
   ]);
-  model = new Model(manifest, w, r);
+  const meta = nb ? JSON.parse(new TextDecoder().decode(nb)) : null;
+  model = new Model(manifest, w, r, meta);
   postMessage({ type: "ready", created: manifest.created_utc });
 }
 

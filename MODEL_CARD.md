@@ -18,11 +18,13 @@ feature = distance, atomic number embedded at the nodes.
 | **Why the extra data** | Four experiments, each against a control retrained in the same session. Stable set alone → + metastable to 0.2 + 2DMatPedia: 0.249 → 0.225 on the stable test. That → + metastable to 0.5: 0.230 → 0.197 (paired −0.032 eV, bootstrap 95% −0.043…−0.022). That → + metastable to 1.0: 0.191 → 0.186 (−0.004, −0.011…+0.003), 0.256 → 0.248 on held-out 0.2–0.5 eV/atom (−0.007, −0.012…−0.002): the return on metastable data has run out. That → + MC2D: 0.191 → **0.190** on the stable test (−0.001, −0.011…+0.014) and 0.449 → **0.385** on held-out MC2D (−0.064, −0.103…−0.027). The shipped 0.190 is above the previous release's 0.186 because two trainings of one recipe differ by about 0.005 eV; against its own control it is not worse. Details below |
 | **Why angles** | An edge carries a distance and nothing else, so two polymorphs of one composition are nearly the same graph. Against its own control, adding a per-atom bond-angle histogram took MAE from 0.271 to 0.246 eV (paired +0.026, bootstrap 95% +0.015…+0.037, Wilcoxon p = 4·10⁻⁵) and doubled how far the model separates 1H-MX₂ from 1T-MX₂ |
 | **Composition baseline** | **0.430 eV** on the identical test set (`scripts/composition_baseline.py`), so structure wins by 57%. The 0.360 eV quoted in early versions came from five-fold cross-validation, a different protocol that leaks near-duplicate compositions |
-| **Checksum** | SHA-256 `d7aff9613496dc4abee465eb1b6ede93b86fc7517c59454e7afb36853f3e03cd` |
+| **Checksum** | SHA-256 `859beb94381f819d14b48cba683da1336fde6c86d7c258692b2405c60701b90e` |
 
 The checkpoint also carries its own `calibration` block, both gap corrections, the
 latent heads, the metastability head with its interval table (`population`) and
-45 857 reference embeddings, so it can judge and correct its own output without any
+45 857 reference embeddings with the id, formula and DFT label of each
+(`reference_meta`, so a prediction can name its nearest training structures), so it can
+judge and correct its own output without any
 external file. Its checksum therefore changes whenever the calibration is refitted,
 not only when the weights are retrained.
 

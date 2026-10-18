@@ -38,6 +38,35 @@ VERDICT = {
 }
 
 
+# cosine distance in the ensemble's latent space below which the nearest training
+# structure is practically the same layer: a training structure finds itself at
+# ~1e-4 (float16 rounding), phosphorene relaxed in JARVIS finds its Alexandria twin
+# at ~0.005. docs/index.html uses the same threshold.
+SAME_LAYER = 0.005
+
+
+def neighbour_detail(n: dict) -> str:
+    """'DFT gap 1.76 eV', with the label's flag when it has one."""
+    text = "from MC2D" if n.get("dft_gap") is None else f"DFT gap {n['dft_gap']:.2f} eV"
+    if n.get("flag") == "wrong":
+        text += ", a label known to be wrong"
+    elif n.get("flag") == "disputed":
+        text += ", a disputed label"
+    return text
+
+
+def nearest_words(neighbours: list[dict] | None) -> str:
+    """One sentence on the closest training structure, or "" without one."""
+    if not neighbours:
+        return ""
+    n = neighbours[0]
+    if n["distance"] < SAME_LAYER:
+        return (f"The model was trained on practically this same layer, {n['formula']} "
+                f"({neighbour_detail(n)}), so the number largely recalls that result rather "
+                "than predicting a new one.")
+    return f"The closest material it was trained on is {n['formula']} ({neighbour_detail(n)})."
+
+
 def wavelength_nm(gap_ev: float) -> float | None:
     return HC_EV_NM / gap_ev if gap_ev and gap_ev > 0 else None
 
@@ -68,7 +97,12 @@ def describe(pred, typical_error: dict | None = None) -> str:
         text = next((w for k, w in why.items() if reason.startswith(k)),
                     "The five models disagree too much to trust any of them; the structure "
                     "may be metallic or unusual.")
-        return VERDICT["out-of-domain"].format(reason=text)
+        out = VERDICT["out-of-domain"].format(reason=text)
+        # what it resembles explains "unlike anything"; next to a metal or a non-layer
+        # verdict it would only distract
+        if reason.startswith("chemistry"):
+            out = " ".join(x for x in (out, nearest_words(getattr(pred, "neighbours", None))) if x)
+        return out
     tier = "reliable" if v.startswith("reliable") else "check"
     parts = []
     onset = pred.exp_gap_est
@@ -81,4 +115,5 @@ def describe(pred, typical_error: dict | None = None) -> str:
         parts.append(f"That is {use_of(onset)}.")
     typical = getattr(pred, "typical_error", None) or err[tier]
     parts.append(VERDICT[tier].format(err=typical))
-    return " ".join(parts)
+    parts.append(nearest_words(getattr(pred, "neighbours", None)))
+    return " ".join(p for p in parts if p)
