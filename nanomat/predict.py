@@ -108,10 +108,10 @@ def band_edges(work_function: float, gap: float) -> tuple[float, float]:
     reference level rather than anything a probe measures — but together with the
     gap it places both band edges, which is the pair a contact is chosen on.
 
-    Checked against published monolayer values: ionisation potentials land within
-    0.15 eV for MoS2, MoSe2, WS2 and WSe2, affinities within 0.4 eV. The mid-gap
-    assumption is a convention, not a law, so treat these as placements rather than
-    measurements.
+    Checked against the edges C2DB computes (scripts/edges_vs_c2db.py): 0.15 eV
+    where the tool shows them, 0.20 eV where the work-function model never trained,
+    with heavy-element compounds about 0.12 eV out (no spin-orbit coupling in the
+    gap). Both are PBE-level placements, not measurements.
     """
     return work_function - gap / 2, work_function + gap / 2
 

@@ -403,9 +403,15 @@ the quantity the literature means.
 
 **What it unlocks.** With the gap it fixes both band edges relative to vacuum:
 electron affinity = work function − gap/2, ionisation potential = work function +
-gap/2. Against published monolayer values the ionisation potentials land within
-about 0.1 eV (MoS₂ 6.09 vs 6.1, MoSe₂ 5.45 vs 5.5, WS₂ 5.89 vs 6.0, WSe₂ 5.20 vs 5.2)
-and the affinities within 0.45 eV. The mid-gap assumption is a convention, not a law.
+gap/2. Against the edges C2DB computes (PBE with spin-orbit coupling; its Fermi level
+sits exactly mid-gap, so this is its own definition) the shown edges are off by
+0.15 eV on 629 materials and by 0.20 eV on the 113 the work-function model never
+trained on; where the edges are withheld they would be off by 0.28–0.31 eV. Compounds
+of elements with Z ≥ 52 sit about 0.12 eV out, the affinity low and the ionisation
+potential high, because the gap model has no spin-orbit coupling
+(`scripts/edges_vs_c2db.py`). An earlier comparison of four TMDs with unattributed
+literature values (agreement within 0.15 eV) is withdrawn: those values sit above the
+PBE level, and part of the agreement came from that offset.
 
 **The edges need both models to stand behind their half**, so they are withheld
 whenever either verdict says out-of-domain. This model has its own trust layer, not

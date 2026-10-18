@@ -664,14 +664,39 @@ rather than something a probe reads. That is why h-BN comes out at 3.4 eV where 
 literature quotes 4.5 — and the database agrees with the model, at 3.49.
 
 Combined with the gap it places **both band edges relative to vacuum**, which is
-the pair a contact metal is matched against:
+the pair a contact metal is matched against. The full C2DB release stores both
+edges as computed (PBE with spin-orbit coupling) for 1 100 of the C2DB rows in the
+screening table ([`scripts/edges_vs_c2db.py`](scripts/edges_vs_c2db.py)). In C2DB's
+own numbers the Fermi level sits exactly mid-gap, so work function ± half the gap is
+its definition of the edges, not an approximation of it. Error against those edges,
+eV:
 
-| | Electron affinity | published | Ionisation potential | published |
+| | n | Electron affinity | Ionisation potential |
+|---|---|---|---|
+| edges shown | 629 | 0.15 | 0.15 |
+| shown, work-function model never trained on them | 113 | 0.20 | 0.21 |
+| withheld, because either model disowns the structure | 471 | 0.28 | 0.31 |
+
+The rule that withholds the edges earns its keep: where it hides them they would be
+off by twice as much. Compounds of elements with Z ≥ 52 carry a systematic offset,
+the affinity 0.11 eV low and the ionisation potential 0.12 eV high: the gap model
+has no spin-orbit coupling, so its gap is wider than C2DB's and each edge takes half
+the difference. Light compounds show almost none (−0.03 and −0.01).
+
+**Correction.** This section used to set the four TMDs against unattributed
+"published" values (ionisation potentials 6.1, 5.5, 6.0 and 5.2 eV) and report
+agreement within 0.15 eV. Those values sit above the PBE level the model is trained
+to, and part of the agreement came from the spin-orbit offset above. Against C2DB's
+computed edges the affinities agree to within 0.09 eV and the ionisation potentials
+come out 0.21–0.38 eV high, all four having been in the work-function model's
+training set:
+
+| | Electron affinity | C2DB | Ionisation potential | C2DB |
 |---|---|---|---|---|
-| MoS₂ | 4.41 | 4.0 | 6.10 | 6.1 |
-| MoSe₂ | 3.95 | 3.9 | 5.49 | 5.5 |
-| WS₂ | 4.02 | 3.9 | 5.88 | 6.0 |
-| WSe₂ | 3.64 | 3.6 | 5.21 | 5.2 |
+| MoS₂ | 4.40 | 4.31 | 6.10 | 5.89 |
+| MoSe₂ | 3.95 | 3.91 | 5.49 | 5.23 |
+| WS₂ | 4.02 | 3.97 | 5.88 | 5.50 |
+| WSe₂ | 3.63 | 3.61 | 5.21 | 4.85 |
 
 The edges are a subtraction between two models, so they need **both** to stand
 behind their half and are withheld when either verdict says out-of-domain. This
