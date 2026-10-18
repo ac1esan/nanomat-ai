@@ -75,6 +75,30 @@ header p{margin:0;color:var(--text-2);max-width:70ch}
 .preset.pr-go:hover{color:#fff;filter:brightness(1.08)}
 .pr-status{margin:0;font-size:13px;color:var(--text-2);min-height:1.5em}
 .pr-status.err{color:var(--tier-2)}
+.pr-build{border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:8px 12px}
+.pr-build summary{cursor:pointer;font-size:13px;color:var(--text-1);font-weight:600}
+.pb-row{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end;margin-top:10px}
+.pb-row input[type=text]{width:52px}
+.pb-row input[type=number]{width:86px}
+.pb-row .field[hidden]{display:none}
+.pb-note{margin:8px 0 0;font-size:12px;color:var(--text-2);line-height:1.45}
+.pr-guide-link{margin:0;font-size:12px}
+.pr-batch{margin-top:16px}
+.pr-batch .bhead{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:8px}
+.pr-batch h2{font-size:15px;margin:0;color:var(--text-1)}
+.pr-batch .bhint{font-size:12px;color:var(--text-3)}
+.pr-batch .bwrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px}
+.pr-batch table{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}
+.pr-batch th{text-align:left;font-weight:600;color:var(--text-2);background:var(--surface-2);padding:6px 8px;white-space:nowrap}
+.pr-batch td{padding:5px 8px;border-top:1px solid var(--border);white-space:nowrap}
+.pr-batch td.r,.pr-batch th.r{text-align:right}
+.pr-batch tbody tr{cursor:pointer}
+.pr-batch tbody tr:hover,.pr-batch tbody tr.sel{background:var(--surface-2)}
+.pr-batch td.err{color:var(--tier-2);white-space:normal}
+.prose details{margin:6px 0;border:1px solid var(--border);border-radius:6px;padding:7px 11px;background:var(--surface-2)}
+.prose summary{cursor:pointer;color:var(--text-1);font-weight:600}
+.prose pre{background:var(--surface-3);color:var(--text-1);padding:8px 10px;border-radius:5px;
+  overflow-x:auto;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
 
 /* filters */
 .filters{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:flex-end;
@@ -223,6 +247,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
     <a href="https://github.com/ac1esan/nanomat-ai#knowing-when-not-to-believe-it" target="_blank" rel="noopener noreferrer" id="t-how">How the verdict works</a>
     <a href="#predict" id="t-own">Run your own structure</a>
     <button class="preset themebtn" id="theme-btn" type="button" aria-live="polite"></button>
+    <button class="preset" id="lang-btn" type="button"></button>
   </div>
 </header>
 
@@ -374,7 +399,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
   <div class="results">
     <div class="pr-in">
       <label class="drop" id="pr-drop">
-        <input type="file" id="pr-file" accept=".cif,.vasp,.poscar,.contcar,.txt,text/plain">
+        <input type="file" id="pr-file" multiple accept=".cif,.vasp,.poscar,.contcar,.txt,text/plain">
         <span id="t-pr-drop"></span>
       </label>
       <label class="pr-label" for="pr-text" id="t-pr-paste"></label>
@@ -387,9 +412,24 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
         <button class="preset" type="button" data-ex="graphene">graphene</button>
       </div>
       <p class="pr-status" id="pr-status" aria-live="polite"></p>
+      <details class="pr-build" id="pr-build">
+        <summary id="t-pb-sum"></summary>
+        <div class="pb-row">
+          <div class="field"><label for="pb-proto" id="t-pb-proto"></label><select id="pb-proto"></select></div>
+          <div class="field"><label for="pb-e1" id="pb-l1"></label><input type="text" id="pb-e1" autocomplete="off" spellcheck="false"></div>
+          <div class="field" id="pb-f2"><label for="pb-e2" id="pb-l2"></label><input type="text" id="pb-e2" autocomplete="off" spellcheck="false"></div>
+          <div class="field"><label for="pb-a" id="t-pb-a"></label><input type="number" id="pb-a" step="0.001" min="1.5" max="10"></div>
+          <div class="field"><label for="pb-t" id="pb-lt"></label><input type="number" id="pb-t" step="0.001" min="0" max="6"></div>
+          <button class="preset pr-go" id="pb-go" type="button"></button>
+        </div>
+        <p class="pb-note" id="pb-note"></p>
+      </details>
+      <p class="pr-guide-link"><a href="#pr-guide" id="t-pr-guide-link"></a></p>
     </div>
     <aside class="detail" id="pr-detail"></aside>
   </div>
+  <section class="pr-batch" id="pr-batch" hidden></section>
+  <div class="prose" id="pr-guide"></div>
   <div class="prose" id="pr-prose"></div>
 </section>
 
@@ -402,13 +442,19 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
    Strings live here, keyed by language, so another language is a translation
    rather than a rewrite. Everything user-visible goes through t().
 --------------------------------------------------------------------------- */
+// Russian plural: 1 структура, 3 структуры, 5 структур. Counts may arrive formatted
+// ("28 372"), so the digits are read back out first.
+const ruN = (n, one, few, many) => {
+  const k = Number(String(n).replace(/[^\d]/g, "")), m10 = k % 10, m100 = k % 100;
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+};
 const I18N = {
   en: {
     title: "NanoMatAI — 2D band gap screening",
     lede: n => `Predicted band gaps for ${n} two-dimensional structures, each with a calibrated interval and an explicit verdict on whether to believe it. A second ensemble adds the vacuum-referenced work function, and the two together place the band edges — the pair a contact metal is chosen on. The table is a graph neural network's output, precomputed once and served as static data; the "Your structure" tab runs the same network in your browser on a file of your own.`,
     tab_browse: "Browse", tab_trust: "Trust map", tab_fam: "Families", tab_pred: "Your structure",
-    pr_lede: "Drop in a CIF or POSCAR of a 2D layer and get the same card as every row of the table: the predicted gap, its calibrated interval, the verdict with its reason, the optical estimate, the band edges and the training structures yours is closest to. It runs in your browser — the file never leaves your computer. The first prediction downloads the models once.",
-    pr_drop: "Drop a CIF or POSCAR here, or click to choose a file",
+    pr_lede: "Drop in a CIF or POSCAR of a 2D layer, or many at once for a table and a CSV, and get the same card as every row of the table: the predicted gap, its calibrated interval, the verdict with its reason, the optical estimate, the band edges and the training structures yours is closest to. It runs in your browser — the file never leaves your computer. The first prediction downloads the models once.",
+    pr_drop: "Drop one or more CIF or POSCAR files here, or click to choose",
     pr_paste: "…or paste the file's text",
     pr_go: "Predict", pr_try: "or try",
     pr_loading: (a, b) => `Downloading the models: ${a} of ${b} MB (once; your browser keeps them)…`,
@@ -420,6 +466,61 @@ const I18N = {
     pr_empty: "Your structure's card appears here.",
     pr_matches: (n, f) => `The table holds ${n === 1 ? "one structure" : n + " structures"} with the formula ${f}, computed by DFT. `,
     pr_show: "Show them",
+    pr_batch_progress: (k, n) => `Computing ${k} of ${n}…`,
+    pr_batch_done: (n, bad, s) => `Done: ${n} structure${n === 1 ? "" : "s"} in ${s.toFixed(1)} s` +
+      (bad ? `, ${bad} could not be read` : "") + ".",
+    pr_batch_title: n => `${n} structures`,
+    pr_batch_csv: "Download CSV",
+    pr_batch_hint: "Click a row for its full card. The CSV has the columns of the Python command line, so files from either can be compared.",
+    pr_batch_cols: ["File", "Formula", "Gap, eV", "90%", "Verdict", "Optical, eV", "χ / IP, eV", "Nearest training structure"],
+    pr_batch_too_many: n => `${n} files is more than this page takes at once (500); the first 500 are computed.`,
+    pb_sum: "No file? Build one from a prototype",
+    pb_proto: "Prototype",
+    pb_protos: { "1H-MX2": "1H-MX₂ (MoS₂ type)", "1T-MX2": "1T-MX₂ (CdI₂ type)",
+                 "hc-AB": "Honeycomb AB (h-BN type)", "hc-A": "Honeycomb A (graphene type)" },
+    pb_labels: { "1H-MX2": ["Metal M", "Atom X"], "1T-MX2": ["Metal M", "Atom X"],
+                 "hc-AB": ["Element A", "Element B"], "hc-A": ["Element", ""] },
+    pb_a: "a, Å",
+    pb_t: { mx: "X–X thickness, Å", hc: "Buckling, Å" },
+    pb_go: "Build and predict",
+    pb_from: (id, src) => `Lattice constant and thickness from ${id} (${src}), a DFT-relaxed cell of this pair. Edit them to try your own.`,
+    pb_none: ideal => `The table holds no relaxed ${ideal.name} of these elements. Enter the lattice constant a from a relaxed calculation or a measurement, not from atomic radii: a value 9% too large moved the gap by 0.4 eV on the TMDs. Left blank, the thickness is ${ideal.text}.`,
+    pb_ideal: { "1H-MX2": { name: "1H cell", text: "that of an ideal trigonal prism (equal to a), which changed the gap by 0.001 eV on four TMDs" },
+                "1T-MX2": { name: "1T cell", text: "that of an ideal octahedron (0.816 a), a guess: it was measured only for 1H" },
+                "hc-AB": { name: "honeycomb", text: "0, a planar layer" },
+                "hc-A": { name: "honeycomb", text: "0, a planar layer" } },
+    pb_bad_el: "Elements are chemical symbols, such as Mo, S or Se.",
+    pb_bad_a: "The lattice constant should be between 1.5 and 10 Å.",
+    pb_bad_t: "The thickness should be between 0 and 6 Å.",
+    pb_name: (proto, f, a) => `${f} (${proto}), built, a = ${a.toFixed(3)} Å`,
+    pb_src: { alexandria: "Alexandria", c2db: "C2DB", jarvis_dft2d: "JARVIS dft_2d" },
+    pb_short: { "1H-MX2": "1H", "1T-MX2": "1T", "hc-AB": "honeycomb", "hc-A": "honeycomb" },
+    pr_guide_link: "No CIF from a DFT run? How to get a structure ↓",
+    pr_guide: `<h2 id="pr-guide-h">Getting a structure</h2>
+<p>The model reads one relaxed monolayer, as POSCAR or CIF. If that is not what you have:</p>
+<details><summary>I only have a formula</summary>
+<p>Search for it in the Browse tab first: it holds 28 372 monolayers already computed, and the search understands names (graphene, h-BN, molybdenum disulfide). If it is not there, download a monolayer CIF from <a href="https://c2db.fysik.dtu.dk/">C2DB</a>, <a href="http://www.2dmatpedia.org/">2DMatPedia</a> or <a href="https://www.materialscloud.org/discover/mc2d">MC2D</a>: all three store single layers, already relaxed. A formula alone cannot be predicted from: one formula can be several structures with different gaps, and 1H-MoS₂ is a semiconductor where 1T-MoS₂ is a metal.</p></details>
+<details><summary>I have a CIF of the bulk crystal</summary>
+<p>The page will call it "not a 2D layer", and rightly: the model learned from isolated monolayers. Look for the layer in MC2D first, which holds monolayers exfoliated from experimentally known bulk crystals and relaxed in DFT. Otherwise cut one layer out yourself, in VESTA or with ASE, when the layers stack along the c axis:</p>
+<pre>from ase.io import read, write
+bulk = read("bulk.cif")
+z = bulk.positions[:, 2]
+layer = bulk[(z &gt; 2.0) &amp; (z &lt; 5.5)]   # the z-range of one layer, read off a viewer
+layer.center(vacuum=10, axis=2)       # 10 Å of vacuum on each side
+write("layer.vasp", layer, format="vasp")</pre>
+<p>The cut layer keeps the bulk crystal's lattice, which is close to the relaxed monolayer's but not the same; see the fourth point.</p></details>
+<details><summary>I have a lattice constant from a paper</summary>
+<p>For the four simplest prototypes, <b>Build one from a prototype</b> above makes the cell, and fills in a relaxed lattice constant whenever the table already holds that pair. In Python, ASE has the same builders:</p>
+<pre>from ase.build import mx2, graphene
+from ase.io import write
+# 1H-MoS2; kind="1T" for the octahedral phase; thickness is the X-X distance
+write("MoS2.vasp", mx2("MoS2", kind="2H", a=3.18, thickness=3.18, vacuum=10), format="vasp")
+write("hBN.vasp", graphene("BN", a=2.51, vacuum=10), format="vasp")</pre>
+<p>The lattice constant is the number that matters. On four TMDs an ideal chalcogen height, with the X–X thickness equal to a, moved the predicted gap by 0.001 eV against the relaxed cell; a lattice constant estimated from atomic radii, 9% too large, moved it by 0.4 eV. Take a from a relaxed calculation or a measurement.</p></details>
+<details><summary>I have an experimental or unrelaxed structure</summary>
+<p>It will run, but read the number with that in mind. The model learned from cells relaxed with PBE, whose lattice constants usually run slightly above measured ones (MoS₂: 3.19 Å in Alexandria against about 3.16 measured). Stretching a layer by 1% moves the predicted gap by a few hundredths of an eV, and from about +3% the metal gate starts to reject MoSe₂ and WSe₂. If you can, relax the cell first.</p></details>
+<details><summary>Formats and odd cases</summary>
+<p>POSCAR (VASP 4 or 5; a missing comment line is forgiven, and selective dynamics and a negative scale are read) and CIF, whose symmetry operations are expanded. A file with no cell, such as XYZ, cannot describe a periodic layer. The vacuum can lie along any axis: the page finds it, and pads it to the 8 Å neighbour cutoff if it is thinner. A supercell with a defect, an alloy or a substrate runs too; the verdict will say how far it sits from anything the model was trained on.</p></details>`,
     pr_prose: `<h2>What runs here</h2><p>Your browser runs the same five-member ensemble, metal gate, gap-type classifier and work-function ensemble as the Python package, from weights exported out of the same checkpoints, and assembles the verdict the same way. The vacuum is detected and, if thinner than the 8 Å neighbour cutoff, padded, exactly as the Python tool does. Agreement with Python is checked on thousands of structures before every release.</p><p>Upload a relaxed monolayer. The model was trained on DFT-relaxed structures, and an unrelaxed or experimental cell can shift the prediction: a 2% larger lattice already moves the gap and can trip the metal gate. A bulk crystal, with no vacuum gap, is flagged as not a 2D layer.</p>`,
     d_computed: "Computed", d_inbrowser: "in your browser, from your file",
     d_nb: "Nearest training structures",
@@ -526,10 +627,283 @@ const I18N = {
     theme: { system: "◐ Theme: system", light: "☀ Theme: light", dark: "☾ Theme: dark" },
     theme_title: "Switch between following the system, light and dark",
     loading: "Loading predictions…",
+    lang_btn: "Русский", lang_title: "Показать страницу по-русски",
+    ph_min: "min", ph_max: "max", ph_q: "MoS2, graphene",
+    ev: " eV", pr_example: " (example)",
+    tm_cell: (sym, mae, n, sparse) => `${sym} — MAE ${mae} eV over ${n} structures${sparse ? " (thinly measured)" : ""}`,
+    src_names: { alexandria: "Alexandria", c2db: "C2DB", jarvis_dft2d: "JARVIS dft_2d" },
+    dont_use: "— do not use",
+    light_names: ["deep ultraviolet", "ultraviolet", "violet", "blue", "green", "yellow", "orange", "red",
+                  "near infrared", "infrared"],
+    gap_uses: ["a very narrow gap — close to a metal, it conducts readily when warm",
+               "a narrow, infrared gap, like germanium's (0.7 eV): infrared detectors",
+               "in the range solar cells use, like silicon (1.1 eV) or GaAs (1.4 eV)",
+               "a gap that absorbs visible light: LEDs, lasers, visible-light detectors",
+               "a wide gap in the ultraviolet, like GaN (3.4 eV): UV emitters and detectors",
+               "an insulator: the gap of dielectric and encapsulation layers, of which hexagonal boron nitride is the classic one"],
+    uses: [{ label: "anything" },
+           { label: "a solar-cell absorber", hint: "absorbs most of sunlight: an absorption onset of 1.1–1.8 eV (about 690–1130 nm)." },
+           { label: "an LED or laser (visible light)", hint: "emits visible light: an onset of 1.8–3.1 eV (400–690 nm) and a direct gap, which emits efficiently." },
+           { label: "an infrared photodetector", hint: "absorbs infrared: an onset of 0.4–1.1 eV (about 1130–3100 nm)." },
+           { label: "an ultraviolet photodetector", hint: "absorbs ultraviolet and ignores visible light: an onset of 3.1–5 eV (250–400 nm)." },
+           { label: "a transistor channel", hint: "a PBE gap of 1–2.5 eV: wide enough to switch off, narrow enough to conduct when on. MoS₂ sits at 1.7." },
+           { label: "an insulating or dielectric layer", hint: "a PBE gap above 4 eV, like hexagonal boron nitride, used to insulate and protect other layers." }],
+    nb_mc2d_detail: "from MC2D", nb_dft: g => `DFT gap ${g} eV`,
+    nb_wrong_detail: ", a label known to be wrong", nb_disputed_detail: ", a disputed label",
+    near_same: (f, d) => `The model was trained on practically this same layer, ${f} (${d}), so the number largely recalls that result rather than predicting a new one.`,
+    near_closest: (f, d) => `The closest material it was trained on is ${f} (${d}).`,
+    same_layer: ", same layer",
+    pw_dont: "Do not use the number.",
+    pw_metal: "The structure looks metallic, and the gap model was only ever trained on semiconductors.",
+    pw_chem: "Its chemistry is unlike anything the model was trained on.",
+    pw_spread: "The five models disagree too much to trust any of them; the structure may be metallic or unusual.",
+    pw_metallike: "The model sees this as a metal or very nearly one.",
+    pw_onset: (nm, light) => `It should start absorbing light at roughly ${nm} nm (${light}); light of longer wavelength passes through.`,
+    pw_use: u => `That is ${u}.`,
+    pw_conf: err => `The model is confident here${err ? `; predictions like this are typically off by about ${err} eV` : ""}.`,
+    pw_check: err => `Worth confirming with a DFT calculation before relying on it${err ? `; predictions like this are typically off by about ${err} eV` : ""}.`,
+    // the model's own verdict and warnings arrive in English; other languages map them
+    verdict_text: v => v,
+    warn_text: w => w,
+  },  ru: {
+    title: "NanoMatAI — щель двумерных полупроводников",
+    lede: n => `Предсказанные ширины запрещённой зоны для ${n} двумерных структур, у каждой — откалиброванный интервал и прямой вердикт, можно ли ей верить. Второй ансамбль добавляет работу выхода относительно вакуума, и вместе они дают положение краёв зон — ту пару, по которой выбирают металл контакта. Таблица — результат графовой нейросети, посчитанный заранее и отдаваемый как статические данные; вкладка «Ваша структура» запускает ту же сеть прямо в браузере на вашем файле.`,
+    tab_browse: "Обзор", tab_trust: "Карта доверия", tab_fam: "Семейства", tab_pred: "Ваша структура",
+    pr_lede: "Перетащите CIF или POSCAR двумерного слоя — или сразу много файлов, чтобы получить таблицу и CSV, — и получите ту же карточку, что у каждой строки таблицы: предсказанную щель, её откалиброванный интервал, вердикт с причиной, оптическую оценку, края зон и обучающие структуры, к которым ваша ближе всего. Всё считается в браузере — файл не покидает ваш компьютер. При первом расчёте модели скачиваются один раз.",
+    pr_drop: "Перетащите сюда один или несколько файлов CIF или POSCAR или нажмите, чтобы выбрать",
+    pr_paste: "…или вставьте текст файла",
+    pr_go: "Посчитать", pr_try: "или попробуйте",
+    pr_loading: (a, b) => `Скачиваю модели: ${a} из ${b} МБ (один раз, браузер их сохранит)…`,
+    pr_computing: "Считаю…",
+    pr_done: (ms, f) => `Готово за ${ms < 1000 ? Math.round(ms) + " мс" : (ms / 1000).toFixed(1) + " с"} — ${f}.`,
+    pr_err: m => `Не удалось прочитать структуру: ${m}`,
+    pr_nothing: "Сначала вставьте структуру или выберите файл.",
+    pr_pasted: "вставленная структура",
+    pr_empty: "Здесь появится карточка вашей структуры.",
+    pr_matches: (n, f) => `В таблице ${n === 1 ? "одна структура" : `${n} ${ruN(n, "структура", "структуры", "структур")}`} с формулой ${f}, посчитанн${n === 1 ? "ая" : "ые"} в DFT. `,
+    pr_show: "Показать",
+    pr_batch_progress: (k, n) => `Считаю ${k} из ${n}…`,
+    pr_batch_done: (n, bad, s) => `Готово: ${n} ${ruN(n, "структура", "структуры", "структур")} за ${s.toFixed(1)} с` +
+      (bad ? `, ${bad} не удалось прочитать` : "") + ".",
+    pr_batch_title: n => `${n} ${ruN(n, "структура", "структуры", "структур")}`,
+    pr_batch_csv: "Скачать CSV",
+    pr_batch_hint: "Нажмите на строку, чтобы открыть полную карточку. Колонки CSV те же, что у командной строки Python, поэтому файлы из обоих источников можно сравнивать.",
+    pr_batch_cols: ["Файл", "Формула", "Щель, эВ", "90%", "Вердикт", "Оптическая, эВ", "χ / IP, эВ", "Ближайшая обучающая структура"],
+    pr_batch_too_many: n => `${n} файлов — больше, чем страница берёт за раз (500); посчитаны первые 500.`,
+    pb_sum: "Нет файла? Соберите структуру из прототипа",
+    pb_proto: "Прототип",
+    pb_protos: { "1H-MX2": "1H-MX₂ (тип MoS₂)", "1T-MX2": "1T-MX₂ (тип CdI₂)",
+                 "hc-AB": "Сота AB (тип h-BN)", "hc-A": "Сота A (тип графена)" },
+    pb_labels: { "1H-MX2": ["Металл M", "Атом X"], "1T-MX2": ["Металл M", "Атом X"],
+                 "hc-AB": ["Элемент A", "Элемент B"], "hc-A": ["Элемент", ""] },
+    pb_a: "a, Å",
+    pb_t: { mx: "Толщина X–X, Å", hc: "Гофрировка, Å" },
+    pb_go: "Собрать и посчитать",
+    pb_from: (id, src) => `Постоянная решётки и толщина взяты из ${id} (${src}) — релаксированной в DFT ячейки этой пары. Их можно изменить и попробовать свои.`,
+    pb_none: ideal => `В таблице нет релаксированной ${ideal.name} из этих элементов. Введите постоянную решётки a из релаксированного расчёта или измерения, а не из атомных радиусов: значение на 9% больше сдвигало щель TMD на 0.4 эВ. Если толщину не указать, она будет ${ideal.text}.`,
+    pb_ideal: { "1H-MX2": { name: "ячейки 1H", text: "как у идеальной тригональной призмы (равна a) — на четырёх TMD это меняло щель на 0.001 эВ" },
+                "1T-MX2": { name: "ячейки 1T", text: "как у идеального октаэдра (0.816 a) — это догадка: проверено только для 1H" },
+                "hc-AB": { name: "соты", text: "нулевой, то есть слой плоский" },
+                "hc-A": { name: "соты", text: "нулевой, то есть слой плоский" } },
+    pb_bad_el: "Элементы — это химические символы, например Mo, S или Se.",
+    pb_bad_a: "Постоянная решётки должна быть от 1.5 до 10 Å.",
+    pb_bad_t: "Толщина должна быть от 0 до 6 Å.",
+    pb_name: (proto, f, a) => `${f} (${proto}), собрана, a = ${a.toFixed(3)} Å`,
+    pb_short: { "1H-MX2": "1H", "1T-MX2": "1T", "hc-AB": "сота", "hc-A": "сота" },
+    pr_guide_link: "Нет CIF из DFT-расчёта? Как получить структуру ↓",
+    pr_guide: `<h2 id="pr-guide-h">Как получить структуру</h2>
+<p>Модель читает один релаксированный монослой в формате POSCAR или CIF. Если у вас не он:</p>
+<details><summary>Есть только формула</summary>
+<p>Сначала поищите её на вкладке «Обзор»: там 28 372 уже посчитанных монослоя, и поиск понимает названия (graphene, h-BN, «молибденит»). Если её там нет, скачайте CIF монослоя из <a href="https://c2db.fysik.dtu.dk/">C2DB</a>, <a href="http://www.2dmatpedia.org/">2DMatPedia</a> или <a href="https://www.materialscloud.org/discover/mc2d">MC2D</a>: все три хранят одиночные слои, уже релаксированные. По одной формуле предсказывать нельзя: у одной формулы может быть несколько структур с разными щелями, и 1H-MoS₂ — полупроводник, а 1T-MoS₂ — металл.</p></details>
+<details><summary>Есть CIF объёмного кристалла</summary>
+<p>Страница назовёт его «не 2D-слоем», и будет права: модель училась на изолированных монослоях. Сначала поищите слой в MC2D — там монослои, отщеплённые от экспериментально известных объёмных кристаллов и релаксированные в DFT. Иначе вырежьте один слой сами, в VESTA или в ASE, если слои уложены вдоль оси c:</p>
+<pre>from ase.io import read, write
+bulk = read("bulk.cif")
+z = bulk.positions[:, 2]
+layer = bulk[(z &gt; 2.0) &amp; (z &lt; 5.5)]   # диапазон z одного слоя, посмотреть в просмотрщике
+layer.center(vacuum=10, axis=2)       # по 10 Å вакуума с каждой стороны
+write("layer.vasp", layer, format="vasp")</pre>
+<p>Вырезанный слой сохраняет решётку объёмного кристалла — она близка к решётке релаксированного монослоя, но не совпадает с ней; см. четвёртый пункт.</p></details>
+<details><summary>Есть постоянная решётки из статьи</summary>
+<p>Для четырёх простейших прототипов ячейку соберёт <b>«Соберите структуру из прототипа»</b> выше; если такая пара есть в таблице, он подставит релаксированную постоянную решётки. В Python те же построители есть в ASE:</p>
+<pre>from ase.build import mx2, graphene
+from ase.io import write
+# 1H-MoS2; kind="1T" — для октаэдрической фазы; thickness — расстояние X-X
+write("MoS2.vasp", mx2("MoS2", kind="2H", a=3.18, thickness=3.18, vacuum=10), format="vasp")
+write("hBN.vasp", graphene("BN", a=2.51, vacuum=10), format="vasp")</pre>
+<p>Важна именно постоянная решётки. На четырёх TMD идеальная высота халькогена (толщина X–X, равная a) сдвинула предсказанную щель на 0.001 эВ относительно релаксированной ячейки, а постоянная решётки из атомных радиусов, завышенная на 9%, — на 0.4 эВ. Берите a из релаксированного расчёта или измерения.</p></details>
+<details><summary>Есть экспериментальная или нерелаксированная структура</summary>
+<p>Посчитается, но читайте число с этой оговоркой. Модель училась на ячейках, релаксированных в PBE, а у PBE постоянные решётки обычно чуть больше измеренных (MoS₂: 3.19 Å в Alexandria против примерно 3.16 в эксперименте). Растяжение слоя на 1% сдвигает предсказанную щель на несколько сотых эВ, а примерно с +3% металл-гейт начинает отвергать MoSe₂ и WSe₂. Если можете, сначала релаксируйте ячейку.</p></details>
+<details><summary>Форматы и особые случаи</summary>
+<p>POSCAR (VASP 4 или 5; отсутствие строки-комментария прощается, селективная динамика и отрицательный масштаб читаются) и CIF, операции симметрии которого раскрываются. Файл без ячейки, например XYZ, не может описать периодический слой. Вакуум может лежать вдоль любой оси: страница его найдёт и, если он тоньше радиуса соседей 8 Å, дополнит. Суперъячейка с дефектом, сплав или подложка тоже посчитаются; вердикт скажет, насколько это далеко от всего, на чём училась модель.</p></details>`,
+    pr_prose: `<h2>Что здесь работает</h2><p>Ваш браузер запускает тот же ансамбль из пяти моделей, металл-гейт, классификатор типа щели и ансамбль работы выхода, что и Python-пакет, на весах, выгруженных из тех же чекпойнтов, и собирает вердикт так же. Вакуум определяется и, если он тоньше радиуса соседей 8 Å, дополняется — ровно как в Python. Совпадение с Python проверяется на тысячах структур перед каждым релизом.</p><p>Загружайте релаксированный монослой. Модель училась на структурах после релаксации в DFT, а нерелаксированная или экспериментальная ячейка может сдвинуть предсказание: решётка на 2% больше уже сдвигает щель и может задеть металл-гейт. Объёмный кристалл без вакуумного зазора помечается как не 2D-слой.</p>`,
+    d_computed: "Посчитано", d_inbrowser: "в вашем браузере, по вашему файлу",
+    d_nb: "Ближайшие обучающие структуры",
+    d_nb_note: "Ближайшие к вашей в собственном представлении модели, с их DFT-метками: то, на что опирается предсказание, а не измерения вашей структуры. Расстояние меньше 0.005 — практически тот же слой. Подчёркнутые формулы открываются в таблице.",
+    nb_mc2d: "не показана",
+    nb_wrong: "метка известна как ошибочная", nb_disputed: "спорная метка",
+    d_warn: "Замечание",
+    plain_notlayer: "Это не похоже на изолированный двумерный слой — ни по одной оси нет вакуумного зазора в 5 Å, — а модель училась только на монослоях.",
+    fam_lede: "Никто не спрашивает, какая щель у одной записи базы. Спрашивают, что происходит в семействе, когда меняется халькоген. Здесь те же предсказания разложены именно так: выберите прототип и читайте сетку.",
+    fam_pick: "Прототип", fam_pop: "Выборка",
+    fam_scope_all: "Все структуры этого прототипа",
+    fam_scope_browse: "Только то, что оставляют фильтры выше",
+    fam_scope_note: "Семейство — это сравнение, поэтому вкладка начинает со всего семейства. Каждая клетка всё равно говорит, что она такое: точка — модель училась на этой структуре, пунктирная рамка — предсказание вне тира «надёжно». Откалиброванные интервалы относятся к выборке вкладки «Обзор», а не к этой сетке.",
+    fam_lo: "узкая", fam_hi: "широкая", fam_unsure: "вне тира «надёжно»",
+    fam_trained: "модель училась на этой структуре",
+    fam_filtered: "вне текущих фильтров",
+    fam_greyed: "серым: исключено фильтрами выше",
+    fam_count: (shown, total) => `В поле зрения <b>${shown}</b> из ${total} пар элементов этого прототипа; остальное семейство показано серым, а не скрыто`,
+    fam_axis_a: "одиночная позиция", fam_axis_b: "удвоенная позиция",
+    fam_axis_note: "Строки и столбцы — это позиции в структуре, а не химические роли: элемент строки занимает одиночную позицию прототипа, элемент столбца — удвоенную. Для Rb₂O кислород оказывается в строке — так говорит структура, хотя химически это читается наоборот.",
+    fam_opt: (label, n, pairs) => `${label} — ${n} ${ruN(n, "структура", "структуры", "структур")}, ${pairs} ${ruN(pairs, "пара", "пары", "пар")}`,
+    fam_empty: "Ни одна структура в таблице не подходит под этот прототип.",
+    fam_multi: n => `У этой пары ${n} ${ruN(n, "запись", "записи", "записей")}; показана та, у которой меньше всего разброс ансамбля`,
+    fam_prose: `<h2>Как читать</h2><p>Каждая клетка — одна пара элементов в выбранном прототипе, цвет — предсказанная щель. Пунктирная рамка значит, что инструмент не относит это предсказание к тиру «надёжно». Точка в углу значит, что модель училась на этой структуре, и число воспроизведено по памяти, а не предсказано: его ошибка около 0.08 эВ вместо честных 0.26.</p><p>Фильтры по химии и щели выше управляют и этой сеткой, а выборка — нет: у вкладки своя, и она начинается со всего прототипа. Общая с «Обзором» честная выборка оставляла видимой одну пару из девяноста восьми, а сетка из пустых клеток — это не честный ответ, а нечитаемый. Ту же информацию несут пометки на клетках. Переключите выборку на <i>только то, что оставляют фильтры выше</i>, чтобы увидеть, какие клетки одобряет та выборка; остальное становится серым, а не исчезает, потому что форма семейства — факт о данных, а не о текущем фильтре.</p><p>Если у пары несколько записей, показана та, у которой меньше разброс ансамбля. Ничего не сгенерировано: каждая клетка — структура, которую кто-то посчитал, поэтому в семействах остаются дыры.</p>`,
+    f_pop: "Выборка", f_gap: "Ширина щели, эВ", f_preset: "Что ищете",
+    f_edge: "Края зон относительно вакуума, эВ",
+    f_tier: "Доверие", f_type: "Тип щели", f_has: "Должен содержать",
+    f_not: "Не должен содержать", f_search: "Формула или название",
+    use_hint: (what, hint) => `Ищете ${what}: ${hint}`,
+    alias_hint: (name, f) => `«${name}» прочитано как формула ${f}.`,
+    f_notrain: "Без обучающих строк", reset: "Сбросить",
+    pop_calibrated: n => `Отложенные от обучения (${n})`,
+    pop_stable: n => `Все стабильные структуры (${n})`,
+    pop_all: n => `Все, включая метастабильные (${n})`,
+    type_any: "любой", type_direct: "прямая", type_indirect: "непрямая",
+    tier: ["надёжно", "проверить", "вне области"],
+    count: (n, total) => `Подходят <b>${n}</b> из ${total} структур`,
+    count_hidden: n => ` · ещё ${n} скрыто, потому что модель от них отказывается`,
+    count_none: "Под эти фильтры не подходит ни одна структура",
+    count_only_disowned: n => `${n === 1 ? "Подходит одна структура" : `Подходят ${n} ${ruN(n, "структура", "структуры", "структур")}`}, но модель от ${n === 1 ? "неё" : "них"} отказывается — это вне её области, и числом пользоваться нельзя. `,
+    show_disowned: "Всё равно показать",
+    count_elsewhere: n => `${n === 1 ? "Одна структура подходит" : `${n} ${ruN(n, "структура подходит", "структуры подходят", "структур подходят")}`} вне текущей выборки. `,
+    show_all: "Показать всё",
+    count_edges: n => ` · края зон вообще есть у ${n} ${ruN(n, "структуры", "структур", "структур")} этой выборки`,
+    count_none_edges: "Ничего не подходит. Края зон есть только там, где обе модели отвечают за свою половину: у модели щели и у модели работы выхода свои обучающие выборки и свои вердикты.",
+    warn_all: "<b>За пределами откалиброванных источников.</b> Интервалы откалиброваны на стабильных и метастабильных структурах Alexandria и покрывают около 90% тех, на которых модель не училась. Против эталонов C2DB и JARVIS, посчитанных другими методами DFT, они покрывают около 82% и 78%, и часть ошибки там — разница методов: на C2DB весь недобор приходится на соединения тяжёлых элементов, у которых эталон учитывает спин-орбитальное взаимодействие, а оно понижает щель. Порядок вердиктов держится на всех трёх источниках; на JARVIS это слабая проверка, потому что его метки посчитаны другим функционалом.",
+    warn_train: "<b>Включены структуры, на которых модель училась.</b> Строки с пометкой «в обучении» воспроизведены по памяти, а не предсказаны; их ошибка около 0.08 эВ вместо честных 0.25 эВ.",
+    c_title: "Предсказанная щель против собственной неопределённости модели",
+    c_sub: (a, b) => `Каждая точка — одна структура; горизонтальные линии — пороги вердикта при разбросе ансамбля ${a} и ${b} эВ. Наведите курсор, чтобы выделить точку, нажмите, чтобы открыть. Колёсико — масштаб, перетаскивание — сдвиг, двойной щелчок — вернуть всё: при таком числе перекрывающихся точек только масштаб позволяет их разделить.`,
+    crowd: n => n === 1 ? "под курсором ещё 1 структура" : `под курсором ещё ${n} ${ruN(n, "структура", "структуры", "структур")}`,
+    reset_zoom: "Показать всё",
+    ax_gap: "предсказанная щель, эВ", ax_unc: "разброс ансамбля, эВ (лог.)",
+    th_formula: "Формула", th_gap: "Щель, эВ", th_unc: "Разброс", th_type: "Тип",
+    th_ea: "Сродство", th_verdict: "Вердикт",
+    badge_train: "в обучении",
+    d_empty: "Выберите структуру на графике или в таблице.",
+    d_gap: "Щель (PBE)", d_interval: "90%-интервал",
+    d_qp: "Квазичастичная щель", d_opt: "Оптическая щель",
+    d_eb: "Энергия связи экситона",
+    d_qp_note: (n, e) => `фотоэмиссия и транспорт · линейная голова на собственном латентном пространстве ансамбля, подогнана к G₀W₀ на ${n} материалах из C2DB, ошибка на непересекающихся составах ${e} эВ`,
+    d_opt_note: (n, e) => `край поглощения · прямая щель G₀W₀ минус энергия связи экситона, обе из голов на том же латентном пространстве, ошибка на непересекающихся составах ${e} эВ по ${n} материалам`,
+    d_eb_note: e => `то, что связывает электрон и дырку в монослое, и причина, по которой поглощение и фотоэмиссия расходятся · подогнана к расчётам Бете — Солпитера, ошибка на непересекающихся составах ${e} эВ`,
+    d_exciton: d => `Оптическая щель — это прямая квазичастичная щель минус энергия связи, поэтому три числа согласуются по построению, а не случайно. Здесь энергия связи ${d} эВ. По одной щели её не предсказать — она зависит от того, как слой экранирует, — поэтому она читается из структуры, а не подгоняется к щели.`,
+    d_wf: "Работа выхода", d_wf_spread: "Разброс работы выхода",
+    d_wf_verdict: "Вердикт по работе выхода", d_wf_iv: "90%-интервал работы выхода",
+    d_ea: "Сродство к электрону, χ", d_ip: "Потенциал ионизации",
+    d_wf_dft: "Работа выхода, DFT-эталон", d_wf_err: "Ошибка против эталона",
+    d_wf_role: "Роль в обучении модели работы выхода",
+    d_edges_note: mae => `<b>Края зон.</b> Второй ансамбль предсказывает уровень относительно вакуума (<i>wf</i> в C2DB), ошибка на тесте ${mae} эВ на составах, которых он не видел. Края — это этот уровень ± половина щели, та пара, по которой выбирают металл контакта: χ — для контакта n-типа, потенциал ионизации — для p-типа. Против краёв, посчитанных в C2DB на 629 материалах, они в среднем отличаются на 0.15 эВ, на 0.20 там, где модель работы выхода не училась; у соединений тяжёлых элементов сдвиг около 0.12 эВ — сродство занижено, потенциал ионизации завышен, — потому что в модели щели нет спин-орбитального взаимодействия.`,
+    d_edges_caveat: "Для нелегированного полупроводника DFT помещает уровень Ферми в середину щели, поэтому работа выхода сама по себе — опорный уровень, а не то, что измерит зонд. Края, выведенные из неё, — это расстановка, и в них сразу ошибка обеих моделей.",
+    d_wf_stop: "<b>Вторая модель от этой структуры отказывается.</b> Она училась только на C2DB, и эта химия вне того, что она видела, поэтому края зон не показаны, хотя щель в силе. Пример — графен: 3.18 эВ против 4.25 в базе при разбросе в десять раз больше, чем у TMD.",
+    d_wf_gapstop: "Краёв зон нет: они отстоят от работы выхода на половину щели, а от щели выше модель отказалась.",
+    d_wf_none: "Для этой структуры работы выхода нет.",
+    d_type: "Тип щели", d_metal: "Металл-гейт, p(металл)", d_spread: "Разброс ансамбля",
+    d_meta: "Похожа на метастабильные, p", d_meta_yes: "интервал шире, не «надёжно»",
+    d_meta_no: "похожа на структуры у оболочки",
+    d_type_val: (label, p, thr) => `${label} · p(непрямая) = ${p}, порог ${thr}`,
+    d_type_trust: ind => ind ? "такие ответы «непрямая» верны лишь примерно в трети случаев"
+                             : "такие ответы «прямая» верны примерно в девяти случаях из десяти",
+    d_latent: "Расстояние до обучающих данных", d_verdict: "Вердикт", d_tiererr: "Типичная ошибка этого тира",
+    d_plain: "Простыми словами.",
+    d_ref_wrong: "известна как ошибочная", d_ref_disputed: "спорная",
+    d_dft: "DFT-эталон", d_err: "Ошибка против эталона", d_atoms: "Атомов в ячейке",
+    d_source: "Источник", d_role: "Роль в обучении",
+    d_inside: "внутри знакомой области", d_outside: "ВНЕ знакомой области",
+    d_metallike: g => `Ниже ${g} эВ модель считает это металлом или полуметаллом, а не полупроводником, поэтому экспериментальная оценка не предлагается. Слегка отрицательное значение — это регрессор без ограничений, сидящий на нуле, а не отдельный сбой.`,
+    d_stop: "<b>Вне области модели.</b> Щель выше показана для прозрачности, а не для использования. Откалиброванный интервал предполагает, что разброс ансамбля осмыслен, а вне области это как раз не так.",
+    d_note: mae => `Ансамбль из пяти моделей CGCNN, ошибка на тесте ${mae} эВ на составах, которых не было в обучении. Щель выше — уровня PBE, а он занижает то, что даст любое измерение; цитировать стоит две исправленные величины.`,
+    role: ["не видела", "в обучении", "валидация", "отложенный тест"],
+    tm_lede: n => `Где модель на самом деле работает? Каждый элемент окрашен средней ошибкой по ${n} ${ruN(n, "структуре", "структурам", "структурам")} Alexandria из текущей выборки, на которых ансамбль не учился. Измените фильтры выше — карта последует. Это ответ на первый вопрос любой лаборатории: годится ли это для моей химии?`,
+    tm_lo: "точно", tm_hi: "ненадёжно",
+    tm_nodata: "слишком мало структур для оценки",
+    tm_thin: (n, min) => `После текущих фильтров остаётся ${n} ${ruN(n, "структура", "структуры", "структур")} Alexandria, на которых модель не училась, — этого мало, чтобы оценить элемент (нужно ${min} на элемент).`,
+    widen: "Показать всё",
+    tm_sparse: "мало измерений (меньше 60 структур)",
+    tm_prose: `<h2>Как читать</h2><p>Тёмные клетки — химия, где модель слаба, и это не та химия, которую можно ожидать. Ошибка следует за тем, насколько плотно химия представлена в обучающих данных, а не за сложностью её физики: соединения переходных металлов и тяжёлых элементов, которыми наполнена Alexandria, выходят точнее всего, а лёгкие элементы главных подгрупп дают длинный хвост.</p><p>Элемент без цвета набрал меньше 20 структур для оценки при текущих фильтрах. Это тоже информация: предсказание для такой химии опирается на мало виденного, и это отмечает проверка вердикта по расстоянию до обучающих данных.</p>`,
+    footer: `Данные пересобираются скриптами <code>scripts/precompute_screening.py</code> и <code>scripts/build_site_data.py</code>. Модель, веса и метод — лицензия MIT. Структуры из Alexandria (CC-BY 4.0), C2DB и JARVIS-DFT; ансамбль также обучен на 2DMatPedia (Zhou et al., Sci. Data 6, 86 (2019)) и MC2D (Mounet et al., Nat. Nanotechnol. 13, 246 (2018); Campi et al., ACS Nano 17, 11268 (2023)). Оптическая поправка подогнана к результатам G₀W₀ и BSE из <a href="https://c2db.fysik.dtu.dk/" target="_blank" rel="noopener noreferrer">C2DB</a> (CC BY-NC 4.0; Haastrup et al. 2D Mater. 5, 042002 (2018) и Gjerding et al. 2D Mater. 8, 044002 (2021)).`,
+    mc: "Карточка модели", how: "Как работает вердикт", own: "Посчитать свою структуру",
+    theme: { system: "◐ Тема: системная", light: "☀ Тема: светлая", dark: "☾ Тема: тёмная" },
+    theme_title: "Переключение: как в системе, светлая, тёмная",
+    loading: "Загружаю предсказания…",
+    lang_btn: "English", lang_title: "Show the page in English",
+    ph_min: "от", ph_max: "до", ph_q: "MoS2, графен",
+    ev: " эВ", pr_example: " (пример)",
+    tm_cell: (sym, mae, n, sparse) => `${sym} — MAE ${mae} эВ по ${n} ${ruN(n, "структуре", "структурам", "структурам")}${sparse ? " (мало измерений)" : ""}`,
+    dont_use: "— не использовать",
+    light_names: ["глубокий ультрафиолет", "ультрафиолет", "фиолетовый", "синий", "зелёный", "жёлтый",
+                  "оранжевый", "красный", "ближний инфракрасный", "инфракрасный"],
+    gap_uses: ["очень узкая щель — почти металл, при нагреве легко проводит",
+               "узкая инфракрасная щель, как у германия (0.7 эВ): ИК-детекторы",
+               "диапазон солнечных элементов, как у кремния (1.1 эВ) или GaAs (1.4 эВ)",
+               "щель, поглощающая видимый свет: светодиоды, лазеры, детекторы видимого диапазона",
+               "широкая щель в ультрафиолете, как у GaN (3.4 эВ): УФ-излучатели и детекторы",
+               "изолятор: щель диэлектрических и защитных слоёв, классический пример — гексагональный нитрид бора"],
+    uses: [{ label: "что угодно" },
+           { label: "поглотитель для солнечного элемента", hint: "поглощает большую часть солнечного света: край поглощения 1.1–1.8 эВ (примерно 690–1130 нм)." },
+           { label: "светодиод или лазер (видимый свет)", hint: "излучает видимый свет: край 1.8–3.1 эВ (400–690 нм) и прямая щель, которая излучает эффективно." },
+           { label: "ИК-фотодетектор", hint: "поглощает инфракрасный свет: край 0.4–1.1 эВ (примерно 1130–3100 нм)." },
+           { label: "УФ-фотодетектор", hint: "поглощает ультрафиолет и не замечает видимый свет: край 3.1–5 эВ (250–400 нм)." },
+           { label: "канал транзистора", hint: "щель PBE 1–2.5 эВ: достаточно широкая, чтобы закрываться, и достаточно узкая, чтобы проводить в открытом состоянии. У MoS₂ — 1.7." },
+           { label: "изолирующий или диэлектрический слой", hint: "щель PBE больше 4 эВ, как у гексагонального нитрида бора: такие слои изолируют и защищают другие." }],
+    nb_mc2d_detail: "из MC2D", nb_dft: g => `DFT-щель ${g} эВ`,
+    nb_wrong_detail: ", метка известна как ошибочная", nb_disputed_detail: ", спорная метка",
+    near_same: (f, d) => `Модель училась практически на этом же слое, ${f} (${d}), поэтому число во многом воспроизводит его результат, а не предсказывает новый.`,
+    near_closest: (f, d) => `Ближайший материал, на котором училась модель, — ${f} (${d}).`,
+    same_layer: ", тот же слой",
+    pw_dont: "Числом не пользуйтесь.",
+    pw_metal: "Структура похожа на металл, а модель щели училась только на полупроводниках.",
+    pw_chem: "Её химия не похожа ни на что из того, на чём училась модель.",
+    pw_spread: "Пять моделей расходятся слишком сильно, чтобы верить любой из них; структура может быть металлом или необычной.",
+    pw_metallike: "Модель считает это металлом или почти металлом.",
+    pw_onset: (nm, light) => `Материал должен начинать поглощать свет примерно с ${nm} нм (${light}); свет с большей длиной волны проходит насквозь.`,
+    pw_use: u => `Это ${u}.`,
+    pw_conf: err => `Здесь модель уверена${err ? `; такие предсказания обычно ошибаются примерно на ${err} эВ` : ""}.`,
+    pw_check: err => `Прежде чем на это полагаться, стоит подтвердить расчётом DFT${err ? `; такие предсказания обычно ошибаются примерно на ${err} эВ` : ""}.`,
+    verdict_text: v => {
+      const tiers = { reliable: "надёжно", check: "проверить", "out-of-domain": "вне области" };
+      const reasons = { "elevated uncertainty": "повышенная неопределённость",
+        "chemistry sparsely covered by training data": "химия мало представлена в обучении",
+        "chemistry unlike anything in training": "химия не похожа ни на что из обучения",
+        "possibly metal / unusual structure": "возможно, металл или необычная структура",
+        "not a 2D layer": "не 2D-слой" };
+      const m = /^([a-z-]+)(?: \((.*)\))?$/.exec(v);
+      if (!m) return v;
+      const tier = tiers[m[1]] || m[1];
+      if (!m[2]) return tier;
+      return `${tier} (${m[2].startsWith("metal gate") ? m[2].replace("metal gate", "металл-гейт") : (reasons[m[2]] || m[2])})`;
+    },
+    warn_text: w => w
+      .replace(/^no vacuum gap >= 5 A found \(max ([\d.]+) A\): does not look like an isolated 2D layer; model trained on monolayers only$/,
+               "нет вакуумного зазора ≥ 5 Å (максимум $1 Å): не похоже на изолированный 2D-слой; модель училась только на монослоях")
+      .replace(/^vacuum was ([\d.]+) A < cutoff 8 A; padded to ([\d.]+) A to avoid spurious inter-layer edges$/,
+               "вакуум был $1 Å, меньше радиуса соседей 8 Å; дополнен до $2 Å, чтобы не появились ложные межслойные рёбра"),
   },
 };
-let LANG = "en";
-const t = (k, ...a) => { const v = I18N[LANG][k]; return typeof v === "function" ? v(...a) : v; };
+// ?lang= wins and is remembered, then a stored choice, then the browser's language.
+// Switching reloads the page, so everything is rebuilt in one language at once.
+const LANGS = ["en", "ru"];
+let LANG = (() => {
+  let q = null;
+  try { q = new URLSearchParams(location.search).get("lang"); } catch (e) { /* ignore */ }
+  if (LANGS.includes(q)) { try { localStorage.setItem("nanomat-lang", q); } catch (e) { /* not essential */ } return q; }
+  try { const v = localStorage.getItem("nanomat-lang"); if (LANGS.includes(v)) return v; } catch (e) { /* not essential */ }
+  return (navigator.languages || [navigator.language || ""]).some(l => /^ru\b/i.test(l)) ? "ru" : "en";
+})();
+document.documentElement.lang = LANG;
+// a key missing from a translation falls back to English rather than to a blank
+const t = (k, ...a) => { const v = I18N[LANG][k] ?? I18N.en[k]; return typeof v === "function" ? v(...a) : v; };
 const esc = x => String(x).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const fmt = (x, n = 2) => (x === null || x === undefined || Number.isNaN(x)) ? "—" : x.toFixed(n);
 const int = x => x.toLocaleString("en-US").replace(/,/g, " ");
@@ -563,80 +937,66 @@ const TIERVAR = ["--tier-0", "--tier-1", "--tier-2"];
 // absorption-onset estimate, because that is the number a measurement sees, and
 // done here once because language models turned gaps into the wrong colours.
 const HC_EV_NM = 1239.84;
-const LIGHT = [[280, "deep ultraviolet"], [400, "ultraviolet"], [450, "violet"], [495, "blue"],
-               [570, "green"], [590, "yellow"], [620, "orange"], [750, "red"],
-               [1400, "near infrared"], [Infinity, "infrared"]];
-const GAP_USES = [[0.5, "a very narrow gap — close to a metal, it conducts readily when warm"],
-                  [1.1, "a narrow, infrared gap, like germanium's (0.7 eV): infrared detectors"],
-                  [1.8, "in the range solar cells use, like silicon (1.1 eV) or GaAs (1.4 eV)"],
-                  [3.1, "a gap that absorbs visible light: LEDs, lasers, visible-light detectors"],
-                  [4.5, "a wide gap in the ultraviolet, like GaN (3.4 eV): UV emitters and detectors"],
-                  [Infinity, "an insulator: the gap of dielectric and encapsulation layers, of which hexagonal boron nitride is the classic one"]];
-const lightName = nm => LIGHT.find(([edge]) => nm < edge)[1];
-const gapUse = ev => GAP_USES.find(([edge]) => ev < edge)[1];
+// band edges here; the names are in the dictionary (light_names, gap_uses)
+const LIGHT = [280, 400, 450, 495, 570, 590, 620, 750, 1400, Infinity];
+const GAP_USES = [0.5, 1.1, 1.8, 3.1, 4.5, Infinity];
+const lightName = nm => t("light_names")[LIGHT.findIndex(edge => nm < edge)];
+const gapUse = ev => t("gap_uses")[GAP_USES.findIndex(edge => ev < edge)];
 // common names for 2D materials that are not formulas (as nanomat/llm_tools.py NAMES)
 const NAMES = { graphene: "C", phosphorene: "P", "black phosphorus": "P", "blue phosphorene": "P",
   silicene: "Si", germanene: "Ge", stanene: "Sn", borophene: "B", arsenene: "As",
   antimonene: "Sb", bismuthene: "Bi", tellurene: "Te", hbn: "BN", "h-bn": "BN",
   "hexagonal boron nitride": "BN", "g-c3n4": "C3N4", "graphitic carbon nitride": "C3N4",
   "molybdenum disulfide": "MoS2", "molybdenite": "MoS2", "tungsten disulfide": "WS2",
-  "molybdenum diselenide": "MoSe2", "tungsten diselenide": "WSe2" };
+  "molybdenum diselenide": "MoSe2", "tungsten diselenide": "WSe2",
+  // the same names in Russian, for the Russian page
+  "графен": "C", "фосфорен": "P", "чёрный фосфор": "P", "черный фосфор": "P", "силицен": "Si",
+  "германен": "Ge", "станен": "Sn", "борофен": "B", "арсенен": "As", "антимонен": "Sb",
+  "висмутен": "Bi", "теллурен": "Te", "нитрид бора": "BN", "гексагональный нитрид бора": "BN",
+  "графитоподобный нитрид углерода": "C3N4", "дисульфид молибдена": "MoS2", "молибденит": "MoS2",
+  "дисульфид вольфрама": "WS2", "диселенид молибдена": "MoSe2", "диселенид вольфрама": "WSe2" };
 // "What are you looking for?" Each sets a test on top of the other filters; the
 // optical ones read the absorption-onset estimate, the electronic ones the PBE gap.
+// labels and hints are in the dictionary (uses), in the same order
 const USES = [
-  { label: "anything" },
-  { label: "a solar-cell absorber", test: r => r.o !== null && r.o >= 1.1 && r.o <= 1.8,
-    hint: "absorbs most of sunlight: an absorption onset of 1.1–1.8 eV (about 690–1130 nm)." },
-  { label: "an LED or laser (visible light)", test: r => r.o !== null && r.o >= 1.8 && r.o <= 3.1 && r.t === 0,
-    hint: "emits visible light: an onset of 1.8–3.1 eV (400–690 nm) and a direct gap, which emits efficiently." },
-  { label: "an infrared photodetector", test: r => r.o !== null && r.o >= 0.4 && r.o < 1.1,
-    hint: "absorbs infrared: an onset of 0.4–1.1 eV (about 1130–3100 nm)." },
-  { label: "an ultraviolet photodetector", test: r => r.o !== null && r.o > 3.1 && r.o <= 5,
-    hint: "absorbs ultraviolet and ignores visible light: an onset of 3.1–5 eV (250–400 nm)." },
-  { label: "a transistor channel", test: r => r.g >= 1 && r.g <= 2.5,
-    hint: "a PBE gap of 1–2.5 eV: wide enough to switch off, narrow enough to conduct when on. MoS₂ sits at 1.7." },
-  { label: "an insulating or dielectric layer", test: r => r.g >= 4,
-    hint: "a PBE gap above 4 eV, like hexagonal boron nitride, used to insulate and protect other layers." },
-];
+  {},
+  { test: r => r.o !== null && r.o >= 1.1 && r.o <= 1.8 },
+  { test: r => r.o !== null && r.o >= 1.8 && r.o <= 3.1 && r.t === 0 },
+  { test: r => r.o !== null && r.o >= 0.4 && r.o < 1.1 },
+  { test: r => r.o !== null && r.o > 3.1 && r.o <= 5 },
+  { test: r => r.g >= 1 && r.g <= 2.5 },
+  { test: r => r.g >= 4 },
+].map((u, i) => ({ ...u, label: t("uses")[i].label, hint: t("uses")[i].hint }));
 // nanomat/plain.py SAME_LAYER and nearest_words: keep the two in step
 const SAME_LAYER = 0.005;
 function nbDetail(n) {
-  let s = n.dft_gap === null ? "from MC2D" : `DFT gap ${n.dft_gap.toFixed(2)} eV`;
-  if (n.flag === "wrong") s += ", a label known to be wrong";
-  else if (n.flag === "disputed") s += ", a disputed label";
+  let s = n.dft_gap === null ? t("nb_mc2d_detail") : t("nb_dft", n.dft_gap.toFixed(2));
+  if (n.flag === "wrong") s += t("nb_wrong_detail");
+  else if (n.flag === "disputed") s += t("nb_disputed_detail");
   return s;
 }
 function nearestWords(nb) {
   if (!nb || !nb.length) return "";
   const n = nb[0];
-  return n.distance < SAME_LAYER
-    ? `The model was trained on practically this same layer, ${n.formula} (${nbDetail(n)}), so the number largely recalls that result rather than predicting a new one.`
-    : `The closest material it was trained on is ${n.formula} (${nbDetail(n)}).`;
+  return n.distance < SAME_LAYER ? t("near_same", n.formula, nbDetail(n)) : t("near_closest", n.formula, nbDetail(n));
 }
 function plainWords(r) {
   const cal = S.meta.calibration;
   if (r.w === 2) {
     const metal = r.m !== null && cal.metal_threshold !== undefined && r.m >= cal.metal_threshold;
     const chem = !r.nl && !metal && r.l !== null && r.l > cal.latent_q90;
-    const why = r.nl ? t("plain_notlayer")
-      : metal
-      ? "The structure looks metallic, and the gap model was only ever trained on semiconductors."
-      : chem
-        ? "Its chemistry is unlike anything the model was trained on."
-        : "The five models disagree too much to trust any of them; the structure may be metallic or unusual.";
-    return ["Do not use the number. " + why, chem ? nearestWords(r.nb) : ""].filter(Boolean).join(" ");
+    const why = r.nl ? t("plain_notlayer") : metal ? t("pw_metal") : chem ? t("pw_chem") : t("pw_spread");
+    return [t("pw_dont") + " " + why, chem ? nearestWords(r.nb) : ""].filter(Boolean).join(" ");
   }
   const parts = [];
-  if (r.g < S.meta.metal_gap_eV) parts.push("The model sees this as a metal or very nearly one.");
+  if (r.g < S.meta.metal_gap_eV) parts.push(t("pw_metallike"));
   else if (r.o !== null && r.o > 0) {
     const nm = HC_EV_NM / r.o;
-    parts.push(`It should start absorbing light at roughly ${Math.round(nm)} nm (${lightName(nm)}); light of longer wavelength passes through.`);
-    parts.push(`That is ${gapUse(r.o)}.`);
+    parts.push(t("pw_onset", Math.round(nm), lightName(nm)));
+    parts.push(t("pw_use", gapUse(r.o)));
   }
   const err = cal.tier_mae ? Object.values(cal.tier_mae)[r.w] : null;
-  parts.push(r.w === 0
-    ? `The model is confident here${err ? `; predictions like this are typically off by about ${fmt(err, 2)} eV` : ""}.`
-    : `Worth confirming with a DFT calculation before relying on it${err ? `; predictions like this are typically off by about ${fmt(err, 2)} eV` : ""}.`);
+  parts.push(t(r.w === 0 ? "pw_conf" : "pw_check", err ? fmt(err, 2) : null));
   parts.push(nearestWords(r.nb));
   return parts.filter(Boolean).join(" ");
 }
@@ -1060,15 +1420,15 @@ function renderDetail(hostId = "detail", row = undefined) {
   const eb = r.x === undefined ? null : r.x;
   const tierErr = cal.tier_mae ? Object.values(cal.tier_mae)[r.w] : null;
   const rows = [];
-  if (!ood) rows.push([t("d_interval"), "± " + fmt(iv, 2) + " eV"]);
+  if (!ood) rows.push([t("d_interval"), "± " + fmt(iv, 2) + t("ev")]);
   if (!ood && r.g >= S.meta.metal_gap_eV) {
-    rows.push([t("d_qp"), "≈ " + fmt(qp, 2) + " eV"]);
-    if (eb !== null) rows.push([t("d_eb"), "≈ " + fmt(eb, 2) + " eV"]);
-    rows.push([t("d_opt"), "≈ " + fmt(exp, 2) + " eV"]);
+    rows.push([t("d_qp"), "≈ " + fmt(qp, 2) + t("ev")]);
+    if (eb !== null) rows.push([t("d_eb"), "≈ " + fmt(eb, 2) + t("ev")]);
+    rows.push([t("d_opt"), "≈ " + fmt(exp, 2) + t("ev")]);
   }
   if (r.ea !== null) {
-    rows.push([t("d_ea"), fmt(r.ea, 2) + " eV"]);
-    rows.push([t("d_ip"), fmt(r.ip, 2) + " eV"]);
+    rows.push([t("d_ea"), fmt(r.ea, 2) + t("ev")]);
+    rows.push([t("d_ip"), fmt(r.ip, 2) + t("ev")]);
   }
   if (r.t !== null) rows.push([t("d_type"), `<span title="${t("d_type_trust", r.t === 1)}">` + t("d_type_val",
       r.t ? t("type_indirect") : t("type_direct"), fmt(r.p, 2),
@@ -1076,42 +1436,42 @@ function renderDetail(hostId = "detail", row = undefined) {
   if (r.m !== null) rows.push([t("d_metal"), fmt(r.m, 2)]);
   if (r.pm !== null && r.pm !== undefined && cal.population) rows.push([t("d_meta"),
     `${fmt(r.pm, 2)} — ${r.pm > cal.population.p_threshold ? t("d_meta_yes") : t("d_meta_no")}`]);
-  rows.push([t("d_spread"), fmt(r.u, 3) + " eV"]);
+  rows.push([t("d_spread"), fmt(r.u, 3) + t("ev")]);
   if (r.l !== null) rows.push([t("d_latent"),
     `${fmt(r.l, 3)} — ${r.l <= cal.latent_q75 ? t("d_inside") : t("d_outside")}`]);
   rows.push([t("d_verdict"), `<span class="v" style="justify-content:flex-end">
      <i class="tierdot" style="background:var(${TIERVAR[r.w]})"></i>${t("tier")[r.w]}</span>`]);
-  if (tierErr) rows.push([t("d_tiererr"), fmt(tierErr, 2) + " eV"]);
+  if (tierErr) rows.push([t("d_tiererr"), fmt(tierErr, 2) + t("ev")]);
   if (r.d !== null) {
-    rows.push([t("d_dft"), fmt(r.d, 2) + " eV" + (r.rf ? ` <span style="color:var(--tier-2)">— ${t(r.rf === 2 ? "d_ref_wrong" : "d_ref_disputed")}</span>` : "")]);
+    rows.push([t("d_dft"), fmt(r.d, 2) + t("ev") + (r.rf ? ` <span style="color:var(--tier-2)">— ${t(r.rf === 2 ? "d_ref_wrong" : "d_ref_disputed")}</span>` : "")]);
     // an error measured against a label known to be bad would say nothing about the model
-    if (!r.rf) rows.push([t("d_err"), fmt(Math.abs(r.g - r.d), 2) + " eV"]);
+    if (!r.rf) rows.push([t("d_err"), fmt(Math.abs(r.g - r.d), 2) + t("ev")]);
   }
   // the second property keeps its own block: its own spread, its own verdict, and
   // its own training role, because it was trained on a different set entirely
   if (r.k !== null) {
-    rows.push([t("d_wf"), fmt(r.k, 2) + " eV"]);
+    rows.push([t("d_wf"), fmt(r.k, 2) + t("ev")]);
     if (wfcal.scale90 && r.kw !== 2)
-      rows.push([t("d_wf_iv"), "± " + fmt(wfcal.scale90 * r.ku, 2) + " eV"]);
-    rows.push([t("d_wf_spread"), fmt(r.ku, 3) + " eV"]);
+      rows.push([t("d_wf_iv"), "± " + fmt(wfcal.scale90 * r.ku, 2) + t("ev")]);
+    rows.push([t("d_wf_spread"), fmt(r.ku, 3) + t("ev")]);
     if (r.kw !== null) rows.push([t("d_wf_verdict"), `<span class="v" style="justify-content:flex-end">
        <i class="tierdot" style="background:var(${TIERVAR[r.kw]})"></i>${t("tier")[r.kw]}</span>`]);
     if (r.kd !== null) {
-      rows.push([t("d_wf_dft"), fmt(r.kd, 2) + " eV"]);
-      rows.push([t("d_wf_err"), fmt(Math.abs(r.k - r.kd), 2) + " eV"]);
+      rows.push([t("d_wf_dft"), fmt(r.kd, 2) + t("ev")]);
+      rows.push([t("d_wf_err"), fmt(Math.abs(r.k - r.kd), 2) + t("ev")]);
       rows.push([t("d_wf_role"), t("role")[r.kr]]);
     }
   }
   rows.push([t("d_atoms"), String(r.n)]);
   if (r.up) rows.push([t("d_computed"), t("d_inbrowser")]);
   else {
-    rows.push([t("d_source"), S.meta.sources[r.s]]);
+    rows.push([t("d_source"), t("src_names")[S.meta.sources[r.s]] || S.meta.sources[r.s]]);
     rows.push([t("d_role"), t("role")[r.r]]);
   }
 
   el.innerHTML = `<h3>${esc(r.f)}</h3>
     <p class="sub">${esc(r.i)} · ${r.e.join(" ")}</p>
-    <div class="big">${fmt(r.g, 2)} eV${ood ? ` <span style="font-size:13px;color:var(--tier-2)">— do not use</span>` : ""}</div>
+    <div class="big">${fmt(r.g, 2)}${t("ev")}${ood ? ` <span style="font-size:13px;color:var(--tier-2)">${t("dont_use")}</span>` : ""}</div>
     <div class="note plain"><b>${t("d_plain")}</b> ${plainWords(r)}</div>
     ${r.rf ? `<div class="note stop"><b>${t(r.rf === 2 ? "d_ref_wrong" : "d_ref_disputed")}.</b> ${(S.meta.ref_notes || {})[r.i] || ""}</div>` : ""}
     <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
@@ -1139,7 +1499,7 @@ function nbBlock(nb) {
     const inTable = S.byId.has(n.id);
     const f = inTable ? `<button data-nb="${esc(n.id)}" title="${esc(n.id)}">${esc(n.formula)}</button>`
                       : `<span title="${esc(n.id)}">${esc(n.formula)}</span>`;
-    const g = n.dft_gap === null ? t("nb_mc2d") : fmt(n.dft_gap, 2) + " eV";
+    const g = n.dft_gap === null ? t("nb_mc2d") : fmt(n.dft_gap, 2) + t("ev");
     const fl = n.flag ? `<br><span class="fl">${t(n.flag === "wrong" ? "nb_wrong" : "nb_disputed")}</span>` : "";
     return `<tr><td>${f}${fl}</td><td class="r">${g}</td><td>${t("nb_src")[n.source] || n.source}</td>` +
            `<td class="r">${n.distance < 0.001 ? "&lt; 0.001" : fmt(n.distance, 3)}</td></tr>`;
@@ -1220,7 +1580,7 @@ function renderFamilies() {
       const n = count.get(key);
       const cls = "famcell" + (passes ? "" : " muted") + (r.w !== 0 ? " unsure" : "") +
                   (r.r === 1 ? " trained" : "") + (S.fam.sel === r ? " sel" : "");
-      const tip = `${r.f} — ${fmt(r.g, 2)} eV, ${t("tier")[r.w]}` +
+      const tip = `${r.f} — ${fmt(r.g, 2)}${t("ev")}, ${t("tier")[r.w]}` +
                   (r.r === 1 ? " · " + t("badge_train") : "") +
                   (n > 1 ? " · " + t("fam_multi", n) : "") +
                   (passes ? "" : " · " + t("fam_filtered"));
@@ -1232,7 +1592,7 @@ function renderFamilies() {
     html += "</tr>";
   }
   document.getElementById("t-fam-lo").textContent = `${t("fam_lo")} ${fmt(lo, 2)}`;
-  document.getElementById("t-fam-hi").textContent = `${fmt(hi, 2)} eV ${t("fam_hi")}`;
+  document.getElementById("t-fam-hi").textContent = `${fmt(hi, 2)}${t("ev")} ${t("fam_hi")}`;
   host.innerHTML = html + "</table>";
   renderDetail("fam-detail", S.fam.sel);
 }
@@ -1297,14 +1657,14 @@ function renderTrust() {
       const fg = (dark ? u < .45 : u > .5) ? "#ffffff" : "#0b0b0b";
       const sp = d.sparse ? ";border-style:dashed;border-color:currentColor" : "";
       cells.push(`<div class="cell" style="background:${bg};color:${fg}${sp}"
-        title="${sym} — MAE ${fmt(d.mae, 2)} eV over ${d.n} structures${d.sparse ? " (thinly measured)" : ""}">
+        title="${t("tm_cell", sym, fmt(d.mae, 2), d.n, d.sparse)}">
         <b>${sym}</b><small>${fmt(d.mae, 2)}</small></div>`);
     }
   }
   host.innerHTML = cells.join("");
   document.getElementById("t-tm-lede").textContent = t("tm_lede", int(basis.n_structures));
   document.getElementById("t-tm-lo").textContent = `${t("tm_lo")} ${fmt(lo, 2)}`;
-  document.getElementById("t-tm-hi").textContent = `${fmt(hi, 2)} eV ${t("tm_hi")}`;
+  document.getElementById("t-tm-hi").textContent = `${fmt(hi, 2)}${t("ev")} ${t("tm_hi")}`;
   document.getElementById("t-tm-nodata").textContent = t("tm_nodata");
   document.getElementById("t-tm-sparse").textContent = t("tm_sparse");
   document.getElementById("tm-prose").innerHTML = t("tm_prose");
@@ -1325,6 +1685,11 @@ function buildUI() {
                          ["t-mc", "mc"], ["t-how", "how"], ["t-own", "own"]])
     document.getElementById(id).textContent = t(k);
   document.getElementById("f-reset").textContent = t("reset");
+  for (const id of ["f-gmin", "f-eamin", "f-ipmin"]) document.getElementById(id).placeholder = t("ph_min");
+  for (const id of ["f-gmax", "f-eamax", "f-ipmax"]) document.getElementById(id).placeholder = t("ph_max");
+  document.getElementById("f-q").placeholder = t("ph_q");
+  const lb = document.getElementById("lang-btn");
+  lb.textContent = t("lang_btn"); lb.title = t("lang_title");
   applyTheme(THEME, false);
   document.getElementById("t-c-title").textContent = t("c_title");
   document.getElementById("t-c-sub").textContent =
@@ -1364,6 +1729,13 @@ function buildUI() {
                          ["pr-go", "pr_go"], ["t-pr-try", "pr_try"]])
     document.getElementById(id).textContent = t(k);
   document.getElementById("pr-prose").innerHTML = t("pr_prose");
+  document.getElementById("pr-guide").innerHTML = t("pr_guide");
+  for (const [id, k] of [["t-pb-sum", "pb_sum"], ["t-pb-proto", "pb_proto"], ["t-pb-a", "pb_a"],
+                         ["pb-go", "pb_go"], ["t-pr-guide-link", "pr_guide_link"]])
+    document.getElementById(id).textContent = t(k);
+  document.getElementById("pb-proto").innerHTML = Object.entries(t("pb_protos"))
+    .map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  pbLabels();
   document.getElementById("pr-detail").innerHTML = `<p class="sub" style="margin:0">${t("pr_empty")}</p>`;
   renderTHead();
   document.getElementById("panel-browse").hidden = false;
@@ -1420,13 +1792,16 @@ function prStatus(msg, err = false) {
 }
 function prWorker() {
   if (PR_WORKER) return PR_WORKER;
-  PR_WORKER = new Worker("js/worker.js", { type: "module" });
+  // a fresh copy of the 34 KB of code on every page load, so the worker always matches
+  // this page; the 34 MB of weights are revalidated by the worker, not re-downloaded
+  PR_WORKER = new Worker(`js/worker.js?v=${Date.now()}`, { type: "module" });
   PR_WORKER.onmessage = e => {
     const m = e.data;
     if (m.type === "progress")
       prStatus(t("pr_loading", (m.loaded / 1e6).toFixed(1), (m.total / 1e6).toFixed(1)));
     else if (m.type === "ready") prStatus(t("pr_computing"));
     else if (m.id !== PR_JOB) return;               // a newer request superseded this one
+    else if (PR_BATCH && m.id === PR_BATCH.id) prBatchMsg(m);
     else if (m.type === "result") prShow(m.res);
     else if (m.type === "error") prStatus(t("pr_err", m.message), true);
   };
@@ -1435,6 +1810,8 @@ function prWorker() {
 }
 function prRun(text, name) {
   if (!text || !text.trim()) { prStatus(t("pr_nothing"), true); return; }
+  PR_BATCH = null;
+  document.getElementById("pr-batch").hidden = true;    // its rows would no longer open
   PR_NAME = name;
   prStatus(t("pr_computing"));
   // absolute: inside the worker a relative URL would resolve against js/, not the page
@@ -1461,7 +1838,7 @@ function prShow(res) {
     q: res.gap_quasiparticle ?? null, x: res.exciton_binding ?? null, o: res.exp_gap_est ?? null,
     pm: res.p_metastable, iv: res.interval90, rf: 0, nb: res.neighbours || [],
     up: true, nl: !res.layer.is_layer,
-    warns: res.warnings.filter(w => !w.startsWith("metal gate")) };
+    warns: res.warnings.filter(w => !w.startsWith("metal gate")).map(w => t("warn_text", w)) };
   setEdges(row);
   renderDetail("pr-detail", row);
   const key = canonFormula(res.formula);
@@ -1474,8 +1851,92 @@ function prShow(res) {
       `<button class="preset" id="pr-show" data-f="${esc(hits[0].f)}">${t("pr_show")}</button>`;
     document.getElementById("pr-detail").appendChild(note);
   }
-  prStatus(t("pr_done", res.ms, res.verdict));
+  prStatus(t("pr_done", res.ms, t("verdict_text", res.verdict)));
 }
+/* prototype builder ------------------------------------------------------ */
+// A cell from a prototype, the elements and a lattice constant. The lattice constant
+// is the number that matters (scripts/geometry_sensitivity.py), so whenever the table
+// holds a relaxed cell of the pair, its a and thickness are filled in
+// (docs/data/prototypes.json, scripts/build_prototypes.py).
+let PB_GEOM = null, PB_FROM = null;
+const pbProto = () => document.getElementById("pb-proto").value;
+const pbSym = v => (v || "").trim().replace(/^([a-z])/, c => c.toUpperCase());
+function pbKey(proto, e1, e2) {
+  if (proto === "hc-A") return `${e1}|${e1}`;
+  if (proto === "hc-AB") return [e1, e2].sort().join("|");   // families.py orders the pair
+  return `${e1}|${e2}`;
+}
+function pbLabels() {
+  const p = pbProto(), [l1, l2] = t("pb_labels")[p];
+  document.getElementById("pb-l1").textContent = l1;
+  document.getElementById("pb-l2").textContent = l2;
+  document.getElementById("pb-f2").hidden = p === "hc-A";
+  document.getElementById("pb-lt").textContent = t("pb_t")[p.startsWith("hc") ? "hc" : "mx"];
+}
+async function pbLookup() {
+  if (!PB_GEOM) {
+    try { PB_GEOM = await (await fetch("data/prototypes.json", { cache: "no-cache" })).json(); }
+    catch (e) { PB_GEOM = {}; }
+  }
+  const p = pbProto(), e1 = pbSym(document.getElementById("pb-e1").value),
+        e2 = pbSym(document.getElementById("pb-e2").value);
+  const note = document.getElementById("pb-note");
+  if (!e1 || (p !== "hc-A" && !e2)) { note.textContent = ""; PB_FROM = null; return; }
+  const g = (PB_GEOM[p] || {})[pbKey(p, e1, e2)];
+  if (g) {
+    document.getElementById("pb-a").value = g.a.toFixed(3);
+    document.getElementById("pb-t").value = g.t.toFixed(3);
+    PB_FROM = g;
+    note.textContent = t("pb_from", g.id, t("pb_src")[g.source] || g.source);
+  } else {
+    // a value filled in for the previous pair would silently stand for this one
+    if (PB_FROM) { document.getElementById("pb-a").value = ""; document.getElementById("pb-t").value = ""; }
+    PB_FROM = null;
+    note.textContent = t("pb_none", t("pb_ideal")[p]);
+  }
+}
+function pbPoscar(p, e1, e2, a, th) {
+  // hexagonal cell, layer centred at z = 1/2 with 20 Å of vacuum, above the 8 Å cutoff
+  const c = th + 20, dz = th / (2 * c), r = x => x.toFixed(10);
+  const lat = [[a, 0, 0], [-a / 2, a * Math.sqrt(3) / 2, 0], [0, 0, c]];
+  let species, counts, sites;
+  if (p === "1H-MX2") {          // both X above one another: trigonal prism
+    species = [e1, e2]; counts = [1, 2];
+    sites = [[1 / 3, 2 / 3, 0.5], [2 / 3, 1 / 3, 0.5 + dz], [2 / 3, 1 / 3, 0.5 - dz]];
+  } else if (p === "1T-MX2") {   // the two X staggered: octahedron
+    species = [e1, e2]; counts = [1, 2];
+    sites = [[0, 0, 0.5], [1 / 3, 2 / 3, 0.5 + dz], [2 / 3, 1 / 3, 0.5 - dz]];
+  } else if (p === "hc-AB") {
+    species = [e1, e2]; counts = [1, 1];
+    sites = [[1 / 3, 2 / 3, 0.5 + dz], [2 / 3, 1 / 3, 0.5 - dz]];
+  } else {
+    species = [e1]; counts = [2];
+    sites = [[1 / 3, 2 / 3, 0.5 + dz], [2 / 3, 1 / 3, 0.5 - dz]];
+  }
+  return [`${p} ${species.join(" ")} built from a prototype, a = ${a} A, thickness ${th} A`, "1.0",
+          ...lat.map(v => v.map(r).join(" ")), species.join(" "), counts.join(" "), "Direct",
+          ...sites.map(f => f.map(r).join(" "))].join("\n") + "\n";
+}
+function pbBuild() {
+  const p = pbProto(), e1 = pbSym(document.getElementById("pb-e1").value);
+  const e2 = p === "hc-A" ? e1 : pbSym(document.getElementById("pb-e2").value);
+  const sym = /^[A-Z][a-z]?$/;
+  if (!sym.test(e1) || !sym.test(e2)) { prStatus(t("pb_bad_el"), true); return; }
+  const a = parseFloat(document.getElementById("pb-a").value);
+  if (!(a >= 1.5 && a <= 10)) { prStatus(t("pb_bad_a"), true); return; }
+  let th = parseFloat(document.getElementById("pb-t").value);
+  if (Number.isNaN(th)) th = p === "1H-MX2" ? a : p === "1T-MX2" ? 2 * a / Math.sqrt(6) : 0;
+  if (!(th >= 0 && th <= 6)) { prStatus(t("pb_bad_t"), true); return; }
+  const text = pbPoscar(p, e1, e2, a, th);
+  document.getElementById("pr-text").value = text;
+  const f = p.startsWith("hc") ? (p === "hc-A" ? e1 : e1 + e2) : e1 + e2 + "2";
+  prRun(text, t("pb_name", t("pb_short")[p], f, a));
+}
+document.getElementById("pb-proto").addEventListener("change", () => { pbLabels(); pbLookup(); });
+for (const id of ["pb-e1", "pb-e2"]) document.getElementById(id).addEventListener("change", pbLookup);
+document.getElementById("pr-build").addEventListener("toggle", e => { if (e.target.open) pbLookup(); });
+document.getElementById("pb-go").addEventListener("click", pbBuild);
+
 function prFile(file) {
   if (!file) return;
   file.text().then(text => {
@@ -1483,14 +1944,97 @@ function prFile(file) {
     prRun(text, file.name);
   });
 }
-document.getElementById("pr-file").addEventListener("change", e => prFile(e.target.files[0]));
+function prFiles(list) {
+  const files = [...(list || [])];
+  if (files.length <= 1) { prFile(files[0]); return; }
+  prBatch(files);
+}
+
+/* batch ------------------------------------------------------------------ */
+// Several files at once: the worker takes them one by one, the page collects the
+// results by index and shows them as a table and a CSV with the columns of
+// `python screen_bandgap.py --in ... --out`, so the two can be compared.
+const PR_MAX_BATCH = 500;
+let PR_BATCH = null;
+async function prBatch(files) {
+  const over = files.length > PR_MAX_BATCH;
+  files = files.slice(0, PR_MAX_BATCH);
+  const texts = await Promise.all(files.map(f => f.text()));
+  PR_BATCH = { id: ++PR_JOB, names: files.map(f => f.name), res: new Array(files.length).fill(undefined),
+               done: 0, t0: performance.now(), over: over ? files.length : 0, sel: -1 };
+  prStatus(over ? t("pr_batch_too_many", files.length) : t("pr_batch_progress", 0, files.length));
+  const base = new URL("model/", document.baseURI).href;
+  const w = prWorker();
+  texts.forEach((text, k) => w.postMessage({ id: PR_BATCH.id, k, text, base }));
+}
+function prBatchMsg(m) {
+  const B = PR_BATCH;
+  if (m.type === "result") B.res[m.k] = m.res;
+  else if (m.type === "error") B.res[m.k] = { error: m.message };
+  else return;
+  B.done++;
+  if (B.done < B.res.length) { prStatus(t("pr_batch_progress", B.done, B.res.length)); return; }
+  const bad = B.res.filter(r => r.error).length;
+  prStatus(t("pr_batch_done", B.res.length, bad, (performance.now() - B.t0) / 1000));
+  prBatchRender();
+}
+function prBatchRender() {
+  const B = PR_BATCH, el = document.getElementById("pr-batch");
+  const cols = t("pr_batch_cols");
+  const nb = r => (r.neighbours && r.neighbours[0])
+    ? `${esc(r.neighbours[0].formula)} (${r.neighbours[0].dft_gap === null ? "MC2D" : fmt(r.neighbours[0].dft_gap, 2) + t("ev")}${r.neighbours[0].distance < SAME_LAYER ? t("same_layer") : ""})` : "";
+  const rows = B.res.map((r, k) => {
+    if (r.error) return `<tr data-b="${k}"><td>${esc(B.names[k])}</td><td class="err" colspan="${cols.length - 1}">${esc(t("pr_err", r.error))}</td></tr>`;
+    const w = tierOf(r.verdict), ood = w === 2;
+    return `<tr data-b="${k}"${k === B.sel ? ' class="sel"' : ""}><td>${esc(B.names[k])}</td><td>${esc(r.formula)}</td>` +
+      `<td class="r">${fmt(r.gap, 2)}</td><td class="r">${ood ? "—" : "± " + fmt(r.interval90, 2)}</td>` +
+      `<td><span class="v"><i class="tierdot" style="background:var(${TIERVAR[w]})"></i>${t("tier")[w]}</span></td>` +
+      `<td class="r">${r.exp_gap_est == null ? "—" : fmt(r.exp_gap_est, 2)}</td>` +
+      `<td class="r">${r.electron_affinity == null ? "—" : fmt(r.electron_affinity, 2) + " / " + fmt(r.ionisation_potential, 2)}</td>` +
+      `<td>${nb(r)}</td></tr>`;
+  }).join("");
+  el.innerHTML = `<div class="bhead"><h2>${t("pr_batch_title", B.res.length)}</h2>
+      <button class="preset pr-go" type="button" id="pr-batch-csv">${t("pr_batch_csv")}</button>
+      <span class="bhint">${t("pr_batch_hint")}</span></div>
+    <div class="bwrap"><table><thead><tr>${cols.map((c, i) => `<th${[2, 3, 5, 6].includes(i) ? ' class="r"' : ""}>${c}</th>`).join("")}</tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+  el.hidden = false;
+}
+function prBatchCsv() {
+  // nanomat.predict.Prediction.as_row, so the two outputs line up column for column
+  const B = PR_BATCH, r3 = v => (v === null || v === undefined || Number.isNaN(v) ? "" : (+v).toFixed(3));
+  const head = ["file", "formula", "natoms", "band_gap_PBE_eV", "work_function_eV", "electron_affinity_eV",
+    "ionisation_potential_eV", "work_function_unc_eV", "work_function_verdict", "gap_quasiparticle_eV",
+    "gap_quasiparticle_direct_eV", "exciton_binding_eV", "exp_gap_est_eV", "uncertainty_eV", "interval90_eV",
+    "latent_distance", "typical_error_eV", "verdict", "p_metal", "p_metastable", "gap_type", "p_indirect",
+    "vacuum_A", "warnings", "nearest_training_id", "nearest_training_formula", "nearest_training_dft_gap_eV",
+    "nearest_training_distance", "error"];
+  const q = v => { const x = v === null || v === undefined ? "" : String(v); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
+  const lines = [head.join(",")];
+  B.res.forEach((r, k) => {
+    if (r.error) { lines.push([B.names[k], ...new Array(head.length - 2).fill(""), r.error].map(q).join(",")); return; }
+    const n = (r.neighbours || [])[0] || {};
+    lines.push([B.names[k], r.formula, r.natoms, r3(r.gap), r3(r.work_function), r3(r.electron_affinity),
+      r3(r.ionisation_potential), r3(r.work_function_unc), r.work_function_verdict || "", r3(r.gap_quasiparticle),
+      r3(r.gap_quasiparticle_direct), r3(r.exciton_binding), r3(r.exp_gap_est), r3(r.unc), r3(r.interval90),
+      r3(r.latent_distance), r3(r.typical_error), r.verdict, r.p_metal == null ? "" : (+r.p_metal).toFixed(2),
+      r.p_metastable == null ? "" : (+r.p_metastable).toFixed(2), r.gap_type || "",
+      r.p_indirect == null ? "" : (+r.p_indirect).toFixed(2), r.layer ? (+r.layer.vacuum).toFixed(1) : "",
+      (r.warnings || []).join("; "), n.id || "", n.formula || "", r3(n.dft_gap), r3(n.distance), ""].map(q).join(","));
+  });
+  const url = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: "nanomat_predictions.csv" });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+document.getElementById("pr-file").addEventListener("change", e => prFiles(e.target.files));
 const DROP = document.getElementById("pr-drop");
 DROP.addEventListener("dragover", e => { e.preventDefault(); DROP.classList.add("over"); });
 DROP.addEventListener("dragleave", () => DROP.classList.remove("over"));
 DROP.addEventListener("drop", e => {
   e.preventDefault();
   DROP.classList.remove("over");
-  prFile(e.dataTransfer.files[0]);
+  prFiles(e.dataTransfer.files);
 });
 
 /* -------------------------------------------------------------------- events */
@@ -1498,6 +2042,25 @@ document.addEventListener("click", e => {
   const tab = e.target.closest(".tab");
   if (tab) { selectTab(tab.dataset.panel); return; }
   if (e.target.closest("#t-own")) { e.preventDefault(); selectTab("predict"); return; }
+  if (e.target.closest("#t-pr-guide-link")) {
+    // scrolled to by hand: following the anchor would replace #predict in the address
+    e.preventDefault();
+    document.getElementById("pr-guide").scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  if (e.target.id === "pr-batch-csv") { prBatchCsv(); return; }
+  const brow = e.target.closest("#pr-batch tr[data-b]");
+  if (brow && PR_BATCH) {
+    const k = +brow.dataset.b, r = PR_BATCH.res[k];
+    if (r && !r.error) {
+      PR_BATCH.sel = k;
+      PR_NAME = PR_BATCH.names[k];
+      prShow(r);
+      prBatchRender();
+      document.getElementById("pr-detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    return;
+  }
   if (e.target.id === "pr-go") {
     prRun(document.getElementById("pr-text").value, t("pr_pasted"));
     return;
@@ -1506,7 +2069,7 @@ document.addEventListener("click", e => {
   if (ex) {
     const text = PR_EXAMPLES[ex.dataset.ex];
     document.getElementById("pr-text").value = text;
-    prRun(text, ex.dataset.ex + " (example)");
+    prRun(text, ex.dataset.ex + t("pr_example"));
     return;
   }
   const nbBtn = e.target.closest("button[data-nb]");
@@ -1540,6 +2103,14 @@ document.addEventListener("click", e => {
     S.f.tiers[i] = !S.f.tiers[i];
     chip.setAttribute("aria-pressed", S.f.tiers[i]);
     apply(); return;
+  }
+  if (e.target.id === "lang-btn") {
+    const next = LANG === "en" ? "ru" : "en";
+    try { localStorage.setItem("nanomat-lang", next); } catch (e) { /* the URL carries it */ }
+    const u = new URL(location.href);
+    u.searchParams.set("lang", next);
+    location.href = u.toString();
+    return;
   }
   if (e.target.id === "theme-btn") {
     applyTheme(THEMES[(THEMES.indexOf(THEME) + 1) % THEMES.length], true);
@@ -1673,7 +2244,7 @@ cv().addEventListener("mousemove", e => {
   if (!r) { if (S.hover) { S.hover = null; drawChart(); } tip.hidden = true; return; }
   if (S.hover !== r) { S.hover = r; drawChart(); }
   const cal = S.meta.calibration;
-  tip.innerHTML = `<b>${r.f}</b>${fmt(r.g, 2)} eV${r.w === 2 ? "" : " ± " + fmt(interval90(r), 2)}
+  tip.innerHTML = `<b>${r.f}</b>${fmt(r.g, 2)}${t("ev")}${r.w === 2 ? "" : " ± " + fmt(interval90(r), 2)}
     <span style="color:var(${TIERVAR[r.w]})"> · ${t("tier")[r.w]}</span>` +
     (crowd > 1 ? `<span style="color:var(--text-3)"><br>${t("crowd", crowd - 1)}</span>` : "");
   tip.hidden = false;

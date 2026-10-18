@@ -2,7 +2,11 @@
 // interface. The models are fetched once, on the first request, with progress
 // reported back; after that every prediction is local and the file never leaves
 // the visitor's machine.
-import { Model, parseStructure, formulaOf } from "./nanomat.js";
+// Imported with the worker's own query string, which the page sets per page load, so a
+// worker or predictor cached from an earlier deploy can never meet a newer page. Not
+// awaited at the top level: messages that arrived during the import would be lost
+// before onmessage was set, so the handler below awaits it instead.
+const LIB = import("./nanomat.js" + new URL(import.meta.url).search);
 
 let model = null;
 let loading = null;
@@ -31,6 +35,7 @@ async function fetchBuffer(url, expected, report) {
 }
 
 async function load(base) {
+  const { Model } = await LIB;
   const manifest = await (await fetch(base + "manifest.json", { cache: "no-cache" })).json();
   const nbBytes = manifest.bytes["neighbours.json"] || 0;
   const total = manifest.bytes["weights.bin"] + manifest.bytes["refs.bin"] + nbBytes;
@@ -47,8 +52,10 @@ async function load(base) {
 }
 
 self.onmessage = async e => {
-  const { id, text, base } = e.data;
+  // k: the file's place in a batch, echoed back so results can arrive in any order
+  const { id, k, text, base } = e.data;
   try {
+    const { parseStructure, formulaOf } = await LIB;
     if (!model) {
       loading = loading || load(base || "model/");
       await loading;
@@ -59,9 +66,9 @@ self.onmessage = async e => {
     res.formula = formulaOf(st);
     res.elements = [...new Set(st.species)];
     res.ms = performance.now() - t0;
-    postMessage({ type: "result", id, res });
+    postMessage({ type: "result", id, k, res });
   } catch (err) {
     loading = model ? loading : null;   // a failed download may be retried
-    postMessage({ type: "error", id, message: err.message || String(err) });
+    postMessage({ type: "error", id, k, message: err.message || String(err) });
   }
 };

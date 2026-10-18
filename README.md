@@ -13,7 +13,8 @@ map of where the model actually works. No install. Its **Your structure** tab ru
 same ensemble in your browser on a CIF or POSCAR of your own, and names the training
 structures yours sits closest to, with their DFT gaps; the file never leaves your
 computer.
-Same page on [Hugging Face Spaces](https://huggingface.co/spaces/ac1esan/nanomat-ai).
+Same page on [Hugging Face Spaces](https://huggingface.co/spaces/ac1esan/nanomat-ai), and
+[in Russian](https://ac1esan.github.io/nanomat-ai/?lang=ru).
 
 A graph neural network that predicts the band gap of a 2D monolayer from its
 crystal structure in under a second on a laptop CPU — and, more importantly,
@@ -38,7 +39,8 @@ from 0.449 to 0.385 eV and left the stable test where it was
 ## Quick start
 
 **Without installing anything:** drop a CIF or POSCAR into the
-[browser's *Your structure* tab](https://ac1esan.github.io/nanomat-ai/#predict). The
+[browser's *Your structure* tab](https://ac1esan.github.io/nanomat-ai/#predict), or
+up to 500 at once for a table and a CSV with the command line's columns. The
 predictor there is a JavaScript port of the Python one, run on weights exported from the
 same checkpoints, and agrees with it to a millionth of an eV on 2 016 structures from
 four databases (`scripts/web_parity.py`, checked in CI on every push). Or use Colab:
@@ -62,6 +64,27 @@ If you have no structure file to hand, the
 material is for — a solar-cell absorber, a visible LED, an infrared or ultraviolet
 detector, a transistor channel, an insulating layer — and search by name ("graphene",
 "hBN"). Every card opens with the same plain-language summary.
+
+**No file from a DFT run?** The tab's *Getting a structure* section goes through each
+case; in short:
+
+- **Only a formula.** Search the browser first. Otherwise download a monolayer CIF from
+  C2DB, 2DMatPedia or MC2D, which all store relaxed single layers. A formula alone is
+  not enough to predict from: 1H-MoS₂ is a semiconductor and 1T-MoS₂ a metal.
+- **A CIF of the bulk crystal** (COD, ICSD, Materials Project). The tool rejects it as
+  not a 2D layer. Look for the exfoliated layer in MC2D, or cut one out: in VESTA, or
+  in ASE by keeping one layer's atoms and calling `layer.center(vacuum=10, axis=2)`.
+- **A lattice constant from a paper.** The tab's prototype builder makes 1H-MX₂, 1T-MX₂
+  and honeycomb cells, and fills in a relaxed lattice constant and thickness whenever
+  the table holds that pair (252 pairs, `docs/data/prototypes.json` from
+  [`scripts/build_prototypes.py`](scripts/build_prototypes.py)). In Python,
+  `ase.build.mx2` and `ase.build.graphene` do the same. The lattice constant is the
+  number that matters: an ideal chalcogen height moved the gap by 0.001 eV on four
+  TMDs, a lattice constant from atomic radii by 0.4 eV
+  ([`scripts/geometry_sensitivity.py`](scripts/geometry_sensitivity.py)).
+- **An experimental or unrelaxed cell.** It runs, but the model learned from cells
+  relaxed with PBE: 1% of strain moves the gap by a few hundredths of an eV, and from
+  about +3% the metal gate starts to reject MoSe₂ and WSe₂.
 
 ```bash
 python screen_bandgap.py --app                                # web UI at http://127.0.0.1:7860
