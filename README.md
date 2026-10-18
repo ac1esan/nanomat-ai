@@ -135,7 +135,10 @@ a single model managed 0.17). Error rises from 0.09 to 0.40 eV across its quarti
 same data, so on a chemistry the training set barely covers they can agree for the
 wrong reason: the spread measures disagreement between initialisations, not how well
 a chemistry is covered. Cosine distance to the ten nearest training structures in the
-model's own embedding space measures that directly. It correlates with error at 0.43
+model's own embedding space measures that directly, as proposed for neural networks in
+chemistry by [Janet et al. (Chem. Sci. 2019)](https://doi.org/10.1039/c9sc02298h); ensembles
+and other uncertainty methods for materials properties were compared by
+[Tran et al. (2020)](https://doi.org/10.1088/2632-2153/ab7e1a). It correlates with error at 0.43
 against 0.45 for the spread, and the two together reach 0.48, so they carry different
 information. (At 0.2 eV/atom it was the stronger of the two, 0.47 against 0.45; both
 weakened as metastable data made the errors smaller and more even, to 0.39 and 0.40,
