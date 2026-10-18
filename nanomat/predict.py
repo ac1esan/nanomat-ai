@@ -11,6 +11,7 @@ Pipeline for one structure
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field
 
@@ -337,6 +338,10 @@ class Prediction:
     # above the hull) in the ensemble's latent space; sets the interval's scale. A
     # resemblance, not a stability calculation
     p_metastable: float | None = None
+    # the closest training structures in the latent space the distance above is
+    # measured in: id, source, formula, DFT label (None where not redistributed),
+    # label flag and cosine distance. Up to five, duplicates of one label merged
+    neighbours: list[dict] = field(default_factory=list)
     layer: dict = field(default_factory=dict)  # vacuum axis / thickness / padded
     warnings: list[str] = field(default_factory=list)
 
@@ -383,6 +388,9 @@ class Predictor:
         self.cal = dict(DEFAULT_CAL)
         self.corr = {k: dict(v) for k, v in DEFAULT_CORRECTIONS.items()}
         self.ref_emb: torch.Tensor | None = None  # normalised training embeddings
+        # what each of those rows is (scripts/reference_meta.py): id, source, formula,
+        # DFT label and flag, aligned with ref_emb
+        self.ref_meta: dict | None = None
         # linear heads on the concatenated member embeddings: G0W0 gaps and the
         # exciton binding energy (scripts/fit_exciton.py). Absent = fall back to the
         # polynomial corrections above.
@@ -426,6 +434,11 @@ class Predictor:
             self.mean, self.std = float(ck["mean"]), float(ck["std"])
             if ck.get("reference_embeddings") is not None:
                 self.ref_emb = ck["reference_embeddings"].float()
+                meta = ck.get("reference_meta")
+                # metadata written for another set of embeddings would name the wrong
+                # structures; drop it rather than mislabel neighbours
+                if isinstance(meta, dict) and len(meta.get("id", [])) == self.ref_emb.shape[0]:
+                    self.ref_meta = meta
             oh = ck.get("optical_heads")
             if isinstance(oh, dict) and "exciton_binding" in oh:
                 self.heads = oh
@@ -542,9 +555,12 @@ class Predictor:
         return gap, float(np.std(preds))
 
     @torch.no_grad()
-    def latent_distance(self, graphs: list, k: int = 10) -> np.ndarray | None:
-        """1 - mean cosine similarity to the k nearest training structures.
-        None when the checkpoint carries no reference embeddings."""
+    def nearest(self, graphs: list, k: int = 10):
+        """(distance, indices, similarities) of the k nearest training structures.
+
+        distance is 1 - mean cosine similarity over the k, the latent distance the
+        verdict reads; indices and similarities are sorted, most similar first, and
+        index into ref_emb / ref_meta. None without reference embeddings."""
         if self.ref_emb is None or not graphs:
             return None
         # wherever run_many(device=...) left the model; the graphs arrive on the CPU
@@ -552,8 +568,41 @@ class Predictor:
         e = self.models[0].encode(Batch.from_data_list(graphs).to(dev))
         e = e / e.norm(dim=1, keepdim=True).clamp_min(1e-9)
         sims = e @ self.ref_emb.to(dev).T
-        k = min(k, sims.shape[1])
-        return (1 - sims.topk(k, dim=1).values.mean(1)).cpu().numpy()
+        top = sims.topk(min(k, sims.shape[1]), dim=1)
+        vals, idx = top.values.cpu().numpy(), top.indices.cpu().numpy()
+        return 1 - vals.mean(1), idx, vals
+
+    def latent_distance(self, graphs: list, k: int = 10) -> np.ndarray | None:
+        """1 - mean cosine similarity to the k nearest training structures.
+        None when the checkpoint carries no reference embeddings."""
+        near = self.nearest(graphs, k)
+        return None if near is None else near[0]
+
+    def neighbours(self, idx, sims, show: int = 5) -> list[dict]:
+        """Readable nearest training structures for one prediction.
+
+        Walks the nearest ones in order and skips a row whose formula and label match
+        one already kept: the same layer stored in several cells would otherwise fill
+        the list with copies of one answer."""
+        m = self.ref_meta
+        if m is None:
+            return []
+        out, seen = [], set()
+        for i, s in sorted(zip(idx.tolist(), sims.tolist()), key=lambda t: (-t[1], t[0])):
+            gap = float(m["gap"][i])
+            gap = None if np.isnan(gap) else round(gap, 3)
+            # the page holds labels to 3 decimals and rounds half up; same key here
+            key = (m["formula"][i], None if gap is None else math.floor(gap * 100 + 0.5))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({"id": m["id"][i], "source": m["source"][i], "formula": m["formula"][i],
+                        # float16 references put a structure's distance to itself at
+                        # +-1e-4; below zero means zero
+                        "dft_gap": gap, "flag": m["flag"][i], "distance": max(0.0, float(1 - s))})
+            if len(out) == show:
+                break
+        return out
 
     def p_metastable(self, emb) -> float | None:
         """Resemblance to the metastable training population, from the concatenated
@@ -612,8 +661,9 @@ class Predictor:
             with torch.no_grad():
                 b_ = Batch.from_data_list([g])
                 emb = torch.cat([m.encode(b_) for m in self.models], dim=1).cpu().numpy()[0]
-        ld = self.latent_distance([g])
-        ld = None if ld is None else float(ld[0])
+        near = self.nearest([g])
+        ld = None if near is None else float(near[0][0])
+        nb = [] if near is None else self.neighbours(near[1][0], near[2][0])
         p_meta = self.p_metastable(emb)
         wf_v, wf_u = (self.wf.predict([g]) if self.wf else (None, None))
         wf_l = self.wf.latent_distance([g]) if self.wf else None
@@ -637,7 +687,7 @@ class Predictor:
             interval90=self.interval90(unc, p_meta),
             typical_error=self.cal["tier_mae"].get(tier_key(v)),
             gap_type=gap_type, p_indirect=p_ind,
-            p_metal=p_metal, p_metastable=p_meta, layer=info, warnings=warns,
+            p_metal=p_metal, p_metastable=p_meta, neighbours=nb, layer=info, warnings=warns,
         )
 
 
@@ -735,10 +785,13 @@ class Predictor:
             if self.wf.ref_emb is not None:
                 wfl = np.concatenate([self.wf.latent_distance(graphs[i:i + batch_size])
                                       for i in range(0, len(graphs), batch_size)])
-        lat = None
+        lat = nidx = nsim = None
         if self.ref_emb is not None and graphs:
-            lat = np.concatenate([self.latent_distance(graphs[i:i + batch_size])
-                                  for i in range(0, len(graphs), batch_size)])
+            parts = [self.nearest(graphs[i:i + batch_size])
+                     for i in range(0, len(graphs), batch_size)]
+            lat = np.concatenate([p[0] for p in parts])
+            nidx = np.concatenate([p[1] for p in parts])
+            nsim = np.concatenate([p[2] for p in parts])
 
         out: list = [(k, None) for k, _ in items]
         for j, key in enumerate(keys):
@@ -768,7 +821,9 @@ class Predictor:
                 interval90=self.interval90(unc, p_meta),
                 typical_error=self.cal["tier_mae"].get(tier_key(v)),
                 gap_type=None if pt is None else ("indirect" if pt >= self.type_thr else "direct"),
-                p_indirect=pt, p_metal=pm, p_metastable=p_meta, layer=info, warnings=w))
+                p_indirect=pt, p_metal=pm, p_metastable=p_meta,
+                neighbours=[] if nidx is None else self.neighbours(nidx[j], nsim[j]),
+                layer=info, warnings=w))
         return out
 
 

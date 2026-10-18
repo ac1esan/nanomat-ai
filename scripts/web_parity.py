@@ -115,6 +115,8 @@ def main():
             row["python"] = {k: getattr(p, k) for k in FIELDS}
             row["python"]["is_layer"] = bool(p.layer.get("is_layer"))
             row["python"]["padded"] = bool(p.layer.get("padded"))
+            row["python"]["neighbours"] = [{"id": n["id"], "distance": n["distance"]}
+                                           for n in p.neighbours]
         rows.append(row)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     json.dump(rows, open(args.out, "w"))

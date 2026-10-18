@@ -10,7 +10,8 @@
 **[Browse the predictions →](https://ac1esan.github.io/nanomat-ai/)** — 28 372
 structures with a calibrated interval and a verdict on each, plus a periodic-table
 map of where the model actually works. No install. Its **Your structure** tab runs the
-same ensemble in your browser on a CIF or POSCAR of your own; the file never leaves your
+same ensemble in your browser on a CIF or POSCAR of your own, and names the training
+structures yours sits closest to, with their DFT gaps; the file never leaves your
 computer.
 Same page on [Hugging Face Spaces](https://huggingface.co/spaces/ac1esan/nanomat-ai).
 
@@ -142,6 +143,18 @@ and recovered when MC2D joined training.) Built from both, the verdict keeps its
 on every held-out set the model never trained on: 0.15 / 0.21 / 0.37 eV across the
 three tiers on metastable Alexandria at 0.1–0.2 eV/atom, 0.14 / 0.21 / 0.37 at
 0.2–0.5, 0.15 / 0.25 / 0.47 on 2DMatPedia and 0.16 / 0.29 / 0.49 on MC2D.
+
+The distance is now also shown as what it is made of. The checkpoint names every
+reference row (id, source, formula, DFT label and, where the audit found one, the label's
+flag; [`scripts/reference_meta.py`](scripts/reference_meta.py)), so each prediction
+lists the up to five nearest training structures, with copies of one label stored in
+several cells merged. A training structure finds itself at a distance of about 10⁻⁴, and
+phosphorene relaxed in JARVIS finds its Alexandria twin at 0.005; below that the output
+says the model was trained on practically the same layer and the number largely recalls
+that label. The JARVIS cell of MoS₂ is such a case (Alexandria's label 1.76 eV, predicted
+1.69). Graphene is not: no pure-carbon layer was trained on, and its nearest structures
+are carbon nitrides at 0.16–0.25. MC2D rows carry no label, because the licence of its
+OPTIMADE response is still unconfirmed.
 
 **A retraction.** This section used to prove the point with phosphorene: 0.82 eV
 predicted, 2.0 eV measured, called reliable. Phosphorene is in the training split, and
@@ -836,6 +849,44 @@ Paying 17% of accuracy for 2% of combined ranking, and getting more false alarms
 with it, is not a trade worth making. The flag stays in the trainer with this
 measurement attached, so nobody has to rediscover it.
 
+### Four experiments that failed their rules (October 2026)
+
+The full C2DB release ([`c2db.db`](https://wiki.fysik.dtu.dk/c2db.db), 16 905 entries)
+holds what its web table does not: the gap without spin-orbit coupling, HSE06 gaps and
+effective masses. Three experiments used it, and a fourth tried a three-body update in
+the graph. Each had its rule written in the script header first, and none passed.
+
+- **A spin-orbit correction** ([`scripts/soc_c2db.py`](scripts/soc_c2db.py)). Of 3 878
+  non-magnetic C2DB semiconductors the model accepts 2 059. Fitted to their shift
+  `gap_dir − gap_dir_nosoc`, a head on the latent space plus composition cut the error
+  of the shift from 0.116 eV (a constant for heavy and for light compounds) to 0.090,
+  and on heavy compounds from 0.183 to 0.107. It failed twice. On light compounds it
+  invented a shift (0.070 eV against 0.039 for the constant), and it gave tungsten less than half
+  of its spin-orbit splitting: WS₂ −0.14 eV against C2DB's −0.28, WSe₂ −0.12 against
+  −0.32, while MoS₂ came out at −0.17 against −0.08.
+- **An HSE06 head** ([`scripts/fit_hse_head.py`](scripts/fit_hse_head.py), 1 611
+  materials). A ridge head on the latent space beat a line on the gap by 39% (0.232
+  against 0.380 eV) and did so in every band of the gap, but missed the same metal:
+  WS₂ 2.32 eV against 2.06, WSe₂ 1.97 against 1.73, while MoS₂ and MoSe₂ landed within
+  0.08. On 36 dft_2d HSE gaps outside the fit it was worse than the line (0.267 against
+  0.204).
+- **Effective masses** ([`scripts/emass_experiment.py`](scripts/emass_experiment.py)).
+  Five CGCNNs with angles on 2 974 electron and 2 931 hole masses, composition-disjoint.
+  In log₁₀ the error is 0.267 for electrons and 0.258 for holes, a factor of about 1.8,
+  and a composition model does as well (0.252 and 0.260): structure did not beat
+  composition, as with band gaps at 696 structures. The rule asked for 10% better.
+- **A three-body edge update** ([`nanomat/model.py`](nanomat/model.py), `tri_dim`):
+  messages between the bonds of one atom, filtered by their angle. It separated 1H from
+  1T slightly better (0.67 → 0.71 of the DFT difference) and was worse everywhere else:
+  0.184 → 0.194 eV on the stable test (paired +0.010, 95% +0.002…+0.018), worse on
+  metastable and far-from-hull layers too. The code stays, switched off; the shipped
+  weights do not use it.
+
+The spin-orbit and HSE heads fail in the same place. The latent space was trained on
+labels without spin-orbit coupling, so it does not tell molybdenum from tungsten in the
+way spin-orbit coupling does, and a head on top of it cannot add what is not there.
+Fine-tuning the whole network on these pairs is the next thing to try.
+
 ### Does a language model pass the verdict on?
 
 A verdict only helps if the interface in front of it passes it on. Ten language models
@@ -956,15 +1007,15 @@ same speed.
   lowers a gap. Against C2DB, which includes it, compounds of heavy elements (Z ≥ 52)
   come out 0.27 eV higher on average (median 0.20, n = 389) and the rest 0.03 eV
   (n = 262); against held-out Alexandria, which does not, the same groups show no
-  offset (−0.02 and −0.04). C2DB's web table has no SOC-free gap to train a
-  correction on, so the offset is documented, not corrected. The structures that sit
+  offset (−0.02 and −0.04). The offset is documented, not corrected. The structures that sit
   in both Alexandria and C2DB (about 700, `data/structure_twins.csv`) carry exactly
   that difference. A head trained on them ([`scripts/fit_soc.py`](scripts/fit_soc.py))
   failed its pre-written rule: on heavy-element compounds it cut the error against
   C2DB from 0.23 to 0.18 eV on structures it never saw, and it got the four TMDs to
   within 0.02 eV of the literature shift, but on light compounds it invented a shift
-  (0.13 → 0.18). Applying it only to heavy elements is the obvious fix, and it needs
-  data none of this has touched to be tested honestly.
+  (0.13 → 0.18). The full C2DB release, with its spin-orbit-free gaps, was the fresh
+  data to test a better one on, and that head failed too: it gives tungsten less than half of its
+  shift (*Four experiments that failed their rules*).
 - The quasiparticle and optical outputs are linear heads fitted on 199 C2DB materials
   (G₀W₀ and BSE), cross-validated at 0.14–0.27 eV and checked against five measured
   monolayers. Treat them as estimates.
@@ -1050,6 +1101,7 @@ python train_cgcnn.py --data alignn_data_mc2dexp --split-file alignn_data_mc2dex
 ```bash
 python scripts/calibrate_uncertainty.py --weights weights/cgcnn_2d_ensemble.pt \
     --data alignn_data_mc2dexp --split weights/cgcnn_2d_ensemble.split.json
+python scripts/reference_meta.py --data alignn_data_mc2dexp   # names the reference rows
 python scripts/calibrate_population.py --weights weights/cgcnn_2d_ensemble.pt \
     --data alignn_data_mc2dexp --near-hull-split alignn_data_exp/splits/A0.json --meta-tests T_meta,T_far
 python scripts/fit_gap_corrections.py --write      # quasiparticle + optical fallback
@@ -1114,24 +1166,26 @@ figures/                  README figures and the scripts that regenerate them
 
 ## Roadmap
 
-1. **Language models.** The server and its test ship (above). Next is a fourth run,
-   to measure the renamed resemblance field and the out-of-domain rule that now says
-   what to give instead.
+1. **Language models.** The server and its test ship (above), four runs so far. The
+   tool now also names each prediction's nearest training structures; whether models
+   use that to say "this is a recalled label" is the next thing to measure.
 2. **A 2D band-gap benchmark for JARVIS-Leaderboard.** Of its 322 benchmarks, 67 are
    about band gaps and none about 2D materials.
 3. **An error head for the verdict.** Fitted with metastable structures it ranked
    errors better on four of six sets in an exploration; it needs a proper test under
-   a rule written first. A spin-orbit head on the Alexandria–C2DB twins is the other
-   open piece of the trust layer: the C2DB coverage gap is all spin-orbit coupling.
-4. **The next gain is not more metastable data.** The step to 1.0 eV/atom passed its
+   a rule written first.
+4. **Spin-orbit coupling by fine-tuning, not a head.** The C2DB coverage gap is all
+   spin-orbit coupling, and heads on the frozen latent space miss tungsten. The full
+   C2DB has 3 878 non-magnetic gap pairs with and without it to fine-tune on.
+5. **The next gain is not more metastable data.** The step to 1.0 eV/atom passed its
    rule with 0.004 eV on the stable test, against 0.032 for the step before.
-5. **Retrain without the flagged labels** (143, `data/reference_flags.csv`); they are
+6. **Retrain without the flagged labels** (143, `data/reference_flags.csv`); they are
    flagged everywhere they are shown, but 110 of them are still in the training set.
-6. **Light elements on real crystals.** With MC2D in training, the held-out MC2D layers
+7. **Light elements on real crystals.** With MC2D in training, the held-out MC2D layers
    with nitrogen, hydrogen and oxygen still run 0.18–0.23 eV high, and boron on
    held-out metastable Alexandria got worse (+0.26 eV, 26 structures). The magnetic
    3d-metal MC2D entries left out of training are the open part of that database.
-7. Host the uploader somewhere free. Gradio Spaces now require a paid tier, so
+8. Host the uploader somewhere free. Gradio Spaces now require a paid tier, so
    `python screen_bandgap.py --app` is the local answer.
 
 ## Citing this

@@ -24,7 +24,9 @@ const outPath = arg("--report", null);
 
 const manifest = JSON.parse(fs.readFileSync(path.join(modelDir, "manifest.json")));
 const buf = f => { const b = fs.readFileSync(path.join(modelDir, f)); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
-const model = new Model(manifest, buf("weights.bin"), buf("refs.bin"));
+const nbPath = path.join(modelDir, "neighbours.json");
+const meta = fs.existsSync(nbPath) ? JSON.parse(fs.readFileSync(nbPath)) : null;
+const model = new Model(manifest, buf("weights.bin"), buf("refs.bin"), meta);
 const cases = JSON.parse(fs.readFileSync(casesPath));
 
 const NUM = ["gap", "unc", "latent_distance", "p_metal", "p_metastable", "interval90", "typical_error",
@@ -33,7 +35,7 @@ const NUM = ["gap", "unc", "latent_distance", "p_metal", "p_metastable", "interv
              "work_function_interval90", "electron_affinity", "ionisation_potential"];
 const EXACT = ["natoms", "verdict", "gap_type", "is_metal_like", "work_function_verdict", "is_layer", "padded"];
 
-const diffs = Object.fromEntries(NUM.map(k => [k, []]));
+const diffs = Object.fromEntries([...NUM, "neighbour_distance"].map(k => [k, []]));
 const fails = [], nearThreshold = [], errors = [];
 const cal = manifest.calibration, wcal = (manifest.models.wf || {}).calibration || {};
 const near = (x, t, rel = 2e-3) => t !== undefined && x !== null && Math.abs(x - t) <= rel * Math.max(Math.abs(t), 1e-3);
@@ -61,6 +63,19 @@ for (const c of cases) {
     const lim = k.startsWith("p_") || k.includes("latent") ? tol / 2 : tol;
     if (d > lim) fails.push(`${c.name}: ${k} python=${a.toFixed(5)} js=${b.toFixed(5)} (diff ${d.toExponential(2)})`);
   }
+  // the named neighbours: the same training structures at the same distances. Two
+  // references with identical embeddings (one layer stored twice) tie exactly and may
+  // swap, so a name may differ where its distance matches the other side's
+  if (py.neighbours) {
+    const a = py.neighbours, b = js.neighbours || [];
+    if (a.length !== b.length) fails.push(`${c.name}: ${a.length} neighbours in python, ${b.length} in js`);
+    for (let j = 0; j < Math.min(a.length, b.length); j++) {
+      const d = Math.abs(a[j].distance - b[j].distance);
+      diffs.neighbour_distance.push(d);
+      if (d > tol / 2) fails.push(`${c.name}: neighbour ${j} distance python=${a[j].distance} js=${b[j].distance}`);
+      else if (a[j].id !== b[j].id && d > 1e-6) fails.push(`${c.name}: neighbour ${j} python=${a[j].id} js=${b[j].id}`);
+    }
+  }
   for (const k of EXACT) {
     const a = py[k] ?? null, b = js[k] ?? null;
     if (a === b) continue;
@@ -78,7 +93,7 @@ const q = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y) =
 console.log(`${n} cases compared in ${((Date.now() - t0) / 1000).toFixed(1)} s (${manifest.weights_dtype} weights); ` +
             `${errors.length} could not be read by the page`);
 console.log("field                         n     median        p99        max");
-for (const k of NUM) {
+for (const k of [...NUM, "neighbour_distance"]) {
   const a = diffs[k];
   if (!a.length) continue;
   console.log(`${k.padEnd(26)} ${String(a.length).padStart(5)}  ${q(a, 0.5).toExponential(2).padStart(9)}  ` +

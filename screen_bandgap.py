@@ -167,6 +167,14 @@ def format_markdown(r, cal: dict | None = None) -> str:
         near = "inside" if r.latent_distance <= cal["latent_q75"] else "OUTSIDE"
         lines.append(f"| Distance to training data | {r.latent_distance:.3f} — {near} the "
                      f"familiar region (q75 = {cal['latent_q75']:.3f}) |")
+    if r.neighbours:
+        from nanomat.plain import neighbour_detail
+        near_list = "; ".join(f"{n['formula']} ({neighbour_detail(n)}, distance "
+                              f"{'< 0.001' if n['distance'] < 0.001 else format(n['distance'], '.3f')})"
+                              for n in r.neighbours)
+        lines.append(f"| Nearest training structures | {near_list} <br><sub>closest in the "
+                     "model's own representation, with their DFT labels: what the prediction "
+                     "leans on. Below 0.005 is practically the same layer.</sub> |")
     lines.append(f"| **Verdict** | **{r.verdict}** |")
     if r.typical_error is not None:
         lines.append(f"| Typical error of this tier | {r.typical_error:.2f} eV (measured on "

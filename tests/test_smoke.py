@@ -680,3 +680,39 @@ def test_reference_flags():
         assert flags[i]["flag"] == "wrong", i
     disputed = [r for r in flags.values() if r["flag"] == "disputed"]
     assert disputed and all("other Alexandria cells" in r["note"] for r in disputed)
+
+
+def test_neighbours_name_the_training_structures(P):
+    """A prediction names the training structures it sits closest to.
+
+    The reference embeddings were always in the checkpoint; scripts/reference_meta.py
+    attaches id, formula and label to each, so the latent distance can be read as
+    "closest to this known material". The browser page computes the same list
+    (scripts/web_parity.mjs compares it).
+    """
+    import math
+    from nanomat import llm_tools as L
+    from nanomat.plain import SAME_LAYER, describe
+    assert P.ref_meta is not None and len(P.ref_meta["id"]) == P.ref_emb.shape[0]
+    files = ["MoS2.vasp", "graphene.vasp", "WS2.vasp"]
+    single = {f: P.run(read_structure(os.path.join(EX, f))) for f in files}
+    mos2 = single["MoS2.vasp"]
+    # the JARVIS cell of MoS2 is the layer Alexandria trained the model on
+    assert mos2.neighbours[0]["formula"] == "MoS2" and mos2.neighbours[0]["distance"] < SAME_LAYER
+    assert "practically this same layer" in describe(mos2)
+    for r in single.values():
+        d = [n["distance"] for n in r.neighbours]
+        assert 0 < len(d) <= 5 and d == sorted(d) and min(d) >= 0
+        keys = [(n["formula"], None if n["dft_gap"] is None else math.floor(n["dft_gap"] * 100 + 0.5))
+                for n in r.neighbours]
+        assert len(keys) == len(set(keys)), "one label shown twice"
+    # no pure-carbon layer was trained on (both Alexandria graphenes sit in the test
+    # split), and the list must not pretend otherwise
+    gr = single["graphene.vasp"]
+    assert gr.neighbours[0]["distance"] > 0.1 and all(n["formula"] != "C" for n in gr.neighbours)
+    batched = dict(P.run_many([(f, read_structure(os.path.join(EX, f))) for f in files]))
+    for f in files:
+        assert [n["id"] for n in batched[f].neighbours] == [n["id"] for n in single[f].neighbours], f
+    out = L.predict_structure(open(os.path.join(EX, "WS2.vasp")).read())
+    near = out["nearest_training_structures"]
+    assert near and near[0]["formula"] == "WS2" and "nearest_meaning" in out
