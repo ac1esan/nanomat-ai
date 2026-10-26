@@ -4,11 +4,15 @@
 
 Numbers come from the project log (CLAUDE.md): composition baseline (Magpie +
 RF/XGBoost, 5-fold CV MAE) vs CGCNN (val/test MAE) on the same data at
-increasing N, plus the experimental validation from validate_experiment.py.
+increasing N, plus the shipped model's results on the reference monolayers as
+recorded in examples/expected_results.csv against the measured gaps in
+validate_experiment.py. Nothing here runs a model: refresh the CSV with
+`python screen_bandgap.py --in examples/ --out examples/expected_results.csv`.
 """
 
 from __future__ import annotations
 
+import csv
 import os
 import sys
 
@@ -35,6 +39,11 @@ plt.rcParams.update({
 # The composition-disjoint ("grouped") re-measurement of the 13 349 point is marked
 # separately: same code, same data, only the split differs.
 GROUPED_13K = (13349, 0.2614)
+# The composition baseline scored on that same composition-disjoint test set
+# (scripts/composition_baseline.py with the training split.json). Without it the plot
+# would set a cross-validated composition number beside a composition-disjoint
+# structure number, the comparison that once understated the gap (27% for 39%).
+GROUPED_COMP_13K = (13349, 0.430)
 # The shipped ensemble: angles, plus Alexandria up to 1.0 eV/atom above the hull,
 # non-magnetic 2DMatPedia and MC2D in training (mc2d_experiment.py, arm E1), scored on
 # the same composition-disjoint near-hull test set as the diamond above.
@@ -62,6 +71,11 @@ def fig_scaling():
                 color=C_TEXT, fontsize=9.5)
     ax.annotate("", xy=(gx, gy - 0.004), xytext=(gx, 0.2214),
                 arrowprops=dict(arrowstyle="-", color=C_MUTED, lw=0.8, ls=":"))
+    cx, cy = GROUPED_COMP_13K
+    ax.plot([cx], [cy], marker="D", ms=8, mfc="white", mec=C_COMP, mew=2, ls="none",
+            label="Composition, same composition-disjoint split")
+    ax.annotate(f"{cy:.2f}", (cx, cy), textcoords="offset points", xytext=(-32, -3),
+                color=C_TEXT, fontsize=9.5)
     sx, sy = SHIPPED
     ax.plot([sx], [sy], marker="D", ms=8, color=C_GNN, ls="none",
             label="Shipped: + metastable to 1.0 eV/atom, 2DMatPedia, MC2D; same test")
@@ -73,9 +87,9 @@ def fig_scaling():
         ax.annotate(f"{yg:.2f}", (x, yg), textcoords="offset points", xytext=(0, -16),
                     ha="center", color=C_TEXT, fontsize=9.5)
     ax.set_xscale("log")
-    ax.set_xticks(n)
-    ax.set_xticklabels([f"{v:,}".replace(",", " ") + "\n" + r[0] for v, r in zip(n, SCALING)],
-                       fontsize=8.5)
+    ax.set_xticks(n + [sx])
+    ax.set_xticklabels([f"{v:,}".replace(",", " ") + "\n" + r[0] for v, r in zip(n, SCALING)]
+                       + [f"{sx:,}".replace(",", " ") + "\nshipped"], fontsize=8.5)
     ax.minorticks_off()
     ax.set_xlim(520, 60000)
     ax.set_ylim(0.15, 0.70)
@@ -84,9 +98,9 @@ def fig_scaling():
     ax.grid(axis="y", color=C_GRID, lw=0.8)
     ax.set_title("Structure beats composition only once there is enough data",
                  loc="left", color=C_TEXT, fontsize=12.5, pad=26)
-    ax.text(0, 1.005, "Solid lines: random split. Diamonds: no composition shared between "
-            "train and test, one fixed near-hull test set -\nhollow for the first ensemble, "
-            "filled for the shipped one (metastable to 1.0 eV/atom, 2DMatPedia and MC2D in training)",
+    ax.text(0, 1.005, "Solid lines: random splits (composition: five-fold cross-validation). "
+            "Diamonds: one fixed near-hull test set\nwith no composition shared with training - "
+            "hollow: first ensemble and composition model, filled: shipped ensemble",
             transform=ax.transAxes, color=C_MUTED, fontsize=8.5, va="bottom")
     ax.legend(frameon=False, loc="upper right", fontsize=9.5)
     fig.tight_layout()
@@ -102,10 +116,11 @@ def fig_experiment():
     (filled) - direct G0W0 gap minus exciton binding - which is the number the tool
     offers for comparison with absorption. No fitted line: an earlier version drew a
     descriptive fit through these seven points, which read as the shipped correction.
+    A rejected point is labelled with the verdict's own reason: in the shipped model
+    graphene is stopped by the metal gate and phosphorene by the latent distance.
     """
     import numpy as np
-    from validate_experiment import evaluate
-    rows = evaluate()
+    rows = recorded_rows()
     fig, ax = plt.subplots(figsize=(6.8, 6.4), dpi=160)
     ax.set_aspect("equal")
     lim = (-0.3, 6.6)
@@ -130,7 +145,7 @@ def fig_experiment():
             errs.append(abs(opt - r["exp"]))
             label, at = f"{r['material']}  {r['model']:.2f} → {opt:.2f}", opt
         else:
-            label, at = f"{r['material']}\nrejected by the metal gate", r["model"]
+            label, at = f"{r['material']}\nrejected: {rejection_reason(r['verdict'])}", r["model"]
         left_side = r["material"] in ("MoSe2", "WSe2")   # label sits left of the point
         ax.annotate(label, (r["exp"], at), xytext=LBL[r["material"]], color=C_TEXT,
                     fontsize=8.5, va="center",
@@ -150,11 +165,36 @@ def fig_experiment():
                  loc="left", color=C_TEXT, fontsize=12.5, pad=26)
     ax.text(0, 1.005, "The PBE-level number sits below the measurement by design; the "
             f"optical estimate is what compares with\nabsorption (MAE {np.mean(errs):.2f} eV "
-            "over the six semiconductors). Grey: graphene, rejected by the metal gate",
+            f"over the {len(errs)} it accepts). Grey: rejected by the verdict, no optical estimate",
             transform=ax.transAxes, color=C_MUTED, fontsize=8.5, va="bottom")
     fig.tight_layout()
     fig.savefig(os.path.join(FIG, "experiment_validation.png"))
     plt.close(fig)
+
+
+def recorded_rows() -> list[dict]:
+    """The reference monolayers as examples/expected_results.csv records them, joined
+    with the measured gaps of validate_experiment.REF."""
+    from validate_experiment import REF
+    with open(os.path.join(ROOT, "examples", "expected_results.csv")) as fh:
+        got = {r["file"]: r for r in csv.DictReader(fh)}
+    rows = []
+    for fname, (name, exp, _, _) in REF.items():
+        r = got[fname]
+        rows.append({"material": name, "exp": exp, "model": float(r["band_gap_PBE_eV"]),
+                     "unc": float(r["uncertainty_eV"]), "verdict": r["verdict"],
+                     "optical": float(r["exp_gap_est_eV"]) if r["exp_gap_est_eV"] else None})
+    return rows
+
+
+def rejection_reason(verdict: str) -> str:
+    if "metal gate" in verdict:
+        return "metal gate"
+    if "chemistry" in verdict:
+        return "latent distance"
+    if "not a 2D" in verdict or "layer" in verdict:
+        return "not a layer"
+    return "ensemble spread"
 
 
 if __name__ == "__main__":

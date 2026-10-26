@@ -137,10 +137,10 @@ def verdict(unc: float, cal: dict | None = None, latent: float | None = None,
     """Trust tier from two independent signals.
 
     `unc` is the ensemble spread: it ranks errors well, but every member shares one
-    training set, so a chemistry none of them saw yields confident agreement
-    (phosphorene is the worked example - spread 0.035 eV and an error of 1.2 eV).
-    `latent` is the distance to the nearest training structures in the model's own
-    embedding space, which catches exactly that case. Thresholds are quartiles
+    training set, so a chemistry represented by a single training structure yields
+    confident agreement - the spread measures disagreement between initialisations,
+    not coverage. `latent` is the distance to the nearest training structures in the
+    model's own embedding space, which looks at coverage directly. Thresholds are quartiles
     measured on a held-out split by scripts/calibrate_uncertainty.py.
 
     `high_unc_reason` is the wording for the top tier, because the reason differs per
